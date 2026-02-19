@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Free Chat",
+    "slug": "Free-chat",
+    "version": "1.0.0",
+    "jsEngine": "hermes",
+    "orientation": "portrait",
+    "icon": "./assets/Logo.png",
+    "userInterfaceStyle": "automatic",
+
+    "splash": {
+      "image": "./assets/SplaceScreen.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+
+    "assetBundlePatterns": ["**/*"],
+
+    "ios": {
+      "supportsTablet": true
+    },
+
+    "android": {
+      "package": "com.appfree.freechat",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+
+    "web": {
+      "favicon": "./assets/Logo.png"
+    },
+
+    "extra": {
+      "eas": {
+        "projectId": "b62fcbf2-8282-4407-a8fe-25e110d6cd99"
+      }
+    },
+
+    "owner": "mmh25"
+  }
+}

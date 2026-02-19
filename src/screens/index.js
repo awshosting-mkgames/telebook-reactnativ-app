@@ -1,0 +1,12 @@
+export { default as Call } from './Call';
+export { default as Chat } from './Chat';
+export { default as Channels } from './Channels';
+export { default as Contact } from './Contact';
+export { default as Freechat } from './Freechat';
+export { default as Inviteafriends } from './Inviteafriends';
+export { default as Settings } from './Settings';
+export { default as AuthPage } from './Authpage';
+export { default as Profile } from './Profile';
+export { default as Updates } from './Updates';
+export { default as Community } from './Community';
+export { default as Group } from './Group';
