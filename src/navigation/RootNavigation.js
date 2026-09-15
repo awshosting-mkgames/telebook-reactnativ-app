@@ -2,34 +2,31 @@ import { createNavigationContainerRef, StackActions, CommonActions } from '@reac
 
 export const navigationRef = createNavigationContainerRef();
 
+let pendingNavigation = null;
 
 export function navigate(name, params, options) {
-    try {
-        if (!navigationRef.isReady()) {
-            console.warn('Navigation not ready yet');
-            return;
-        }
-
-        if (!navigationRef.current) {
-            console.warn('Navigation ref not initialized');
-            return;
-        }
-
+    if (navigationRef.isReady()) {
         navigationRef.navigate(name, params, options);
-    } catch (error) {
-        console.error('Navigation error:', error);
+        pendingNavigation = null;
+    } else {
+        pendingNavigation = { name, params, options };
+    }
+}
+
+export function flushPendingNavigation() {
+    if (pendingNavigation && navigationRef.isReady()) {
+        const { name, params, options } = pendingNavigation;
+        pendingNavigation = null;
+        navigationRef.navigate(name, params, options);
     }
 }
 
 export function push(name, params) {
     if (navigationRef.isReady() && navigationRef.current?.dispatch) {
-        navigationRef.current?.dispatch({
-            ...StackActions.push(name, params),
-        });
+        navigationRef.current.dispatch(StackActions.push(name, params));
     }
 }
 
-// Go back to the previous screen
 export function goBack() {
     if (navigationRef.isReady() && navigationRef.canGoBack()) {
         navigationRef.goBack();

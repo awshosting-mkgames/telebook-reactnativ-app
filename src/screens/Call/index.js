@@ -6,8 +6,9 @@ import {
     FlatList,
     Image,
     TouchableOpacity,
-    SafeAreaView,StatusBar,Platform
+    SafeAreaView, StatusBar, Platform
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
 const CALLS = [
@@ -27,7 +28,8 @@ const CALLS = [
     { id: '7', name: 'Ben Stock', time: '9 June, 4:52 pm', type: 'out_video', image: 'https://randomuser.me/api/portraits/men/77.jpg' }
 ];
 
-export default function Call({navigation}) {
+export default function Call({ navigation }) {
+    const { t } = useTranslation();
     const { theme, toggleTheme } = useContext(ThemeContext);
     const renderItem = ({ item }) => {
         const isMissed = item.type.includes('missed');
@@ -36,12 +38,12 @@ export default function Call({navigation}) {
         return (
             <View style={styles.row}>
                 <Image
-                    source={{uri: item.image}} 
+                    source={{ uri: item.image }}
                     style={styles.avatar}
                 />
 
                 <View style={{ flex: 1 }}>
-                    <Text style={[styles.name,{color: theme.text}, isMissed && styles.missed]}>
+                    <Text style={[styles.name, { color: theme.text }, isMissed && styles.missed]}>
                         {item.name}
                     </Text>
 
@@ -80,15 +82,15 @@ export default function Call({navigation}) {
         navigation.navigate('Inviteafriends');
     }
     return (
-        <SafeAreaView style={[styles.container,{ backgroundColor: theme.background}]}>
-             <StatusBar backgroundColor="#1199ff" barStyle="light-content" />
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+            <StatusBar backgroundColor="#1199ff" barStyle="light-content" />
             {/* Header */}
             <View style={styles.header}>
                 <Ionicons name="filter-sharp" size={24} color="#fff" />
-                <Text style={styles.headerTitle}>Call</Text>
+                <Text style={styles.headerTitle}>{t('Chat')}</Text>
             </View>
 
-            <Text style={[styles.section,{ color: theme.text}]}>Recent</Text>
+            <Text style={[styles.section, { color: theme.text }]}>{t('Date')}</Text>
 
             <FlatList
                 data={CALLS}
@@ -98,7 +100,7 @@ export default function Call({navigation}) {
             />
 
             {/* Floating Button */}
-            <TouchableOpacity onPress={()=>gotoinviteFriends()} style={styles.fab}>
+            <TouchableOpacity onPress={() => gotoinviteFriends()} style={styles.fab}>
                 <Ionicons name="call" size={20} color="#fff" />
             </TouchableOpacity>
         </SafeAreaView>
@@ -106,89 +108,88 @@ export default function Call({navigation}) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-  },
+    container: {
+        flex: 1,
+        backgroundColor: '#fff',
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    },
 
-  header: {
-    height: 70,
-    backgroundColor: '#1296f3',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
+    header: {
+        height: 70,
+        backgroundColor: '#1296f3',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+    },
 
-  headerTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '600',
-    marginLeft: 16,
-  },
+    headerTitle: {
+        color: '#fff',
+        fontSize: 20,
+        fontWeight: '600',
+        marginLeft: 16,
+    },
 
-  section: {
-    fontSize: 18,
-    fontWeight: '600',
-    margin: 16,
-  },
+    section: {
+        fontSize: 18,
+        fontWeight: '600',
+        margin: 16,
+    },
 
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
 
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginRight: 12,
-    backgroundColor: '#ddd',
-  },
+    },
 
-  name: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#000',
-  },
+    avatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        marginRight: 12,
+        backgroundColor: '#ddd',
+    },
 
-  missed: {
-    color: '#e53935',
-  },
+    name: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#000',
+    },
 
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
+    missed: {
+        color: '#e53935',
+    },
 
-  time: {
-    fontSize: 11,
-    color: '#666',
-  },
+    timeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 2,
+    },
 
-  callBtn: {
-    width: 35,
-    height: 35,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    time: {
+        fontSize: 11,
+        color: '#666',
+    },
 
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 14,
-    backgroundColor: '#1296f3',
-    width: 50,
-    height: 50,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 5,
-  },
+    callBtn: {
+        width: 35,
+        height: 35,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    fab: {
+        position: 'absolute',
+        bottom: 24,
+        right: 14,
+        backgroundColor: '#1296f3',
+        width: 50,
+        height: 50,
+        borderRadius: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 5,
+    },
 });

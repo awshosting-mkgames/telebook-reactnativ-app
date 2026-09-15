@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "500169116691",
+    "project_id": "chat-app-96f85",
+    "storage_bucket": "chat-app-96f85.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:500169116691:android:33c1b45c15996f773603e6",
+        "android_client_info": {
+          "package_name": "com.Telebookapp.Telebook"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUzF7UInjLqgfXcpyIfK4olSVC2anmBJQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

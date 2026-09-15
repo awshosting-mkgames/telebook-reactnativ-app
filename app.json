@@ -1,44 +1,78 @@
 {
   "expo": {
-    "name": "Free Chat",
+    "name": "Telebook",
     "slug": "Free-chat",
     "version": "1.0.0",
-    "jsEngine": "hermes",
     "orientation": "portrait",
-    "icon": "./assets/Logo.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-
-    "splash": {
-      "image": "./assets/SplaceScreen.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+    "updates": {
+      "fallbackToCacheTimeout": 0
     },
-
-    "assetBundlePatterns": ["**/*"],
-
-    "ios": {
-      "supportsTablet": true
-    },
-
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
-      "package": "com.appfree.freechat",
-      "versionCode": 1,
+      "package": "com.Telebookapp.Telebook",
+      "versionCode": 3,
+      "allowBackup": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
+        "POST_NOTIFICATIONS",
+        "WAKE_LOCK",
+        "VIBRATE",
+        "READ_MEDIA_VIDEO"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#010100"
       }
     },
-
     "web": {
       "favicon": "./assets/Logo.png"
     },
-
     "extra": {
       "eas": {
         "projectId": "b62fcbf2-8282-4407-a8fe-25e110d6cd99"
       }
     },
-
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 449,
+          "resizeMode": "contain",
+          "backgroundColor": "#010100"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true,
+            "enableProguardInReleaseBuilds": false
+          }
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Telebook to access your photos.",
+          "savePhotosPermission": "Allow Telebook to save photos.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      "expo-notifications",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      "@react-native-firebase/messaging",
+      "expo-video",
+      "expo-audio"
+    ],
     "owner": "mmh25"
   }
 }

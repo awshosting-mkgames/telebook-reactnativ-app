@@ -9,13 +9,15 @@ import {
     SafeAreaView,
     StatusBar,Platform,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
 
 
 
 export default function InviteAFriends({navigation}) {
-     const { theme, toggleTheme } = useContext(ThemeContext);
+     const { t } = useTranslation();
+    const { theme, toggleTheme } = useContext(ThemeContext);
     const contacts = [
         { id: '1', name: 'Alexander', phone: '+44 1836 822222' },
         { id: '2', name: 'Kenny', phone: '+44 1975 985465' },

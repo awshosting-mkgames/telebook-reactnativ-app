@@ -1,58 +1,122 @@
-import React, { useState, useContext } from 'react';
-import {
-View,
-Text,
-StyleSheet,
-TouchableOpacity,
-SafeAreaView,
-StatusBar,Platform,Image
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Images from '../../../utils/images';
+import { useContext, useState } from 'react';
+import {
+    Platform,
+    SafeAreaView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
 import { ThemeContext } from '../../../components/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
+import { useDispatch } from 'react-redux';
+import i18n, { LANG_STORAGE_KEY } from '../../../i18n/i18n';
+import { settotalappData } from '../../../redex/slices/totalappDataSlice';
 
 const Wellcomescreen = ({ setPageSection, renderSection }) => {
-const [selectedLanguage, setSelectedLanguage] = useState('en');
-const { theme, toggleTheme } = useContext(ThemeContext);
+    const { t } = useTranslation();
+    const [selectedLanguage, setSelectedLanguage] = useState('en');
+    const { theme } = useContext(ThemeContext);
+    const dispatch = useDispatch();
 
-return (
-    <SafeAreaView style={[styles.container,{ backgroundColor: theme.background}]}>
-            <StatusBar backgroundColor={theme.statusbar} barStyle={theme?.statusbar}/>
-            <View style={styles.illustrationSection}>
-                <Image source={Images.WellcomeBannerPage} style={{width: '100%', height: '100%', resizeMode: 'contain'}} />
+    const handleContinue = async () => {
+        await i18n.changeLanguage(selectedLanguage);
+        await AsyncStorage.setItem(LANG_STORAGE_KEY, selectedLanguage);
+        dispatch(settotalappData({ lang: selectedLanguage }));
+        renderSection(2);
+    };
+
+    return (
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+            <StatusBar backgroundColor={theme.statusbar} barStyle={theme?.statusbar} />
+
+            {/* Hero illustration area */}
+            <View style={styles.heroSection}>
+                <View style={[styles.heroCircle, { backgroundColor: theme.inputBackground || '#EEF4FF' }]}>
+                    <Text style={styles.heroEmoji}>💬</Text>
+                </View>
+                <Text style={[styles.appName, { color: theme.text }]}>TeleBook</Text>
+                <Text style={[styles.tagline, { color: theme.subText || '#888' }]}>
+                    Connect with anyone, anywhere
+                </Text>
             </View>
-            <Text style={styles.title}>Select Language</Text>
-            <View style={[styles.languageContainer,{ backgroundColor: theme.background}]}>
-                <TouchableOpacity style={[styles.languageCard,{ backgroundColor: theme.background}, selectedLanguage === 'hi' && styles.selectedCard]}  onPress={() => {toggleTheme();setSelectedLanguage('hi')}} activeOpacity={0.7} >
+
+            {/* Language label */}
+            <Text style={[styles.sectionTitle, { color: theme.subText || '#888' }]}>
+                Select Language / भाषा चुनें
+            </Text>
+
+            {/* Language Cards */}
+            <View style={styles.languageContainer}>
+                <TouchableOpacity
+                    style={[
+                        styles.languageCard,
+                        { backgroundColor: theme.background, borderColor: selectedLanguage === 'hi' ? '#00A8FF' : theme.borderColor || '#E8E8E8' },
+                        selectedLanguage === 'hi' && styles.selectedCard,
+                    ]}
+                    onPress={() => setSelectedLanguage('hi')}
+                    activeOpacity={0.7}
+                >
                     <View style={styles.languageContent}>
-                        <View style={styles.flagCircle}>
+                        <View style={[styles.flagCircle, { backgroundColor: theme.inputBackground || '#F5F5F5' }]}>
                             <Text style={styles.flag}>🇮🇳</Text>
                         </View>
-                        <Text style={[styles.languageName,{ color: theme.text}, selectedLanguage === 'hi' && styles.selectedText]} >Hindi</Text>
+                        <View>
+                            <Text style={[styles.languageName, { color: selectedLanguage === 'hi' ? '#00A8FF' : theme.text }]}>
+                                हिंदी
+                            </Text>
+                            <Text style={[styles.languageSub, { color: theme.subText || '#999' }]}>Hindi</Text>
+                        </View>
                     </View>
-                    {
-                        selectedLanguage === 'hi' && <Ionicons name="checkmark" size={28} color="#00A8FF" />
-                    }
+                    {selectedLanguage === 'hi' && (
+                        <View style={styles.checkCircle}>
+                            <Ionicons name="checkmark" size={16} color="#fff" />
+                        </View>
+                    )}
                 </TouchableOpacity>
-                <TouchableOpacity  style={[styles.languageCard,{ backgroundColor: theme.background}, selectedLanguage === 'en' && styles.selectedCard]} onPress={() =>{toggleTheme();setSelectedLanguage('en')} } activeOpacity={0.7}>
+
+                <TouchableOpacity
+                    style={[
+                        styles.languageCard,
+                        { backgroundColor: theme.background, borderColor: selectedLanguage === 'en' ? '#00A8FF' : theme.borderColor || '#E8E8E8' },
+                        selectedLanguage === 'en' && styles.selectedCard,
+                    ]}
+                    onPress={() => setSelectedLanguage('en')}
+                    activeOpacity={0.7}
+                >
                     <View style={styles.languageContent}>
-                        <View style={styles.flagCircle}>
+                        <View style={[styles.flagCircle, { backgroundColor: theme.inputBackground || '#F5F5F5' }]}>
                             <Text style={styles.flag}>🇺🇸</Text>
                         </View>
-                        <Text  style={[styles.languageName,{ color: theme.text}, selectedLanguage === 'en' && styles.selectedText]} >
-                            English (US)
-                        </Text>
+                        <View>
+                            <Text style={[styles.languageName, { color: selectedLanguage === 'en' ? '#00A8FF' : theme.text }]}>
+                                English
+                            </Text>
+                            <Text style={[styles.languageSub, { color: theme.subText || '#999' }]}>United States</Text>
+                        </View>
                     </View>
-                    {
-                        selectedLanguage === 'en' && <Ionicons name="checkmark" size={28} color="#00A8FF" />
-                    }
+                    {selectedLanguage === 'en' && (
+                        <View style={styles.checkCircle}>
+                            <Ionicons name="checkmark" size={16} color="#fff" />
+                        </View>
+                    )}
                 </TouchableOpacity>
             </View>
 
             {/* Continue Button */}
             <View style={styles.buttonContainer}>
-                <TouchableOpacity onPress={()=>renderSection(2)} style={styles.continueButton} activeOpacity={0.8}>
-                    <Text style={styles.continueText}>Continue</Text>
+                <TouchableOpacity
+                    onPress={handleContinue}
+                    style={styles.continueButton}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.continueText}>
+                        {selectedLanguage === 'hi' ? 'जारी रखें' : 'Continue'}
+                    </Text>
+                    <Ionicons name="arrow-forward" size={20} color="#fff" style={{ marginLeft: 8 }} />
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -62,107 +126,105 @@ return (
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-       
-        paddingHorizontal: 10,
+        paddingHorizontal: 20,
         paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     },
-
-    // Illustration Section
-    illustrationSection: {
-        height: 250,
-        marginTop: 80,
-        position: 'relative',
+    heroSection: {
+        alignItems: 'center',
+        marginTop: 60,
+        marginBottom: 32,
+    },
+    heroCircle: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
         alignItems: 'center',
         justifyContent: 'center',
+        marginBottom: 16,
     },
-
-   
-   
-
-    // Title
-    title: {
-        fontSize: 15,
-        fontWeight: '400',
-        color: '#2C2C2C',
+    heroEmoji: {
+        fontSize: 52,
+    },
+    appName: {
+        fontSize: 28,
+        fontWeight: '700',
+        letterSpacing: 0.5,
+    },
+    tagline: {
+        fontSize: 14,
+        marginTop: 6,
+    },
+    sectionTitle: {
+        fontSize: 13,
         textAlign: 'center',
-
+        marginBottom: 16,
+        fontWeight: '500',
     },
-
-    // Language Container
     languageContainer: {
         gap: 12,
-        paddingHorizontal: 15,
-        marginTop: 20,
-        backgroundColor: '#ffffff',
     },
     languageCard: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        width: '100%',
-        paddingVertical: 10,
-        paddingHorizontal: 10,
-        backgroundColor: '#ffffff',
-        borderRadius: 50,
-        borderWidth: 2,
-        borderColor: '#E8E8E8',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 16,
+        borderWidth: 1.5,
     },
     selectedCard: {
-        borderColor: '#00A8FF',
-       
+        backgroundColor: '#F0F8FF',
     },
     languageContent: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 15,
+        gap: 14,
     },
     flagCircle: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: '#F5F5F5',
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
     },
     flag: {
-        fontSize: 30,
+        fontSize: 26,
     },
     languageName: {
-        fontSize: 18,
-        fontWeight: '500',
-        color: '#2C2C2C',
-    },
-    selectedText: {
-        color: '#00A8FF',
+        fontSize: 16,
         fontWeight: '600',
     },
-
-    // Continue Button
+    languageSub: {
+        fontSize: 12,
+        marginTop: 2,
+    },
+    checkCircle: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#00A8FF',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     buttonContainer: {
         flex: 1,
         justifyContent: 'flex-end',
-        paddingBottom: 50,
-        paddingHorizontal: 15,
+        paddingBottom: 44,
+        marginTop: 20,
     },
     continueButton: {
         backgroundColor: '#00A8FF',
-        paddingVertical: 18,
-        borderRadius: 30,
+        paddingVertical: 16,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#00A8FF',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
+        flexDirection: 'row',
     },
     continueText: {
         color: '#FFFFFF',
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: '700',
     },
 });
+
 export default Wellcomescreen;

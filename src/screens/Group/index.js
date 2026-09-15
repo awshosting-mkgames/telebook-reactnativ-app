@@ -1,216 +1,411 @@
-import React, { useState, useContext } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useContext, useEffect, useState } from 'react';
 import {
-    StyleSheet, Text, View, Image, ScrollView,
-    TouchableOpacity, Switch, FlatList, Dimensions
+    ActivityIndicator, Alert, Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
-const { width } = Dimensions.get('window');
+import apiService from '../../services/apiService';
 
-const Group = ({ navigation }) => {
-     const { theme, toggleTheme } = useContext(ThemeContext);
-    // Mock Data for Members
-    const members = [
-        { id: '1', name: 'You', status: 'Available', isAdmin: true, img: 'https://i.pravatar.cc/100?u=1' },
-        { id: '2', name: 'Kenny Payne', status: 'Busy', img: 'https://i.pravatar.cc/100?u=2' },
-        { id: '3', name: 'Anthony LaRusso', status: 'Miyagi-Do 🥋', img: 'https://i.pravatar.cc/100?u=3' },
-        { id: '4', name: 'Eli Moskowitz', status: 'I am busy all time', img: 'https://i.pravatar.cc/100?u=4' },
-        { id: '5', name: 'Johnny Lawrence', status: 'Cobra kai 🐍', img: 'https://i.pravatar.cc/100?u=5' },
-    ];
+// ── Components ────────────────────────────────────────────────────────────────
+import AddMemberModal from './components/AddMemberModal';
+import EditNamePopup from './components/EditNamePopup';
+import GroupFooter from './components/GroupFooter';
+import GroupHeader from './components/GroupHeader';
+import GroupMedia from './components/GroupMedia';
+import GroupMembers from './components/GroupMembers';
+import { getImageUrl } from './components/helpers';
+import MediaSlider from './components/MediaSlider';
+import { appendFile } from '../../utils/uploadFile';
 
-    // Action Button Component
-    const ActionBtn = ({ icon, label, type = "Ionicons" }) => (
-        <TouchableOpacity style={styles.actionBtn}>
-            <View style={styles.actionIconCircle}>
-                {type === "Ionicons" ? <Ionicons name={icon} size={22} color="#3498db" /> : <Feather name={icon} size={22} color="#3498db" />}
-            </View>
-            <Text style={styles.actionLabel}>{label}</Text>
-        </TouchableOpacity>
-    );
+export default function GroupScreen({ navigation, route }) {
+    const { chatId } = route.params;
+    const { theme }  = useContext(ThemeContext);
 
+    const maniAllData = useSelector((state) => state.totalappData);
+    const MY_USER_ID  = maniAllData?.userId ?? '';
+
+    const [groupDetails,    setGroupDetails]    = useState(null);
+    const [mediaDetails,    setMediaDetails]    = useState(null);
+    const [loading,         setLoading]         = useState(true);
+    const [showAllMembers,  setShowAllMembers]  = useState(false);
+    const [editNameVisible,  setEditNameVisible]  = useState(false);
+    const [mediaSliderIdx,   setMediaSliderIdx]   = useState(null);
+    const [addMemberVisible, setAddMemberVisible] = useState(false);
+
+
+    useEffect(() => { fetchGroupDetails(); }, []);
+
+    const fetchGroupDetails = async () => {
+        try {
+            setLoading(true);
+            const res = await apiService({ method: 'GET', endpoint: `chats/group/${chatId}/info` });
+            if (res?.success) {
+                setGroupDetails(res?.data?.group);
+                setMediaDetails(res?.data?.media);
+            }
+        } catch (e) {
+            console.error('Group fetch error:', e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const checkUserRole = (groupDetails,memberId) => {
+        const isInGroupAdminList = groupDetails?.groupAdmin?.some(
+            (a) => String(a?._id) === String(memberId)
+        );
+        const isInAdminList = groupDetails?.admins?.some(
+            (a) => String(a) === String(memberId)
+        );
+        if (isInGroupAdminList) {
+            return true;
+        }
+        if (isInAdminList) {
+            return true;
+        }
+        return 3;
+    };
+
+    // 1. Rename group
+    const handleSaveName = async (newName) => {
+        try {
+            const res = await apiService({
+                method:   'PUT',
+                endpoint: 'chats/group/rename',
+                data:     { chatId, chatName: newName },
+            });
+            if (res?.success) {
+                setGroupDetails(prev => ({ ...prev, chatName: newName }));
+                setEditNameVisible(false);
+            } else {
+                Alert.alert('Error', res?.message || 'Name update nahi hua');
+            }
+        } catch (e) { Alert.alert('Error', e.message); }
+    };
+
+    // 2. Change group image
+    const handleChangeImage = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') return Alert.alert('Permission chahiye', 'Gallery allow karo');
+
+        const res = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality:    0.8,
+        });
+        if (res.canceled) return;
+
+        try {
+            const asset = res.assets[0];
+            const fd    = new FormData();
+            fd.append('chatId',    chatId);
+            await appendFile(fd, 'groupIcon', {
+                ...asset,
+                name: `group_${Date.now()}.jpg`,
+                type: 'image/jpeg',
+            });
+            const apiRes = await apiService({
+                method:   'PUT',
+                endpoint: 'chats/group/update',
+                data:     fd,
+                isMultipart: true,
+            });
+            if (apiRes?.success) {
+                setGroupDetails(prev => ({ ...prev, groupIcon: apiRes?.data?.groupIcon || prev.groupIcon }));
+                Alert.alert('Done', 'Group photo update ho gaya!');
+            } else {
+                Alert.alert('Error', apiRes?.message || 'Photo update nahi hui');
+            }
+        } catch (e) { Alert.alert('Error', e.message); }
+    };
+
+    // 3. Remove member
+    const handleRemoveMember = (member) => {
+        Alert.alert(
+            'Remove Member',
+            `${member.name} ko group se remove karein?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove', style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const res = await apiService({
+                                method:   'PUT',
+                                endpoint: 'chats/group/remove',
+                                data:     { chatId, userId: member._id },
+                            });
+                            if (res?.success) {
+                                setGroupDetails(prev => ({
+                                    ...prev,
+                                    members:      prev.members.filter(m => m._id !== member._id),
+                                    totalMembers: (prev.totalMembers || 1) - 1,
+                                }));
+                            } else {
+                                Alert.alert('Error', res?.message || 'Remove nahi hua');
+                            }
+                        } catch (e) { Alert.alert('Error', e.message); }
+                    },
+                },
+            ]
+        );
+    };
+
+    // 4. Exit group
+    const handleExitGroup = () => {
+        Alert.alert(
+            'Exit Group',
+            `"${groupDetails?.chatName}" group leave karein?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Exit', style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const res = await apiService({
+                                method: 'PUT', endpoint: 'chats/group/leave', data: { chatId },
+                            });
+                            if (res?.success) navigation.goBack();
+                            else Alert.alert('Error', res?.message || 'Leave nahi hua');
+                        } catch (e) { Alert.alert('Error', e.message); }
+                    },
+                },
+            ]
+        );
+    };
+
+    // 5. Delete group (admin only)
+    const handleDeleteGroup = () => {
+        Alert.alert(
+            'Delete Group',
+            `"${groupDetails?.chatName}" permanently delete ho jaayega. Sure hain?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete', style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const res = await apiService({
+                                method: 'DELETE', endpoint: `chats/${chatId}`,
+                            });
+                            if (res?.success) navigation.goBack();
+                            else Alert.alert('Error', res?.message || 'Delete nahi hua');
+
+                        } catch (e) { Alert.alert('Error', e.message); }
+                    },
+                },
+            ]
+        );
+    };
+
+    // 6. Private chat (placeholder — same DELETE for now)
+    const onPriveChat = async () => {
+        try {
+            const res = await apiService({
+                method: 'DELETE', endpoint: `chats/${chatId}`,
+            });
+            if (res?.success) navigation.goBack();
+            else Alert.alert('Error', res?.message || 'Delete nahi hua');
+        } catch (e) { Alert.alert('Error', e.message); }
+    };
+
+    // ── NEW: 7. Add Admin ──────────────────────────────────────────────────────
+    const handleAddAdmin = (member) => {
+        Alert.alert(
+            'Make Admin',
+            `${member.name} ko admin banana chahte hain?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Make Admin',
+                    onPress: async () => {
+                        try {
+                            const res = await apiService({
+                                method:   'PUT',
+                                endpoint: 'chats/group/add-admin',
+                                data:     { chatId, userId: member._id },
+                            });
+                            if (res?.success) {
+                               fetchGroupDetails();
+                                setGroupDetails(prev => ({
+                                    ...prev,
+                                    admins: [...(prev.admins || []), { _id: member._id, name: member.name }],
+                                }));
+                                Alert.alert('Done', `${member.name} ab admin hai!`);
+                            } else {
+                                Alert.alert('Error', res?.message || 'Admin nahi ban saka');
+                            }
+                        } catch (e) { Alert.alert('Error', e.message); }
+                    },
+                },
+            ]
+        );
+    };
+
+    // ── NEW: 8. Remove Admin ───────────────────────────────────────────────────
+    const handleRemoveAdmin = (member) => {
+        Alert.alert(
+            'Remove Admin',
+            `${member.name} ki admin rights hatana chahte hain?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove Admin', style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const res = await apiService({
+                                method:   'PUT',
+                                endpoint: 'chats/group/remove-admin',
+                                data:     { chatId, userId: member._id },
+                            });
+                         
+                            if (res?.success) {
+                                fetchGroupDetails();
+                                setGroupDetails(prev => ({
+                                    ...prev,
+                                    admins: (prev.admins || []).filter(a => a._id !== member._id),
+                                }));
+                                Alert.alert('Done', `${member.name} ab admin nahi hai`);
+                            } else {
+                                Alert.alert('Error', res?.message || 'Admin remove nahi hua');
+                            }
+                        } catch (e) { Alert.alert('Error', e.message); }
+                    },
+                },
+            ]
+        );
+    };
+
+    // ── NEW: 9. Lock / Unlock Chat ─────────────────────────────────────────────
+    const handleToggleLock = async () => {
+        const isLocked = groupDetails?.isLocked ?? false;
+        const endpoint = isLocked ? 'chats/group/unlock' : 'chats/group/lock';
+        const label    = isLocked ? 'Unlock' : 'Lock';
+        try {
+            const res = await apiService({
+                method:   'PUT',
+                endpoint,
+                data:     { chatId },
+            });
+          
+            if (res?.success) {
+                fetchGroupDetails();
+                setGroupDetails(prev => ({ ...prev, isLocked: !isLocked }));
+                Alert.alert('Done', `Chat ${isLocked ? 'unlock' : 'lock'} ho gaya!`);
+            } else {
+                Alert.alert('Error', res?.message || `${label} nahi hua`);
+            }
+        } catch (e) { Alert.alert('Error', e.message); }
+                   
+    };
+
+    // ── Derived ───────────────────────────────────────────────────────────────
+    const isAdmin      = groupDetails?.isAdmin ?? false;
+    const isLocked     = groupDetails?.isLocked ?? false;
+    const existingIds  = (groupDetails?.members || []).map(m => m._id);
+    const mediaImages  = mediaDetails?.images?.items || [];
+
+    // ── Loading ───────────────────────────────────────────────────────────────
+    if (loading) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => navigation.goBack()}>
+                        <Ionicons name="arrow-back" size={24} color="white" />
+                    </TouchableOpacity>
+                </View>
+                <View style={styles.loaderWrap}>
+                    <ActivityIndicator size="large" color="#3498db" />
+                    <Text style={[styles.loaderText, { color: theme.text }]}>Loading group info...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
     return (
-        <SafeAreaView style={[styles.container,{ backgroundColor: theme.background}]}>
-            {/* HEADER BAR */}
-           <View style={styles.header}>
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+
+            {/* Top bar */}
+            <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-                    <Ionicons name="filter-sharp" size={26} color="white" />
-                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Group Info</Text>
             </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.content}>
-
-                {/* PROFILE HEADER */}
-                <View style={styles.profileHeader}>
-                    <Image source={{ uri: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800'  }} style={styles.groupAvatar} />
-                    <Text style={[styles.groupName,{ color: theme.text}]}>Queen Jewelry & Accessories</Text>
-                    <Text style={styles.groupSub}>Group • 250 member</Text>
-
-                    {/* QUICK ACTIONS */}
-                    <View style={styles.actionRow}>
-                        <ActionBtn icon="call-outline" label="Audio" />
-                        <ActionBtn icon="videocam-outline" label="Video" />
-                        <ActionBtn icon="person-add-outline" label="Add" />
-                        <ActionBtn icon="search" label="Search" />
-                    </View>
-                </View>
-
-                <View style={styles.divider} />
-
-                {/* DESCRIPTION SECTION */}
-                <TouchableOpacity style={styles.sectionPadding}>
-                    <Text style={styles.blueText}>Add group description</Text>
-                    <Text style={styles.grayText}>Created by You, 4/11/25</Text>
-                </TouchableOpacity>
-
-                <View style={styles.divider} />
-
-                {/* MEDIA SECTION */}
-                <View style={styles.sectionPadding}>
-                    <View style={styles.rowBetween}>
-                        <Text style={[styles.sectionTitle,{ color: theme.text}]}>Media, links, and docs</Text>
-                        <View style={styles.row}>
-                            <Text style={styles.grayText}>15K </Text>
-                            <Ionicons name="chevron-forward" size={16} color={theme.text} />
-                        </View>
-                    </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaRow}>
-                        {[1, 2, 3, 4, 5].map((i) => (
-                            <Image key={i} source={{ uri: `https://picsum.photos/200/200?random=${i}` }} style={styles.mediaThumb} />
-                        ))}
-                    </ScrollView>
-                </View>
-
-                <View style={styles.divider} />
-
-                {/* SETTINGS */}
-                <TouchableOpacity style={styles.settingItem}>
-                    <View style={[styles.iconBox, { backgroundColor: '#3498db' }]}>
-                        <Ionicons name="notifications" size={20} color="white" />
-                    </View>
-                    <View style={styles.flex1}>
-                        <Text style={[styles.settingTitle,{color :  theme.text}]}>Notifications</Text>
-                        <Text style={styles.grayText}>All</Text>
-                    </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.settingItem}>
-                    <View style={[styles.iconBox, { backgroundColor: '#3498db' }]}>
-                        <MaterialCommunityIcons name="chat-lock" size={20} color="white" />
-                    </View>
-                    <View style={styles.flex1}>
-                        <Text style={[styles.settingTitle,{color :  theme.text}]}>Chat lock</Text>
-                        <Text style={styles.grayText}>Lock and hide this chat on this device.</Text>
-                    </View>
-                    <Switch value={false} trackColor={{ false: "#ddd", true: "#3498db" }} />
-                </TouchableOpacity>
-
-                <View style={styles.divider} />
-
-                {/* MEMBERS LIST */}
-                <View style={styles.sectionPadding}>
-                    <View style={styles.rowBetween}>
-                        <Text style={styles.sectionTitle}>5 member</Text>
-                        <Ionicons name="search" size={20} color="#555" />
-                    </View>
-                </View>
-
-                <TouchableOpacity style={styles.memberRow}>
-                    <View style={[styles.iconBox, { backgroundColor: '#3498db', borderRadius: 25 }]}>
-                        <Ionicons name="person-add" size={20} color="white" />
-                    </View>
-                    <Text style={[styles.memberAddText,{color:theme.color}]}>Add members</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.memberRow}>
-                    <View style={[styles.iconBox, { backgroundColor: '#3498db', borderRadius: 25 }]}>
-                        <Ionicons name="link" size={20} color="white" />
-                    </View>
-                    <Text style={[styles.memberAddText,{color:theme.color}]}>Invite via group link</Text>
-                </TouchableOpacity>
-
-                {members.map(item => (
-                    <View key={item.id} style={styles.memberRow}>
-                        <Image source={{ uri: item.img }} style={styles.memberAvatar} />
-                        <View style={styles.flex1}>
-                            <Text style={[styles.memberName,{color:theme.text}]}>{item.name}</Text>
-                            <Text style={styles.grayText}>{item.status}</Text>
-                        </View>
-                        {item.isAdmin && (
-                            <View style={styles.adminBadge}><Text style={styles.adminText}>Group Admin</Text></View>
-                        )}
-                    </View>
-                ))}
-
-                <TouchableOpacity style={styles.viewAllBtn}>
-                    <Text style={styles.viewAllText}>View all (250 more)</Text>
-                </TouchableOpacity>
-
-                <View style={styles.divider} />
-
-                {/* FOOTER ACTIONS */}
-                <TouchableOpacity style={styles.footerItem}>
-                    <TouchableOpacity style={styles.footerIconCircle}>
-                        <Ionicons name="heart" size={18} color="#ffffff" />
-                    </TouchableOpacity>
-                    <Text style={[styles.footerText,{color:theme.text}]}>Add to Favorites</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.footerItem}>
-                    <TouchableOpacity style={{...styles.footerIconCircle,backgroundColor: '#ff1900'}}>
-                       <MaterialCommunityIcons name="exit-to-app" size={18} color="#ffffff" />
-                    </TouchableOpacity>
-                    <Text style={[styles.footerText, { color: '#e74c3c' }]}>Exit group</Text>
-                </TouchableOpacity>
+            <EditNamePopup
+                visible={editNameVisible}
+                currentName={groupDetails?.chatName}
+                onClose={() => setEditNameVisible(false)}
+                onSave={handleSaveName}
+            />
+            <MediaSlider
+                visible={mediaSliderIdx !== null}
+                items={mediaImages}
+                startIndex={mediaSliderIdx ?? 0}
+                onClose={() => setMediaSliderIdx(null)}
+                getUrl={getImageUrl}
+            />
+            <AddMemberModal
+                visible={addMemberVisible}
+                onClose={() => setAddMemberVisible(false)}
+                chatId={chatId}
+                existingMemberIds={existingIds}
+                onAdded={fetchGroupDetails}
+            />
+            <ScrollView showsVerticalScrollIndicator={false}>
+                <GroupHeader
+                    groupDetails={groupDetails}
+                    theme={theme}
+                    onImagePress={handleChangeImage}
+                    onNamePress={() => setEditNameVisible(true)}
+                    onAddMember={() => setAddMemberVisible(true)}
+                    IspermissonasAdmin={checkUserRole(groupDetails,MY_USER_ID)}
+                />
+                <View style={[styles.divider, { backgroundColor: theme.dividerColor }]} />
+                <GroupMedia
+                    mediaDetails={mediaDetails}
+                    theme={theme}
+                    onMediaPress={(idx) => setMediaSliderIdx(idx)}
+                />
+                <View style={[styles.divider, { backgroundColor: theme.dividerColor }]} />
+                <GroupMembers
+                    groupDetails={groupDetails}
+                    theme={theme}
+                    MY_USER_ID={MY_USER_ID}
+                    showAllMembers={showAllMembers}
+                    setShowAllMembers={setShowAllMembers}
+                    onAddMember={() => setAddMemberVisible(true)}
+                    onRemoveMember={handleRemoveMember}
+                    onAddAdmin={handleAddAdmin}
+                    onRemoveAdmin={handleRemoveAdmin}
+                />
+                <View style={[styles.divider, { backgroundColor: theme.dividerColor }]} />
+                <GroupFooter
+                    theme={theme}
+                    isAdmin={isAdmin}
+                    isLocked={isLocked}
+                    onExitGroup={handleExitGroup}
+                    onDeleteGroup={handleDeleteGroup}
+                    onPriveChat={onPriveChat}
+                    onToggleLock={handleToggleLock}
+                />
 
             </ScrollView>
         </SafeAreaView>
     );
-};
+}
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: 'white' },
-    headerBar: { height: 60, backgroundColor: '#3498db', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15 },
-    content: { flex: 1 },
-     header: {
-        height: 60, backgroundColor: '#3498db',
-        flexDirection: 'row', alignItems: 'center',
-        justifyContent: 'space-between', paddingHorizontal: 15
-    },
-    profileHeader: { alignItems: 'center', paddingVertical: 25 },
-    groupAvatar: { width: 110, height: 110, borderRadius: 55, backgroundColor: '#eee' },
-    groupName: { fontSize: 16, fontWeight: 'bold', marginTop: 15 },
-    groupSub: { fontSize: 13, color: '#727272' , marginTop: 4 },
-    actionRow: { flexDirection: 'row', marginTop: 20, width: '90%', justifyContent: 'space-around' },
-    actionBtn: { width: '22%', height: 60, borderRadius: 12, borderWidth: 1, borderColor: '#eee', justifyContent: 'center', alignItems: 'center',  },
-    actionIconCircle: { marginBottom: 5 },
-    actionLabel: { fontSize: 14, color: '#555' },
-    divider: { height: 8, backgroundColor: '#f6f6f6', marginVertical: 5 },
-    sectionPadding: { padding: 15 },
-    blueText: { color: '#3498db', fontSize: 17, fontWeight: '400',marginBottom: 8 },
-    grayText: { color: '#9f9f9f', fontSize: 15,  fontWeight: '400',marginTop: 5 },
-    sectionTitle: { fontSize: 17, fontWeight: '400', color: '#333' },
-    rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    row: { flexDirection: 'row', alignItems: 'center' },
-    mediaRow: { marginTop: 15, flexDirection: 'row' },
-    mediaThumb: { width: 70, height: 70, borderRadius: 10, marginRight: 10 },
-    settingItem: { flexDirection: 'row', alignItems: 'center', padding: 15 },
-    iconBox: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-    flex1: { flex: 1 },
-    settingTitle: { fontSize: 17, fontWeight: '600',color: '#000000' },
-    memberRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10 },
-    memberAvatar: { width: 45, height: 45, borderRadius: 22.5, marginRight: 15 },
-    memberName: { fontSize: 17, fontWeight: '600' },
-    memberAddText: { fontSize: 17, color: '#333', fontWeight: '500' },
-    adminBadge: { backgroundColor: '#e1f5fe', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5 },
-    adminText: { color: '#3498db', fontSize: 15, fontWeight: 'bold' },
-    viewAllBtn: { backgroundColor: '#e1f5fe', paddingVertical: 10, paddingHorizontal: 25, borderRadius: 20, alignSelf: 'center', marginVertical: 15 },
-    viewAllText: { color: '#3498db', fontWeight: '500', fontSize: 15 },
-    footerItem: { flexDirection: 'row',padding:10, alignItems: 'center', justifyContent: 'flex-start', marginBottom: 10 },
-    footerIconCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', backgroundColor: '#3498db',marginRight: 5 },
-    footerText: { fontSize: 18, fontWeight: '600', marginLeft: 10 }
+    container:   { flex: 1 },
+    header:      { height: 60, backgroundColor: '#3498db', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 14 },
+    headerTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
+    loaderWrap:  { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    loaderText:  { marginTop: 12, fontSize: 15, color: '#555' },
+    divider:     { height: 8, backgroundColor: '#f6f6f6', marginVertical: 5 },
 });
-
-export default Group;

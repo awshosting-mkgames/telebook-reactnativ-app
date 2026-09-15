@@ -16,7 +16,6 @@ export const ThemeProvider = ({ children }) => {
     const loadTheme = async () => {
         try {
             const savedTheme = await AsyncStorage.getItem('APP_THEME');
-
             if (savedTheme === 'dark') {
                 setTheme(DarkTheme);
             } else {

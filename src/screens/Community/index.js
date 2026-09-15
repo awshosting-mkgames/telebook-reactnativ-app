@@ -3,11 +3,13 @@ import {
     StyleSheet, Text, View, Image, ScrollView,
     TouchableOpacity, Switch, FlatList,StatusBar,Platform
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
 
 const Community = ({ navigation }) => {
+    const { t } = useTranslation();
     const { theme, toggleTheme } = useContext(ThemeContext);
     const members = [
         { id: '1', name: 'You', status: 'Available', img: 'https://i.pravatar.cc/100?u=1' },
@@ -68,7 +70,7 @@ const Community = ({ navigation }) => {
                         </TouchableOpacity>
                     </View>
                 </View>
-
+                     <View style={[styles.divider,{backgroundColor: theme.dividerColor}]} />
                 {/* COMMUNITY LINK */}
                 <TouchableOpacity onPress={gotogroupPage} style={styles.communityLink}>
                     <Image source={{ uri: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800' }} style={styles.smallIcon} />
@@ -79,7 +81,7 @@ const Community = ({ navigation }) => {
                     <Ionicons name="chevron-forward" size={20} color="#ccc" />
                 </TouchableOpacity>
 
-                <View style={styles.divider} />
+                <View style={[styles.divider,{backgroundColor: theme.dividerColor}]} />
 
                 {/* SETTINGS LIST */}
                 <SettingItem icon="notifications" name="Notifications" subText="All" />
@@ -89,7 +91,7 @@ const Community = ({ navigation }) => {
                 <SettingItem icon="chatbubble-ellipses" name="Chat lock" subText="Lock and hide this chat on this device." hasSwitch={true} />
                 <SettingItem icon="shield-checkmark" name="Advanced Chat Privacy" subText="Off" />
 
-                <View style={styles.divider} />
+                <View style={[styles.divider,{backgroundColor: theme.dividerColor}]} />
 
                 {/* MEMBERS SECTION */}
                 <View style={styles.memberHeader}>
@@ -105,18 +107,18 @@ const Community = ({ navigation }) => {
                             <Text style={styles.memberStatus}>{item.status}</Text>
                         </View>
                         {item.isAdmin && (
-                            <View style={styles.adminBadge}>
+                            <View style={[styles.adminBadge,{backgroundColor:theme.batchColor}]}>
                                 <Text style={styles.adminText}>Group Admin</Text>
                             </View>
                         )}
                     </View>
                 ))}
 
-                <TouchableOpacity style={styles.viewAllBtn}>
+                <TouchableOpacity style={[styles.viewAllBtn,{backgroundColor:theme.batchColor}]}>
                     <Text style={styles.viewAllText}>View all (250 more)</Text>
                 </TouchableOpacity>
 
-                <View style={styles.divider} />
+                 <View style={[styles.divider,{backgroundColor: theme.dividerColor}]} />
 
                 {/* FOOTER ACTIONS */}
                 <TouchableOpacity style={styles.footerItem}>
@@ -170,7 +172,7 @@ const styles = StyleSheet.create({
     actionText: { marginLeft: 8, fontWeight: '400', color: '#999',marginTop: 10 },
     communityLink: {
         flexDirection: 'row', alignItems: 'center',
-        padding: 15, borderTopWidth: 1, borderTopColor: '#f0f0f0'
+        padding: 15, 
     },
     smallIcon: { width: 40, height: 40, borderRadius: 8 },
     divider: { height: 10, backgroundColor: '#f5f5f5' },
