@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { ThemeContext } from '../../../components/ThemeContext';
 import Config from '../../../services/config';
+import { claimPlayback, useExclusivePlayback } from '../../../utils/playbackManager';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const SLIDER_W = SCREEN_W - 32;
@@ -59,6 +60,8 @@ function MediaModal({ visible, item, onClose }) {
         p.loop = false;
         p.timeUpdateEventInterval = 0.5;
     });
+
+    useExclusivePlayback(player);
 
     // Naya item select hone par player source update karo
     useEffect(() => {
@@ -209,7 +212,11 @@ function MediaModal({ visible, item, onClose }) {
                                     </View>
                                     <TouchableOpacity
                                         style={zm.playBtn}
-                                        onPress={() => isPlaying ? player.pause() : player.play()}
+                                        onPress={() => {
+                                            if (isPlaying) { player.pause(); return; }
+                                            claimPlayback(player);
+                                            player.play();
+                                        }}
                                     >
                                         <Ionicons name={isPlaying ? 'pause' : 'play'} size={35} color="#fff" />
                                     </TouchableOpacity>

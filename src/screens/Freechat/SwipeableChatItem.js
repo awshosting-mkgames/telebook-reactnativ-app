@@ -43,14 +43,9 @@ const getInitials = (name = '') => name.split(' ').slice(0, 2).map(w => w[0]).jo
 const AVATAR_COLORS = ['#1199ff', '#25D366', '#FF9500', '#FF3B30', '#AF52DE', '#5AC8FA'];
 const avatarColor = (name = '') => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
 
-export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBlock, onLongPress, pinnedIds, userId }) {
+export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBlock, onLongPress, isPinned, isBlocked }) {
     const translateX = useRef(new Animated.Value(0)).current;
     const rowOpen = useRef(false);
-    console.log("item_________", item)
-    // Check BOTH local pinnedIds AND API pinnedBy field
-    const isLocalPinned = pinnedIds?.includes(item?._id);
-    const isApiPinned = item?.pinnedBy?.includes(userId);
-    const isPinned = isLocalPinned || isApiPinned;
 
     const isGroup = item?.isGroupChat;
     const lastMsg = item?.latestMessage;
@@ -58,6 +53,8 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
     const timeStr = formatTime(lastMsg?.createdAt || item?.updatedAt);
     const unread = item?.unreadCount || item?.unseenCount || 0;
     const hasAvatar = !!item.displayAvatar;
+    const isLight = theme.mode === 'light';
+    const subColor = isLight ? '#667781' : '#8696a0';
 
     const panResponder = useRef(PanResponder.create({
         onStartShouldSetPanResponder: () => false,
@@ -100,6 +97,13 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
 
     const handleSwipeBlock = () => {
         closeRow();
+        if (isBlocked) {
+            Alert.alert('Unblock Contact', `Unblock ${item.displayName}?`, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Unblock', onPress: () => onBlock(item) },
+            ]);
+            return;
+        }
         Alert.alert(
             'Block Contact',
             `Block ${item.displayName}? They won't be able to send you messages.`,
@@ -115,10 +119,13 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
             {isPinned && <View style={styles.pinStripe} />}
 
             <View style={styles.actionsContainer}>
-                <TouchableOpacity style={styles.blockBtn} onPress={handleSwipeBlock} activeOpacity={0.85}>
-                    <Ionicons name="ban-outline" size={22} color="#fff" />
-                    <Text style={styles.actionBtnText}>Block</Text>
-                </TouchableOpacity>
+                {/* Group ko block nahi kar sakte — wahan sirf Delete */}
+                {!isGroup && (
+                    <TouchableOpacity style={[styles.blockBtn, isBlocked && styles.unblockBtn]} onPress={handleSwipeBlock} activeOpacity={0.85}>
+                        <Ionicons name={isBlocked ? 'checkmark-circle-outline' : 'ban-outline'} size={22} color="#fff" />
+                        <Text style={styles.actionBtnText}>{isBlocked ? 'Unblock' : 'Block'}</Text>
+                    </TouchableOpacity>
+                )}
                 <TouchableOpacity style={styles.deleteBtn} onPress={handleSwipeDelete} activeOpacity={0.85}>
                     <Ionicons name="trash-outline" size={22} color="#fff" />
                     <Text style={styles.actionBtnText}>Delete</Text>
@@ -130,7 +137,7 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                 style={[
                     styles.chatRowAnimated,
                     {
-                        backgroundColor: isPinned ? (theme.mode === 'light' ? '#dbdbdb' : '#393939') : (theme.mode === 'light' ? '#ffffff' : '#000000'),
+                        backgroundColor: isPinned ? (isLight ? '#f0f7ff' : '#16222c') : (theme.background || (isLight ? '#ffffff' : '#000000')),
                         transform: [{ translateX }],
                     },
                 ]}
@@ -174,13 +181,14 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                                 <Text style={[styles.name, { color: theme.text || '#111' }]} numberOfLines={1}>
                                     {item.displayName}
                                 </Text>
+                                {isBlocked && <Ionicons name="ban" size={13} color="#FF3B30" />}
                             </View>
-                            <Text style={[styles.time, unread > 0 && styles.timeUnread, { color: theme.mode === 'light' ? '#161616' : '#cdcdcd' }]}>{timeStr}</Text>
+                            <Text style={[styles.time, { color: subColor }, unread > 0 && styles.timeUnread]}>{timeStr}</Text>
                         </View>
 
                         <View style={styles.chatBottomRow}>
                             <Text
-                                style={[styles.message, { color: theme.mode === 'light' ? '#161616' : '#cdcdcd' }, unread > 0 && styles.unreadMsg]}
+                                style={[styles.message, { color: unread > 0 ? (theme.text || '#111') : subColor }, unread > 0 && styles.unreadMsg]}
                                 numberOfLines={1}
                             >
                                 {isGroup && lastMsg?.sender?.name
@@ -205,6 +213,7 @@ const styles = StyleSheet.create({
     pinStripe: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: '#1199ff', zIndex: 10 },
     actionsContainer: { position: 'absolute', right: 0, top: 0, bottom: 0, width: ACTION_WIDTH, flexDirection: 'row' },
     blockBtn: { flex: 1, backgroundColor: '#FF9500', alignItems: 'center', justifyContent: 'center', gap: 4 },
+    unblockBtn: { backgroundColor: '#25A55F' },
     deleteBtn: { flex: 1, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', gap: 4 },
     actionBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
     chatRowAnimated: { backgroundColor: '#fff' },

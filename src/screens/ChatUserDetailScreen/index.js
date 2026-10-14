@@ -7,8 +7,10 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import apiService from '../../services/apiService';
+import { apiErrorMessage, fetchBlockedUsers, setBlocked as setBlockedApi } from '../../services/chatActions';
+import { syncAllTabData } from '../../services/chatSync';
 import Config from '../../services/config';
 const BASE_URL = Config.Main_url;
 
@@ -42,7 +44,7 @@ const formatDate = (dateStr) => {
 const getImageUrl = (path) => {
     if (!path) return null;
     if (path.startsWith('http')) return path;
-    return BASE_URL?.MEDIA_URL + path;
+    return Config.MEDIA_URL + path;
 };
 
 const formatFileSize = (bytes) => {
@@ -150,6 +152,8 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
     const { chatId } = route.params;
     const maniAllData = useSelector(s => s.totalappData);
     const MY_USER_ID = maniAllData?.userId ?? '';
+    const dispatch = useDispatch();
+    const blockedIds = useSelector(s => s.chatList?.blockedIds ?? []);
 
     const isDark = theme?.mode === 'dark';
     const bg = isDark ? '#121212' : '#f5f7fa';
@@ -165,7 +169,6 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
 
     const [activeTab, setActiveTab] = useState('photos'); // photos | videos | docs | audio
     const [muted, setMuted] = useState(false);
-    const [blocked, setBlocked] = useState(false);
     const [showBlock, setShowBlock] = useState(false);
     const [showClear, setShowClear] = useState(false);
     const [showReport, setShowReport] = useState(false);
@@ -211,6 +214,9 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
     const otherUser = chatInfo?.otherUser;
     const avatarUri = getImageUrl(otherUser?.profilePicture) || DEFAULT_AVATAR;
     const phone = formatPhone(otherUser?.mobile ?? '');
+    // Block state server ki blocked list (Redux) se — pehle hamesha false se shuru hota tha
+    const blocked = !!otherUser?._id && blockedIds.includes(otherUser._id);
+    useEffect(() => { fetchBlockedUsers(dispatch); }, [dispatch]);
 
     // ✅ Flat image+video list — for MediaModal fullscreen viewer
     const allViewableMedia = [
@@ -243,13 +249,8 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
     const handleBlock = async () => {
         setLoadingBlock(true);
         try {
-            let checkblock = await apiService({
-                method: 'PUT',
-                endpoint: blocked ? 'users/unblock/' + otherUser?._id : 'users/block/' + otherUser?._id,
-                data: {},
-            });
-            console.log(checkblock);
-            setBlocked(b => !b);
+            const res = await setBlockedApi(dispatch, otherUser?._id, !blocked);
+            if (!res.ok) throw new Error(res.message);
             showToast(blocked ? 'User unblocked' : 'User blocked');
         } catch {
             Alert.alert('Error', 'Action failed. Try again.');
@@ -260,7 +261,10 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
 
     const handleClearChat = async () => {
         try {
-            await apiService({ method: 'DELETE', endpoint: `chat/clear/${otherUser?._id}` });
+            // DELETE /chats/:chatId/clear (API doc 6.3)
+            const res = await apiService({ method: 'DELETE', endpoint: `chats/${chatId}/clear` });
+            if (!res?.success) throw new Error(apiErrorMessage(res));
+            syncAllTabData(dispatch, MY_USER_ID, { background: true });
             showToast('Chat cleared');
         } catch {
             Alert.alert('Error', 'Could not clear chat. Try again.');
@@ -269,7 +273,9 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
 
     const handleReport = async () => {
         try {
-            await apiService({ method: 'POST', endpoint: 'users/report', data: { targetUserId: otherUser?._id } });
+            // POST /users/report/:userId (API doc 6.2)
+            const res = await apiService({ method: 'POST', endpoint: `users/report/${otherUser?._id}`, data: { reason: 'spam' } });
+            if (!res?.success) throw new Error(apiErrorMessage(res));
             showToast('Report submitted');
         } catch {
             Alert.alert('Error', 'Could not submit report. Try again.');

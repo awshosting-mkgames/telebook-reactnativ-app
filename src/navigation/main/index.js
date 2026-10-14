@@ -2,7 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BottomTabNavigator from '../bottomtab';
 import AuthNavigator from '../auth'
-import { Deleteaccount, Aboutus, TermsConditionsScreen, PrivacyPolicyScreen, Call, Chat, Channels, Contact, Freechat, Mychannelscreen, Channeldetailscreen, Inviteafriends, CreateBroadcast, ChatUserDetailScreen, MyBroadcastList, BroadcastDetails, BroadcastStats, Settings, AvatarScreen, AuthPage, FindContact, CreateGroup, Community, Profile, Updates, Group } from '../../screens';
+import { Deleteaccount, Aboutus, TermsConditionsScreen, PrivacyPolicyScreen, Call, Chat, Channels, Contact, Freechat, Mychannelscreen, Channeldetailscreen, Inviteafriends, CreateBroadcast, ChatUserDetailScreen, MyBroadcastList, BroadcastDetails, BroadcastStats, Settings, AvatarScreen, AuthPage, FindContact, CreateGroup, Community, Profile, Updates, Group, InCallScreen, Plans, Wallet } from '../../screens';
 
 const Stack = createNativeStackNavigator();
 
@@ -42,6 +42,10 @@ const MainNavigator = ({ navigation }) => {
 
             <Stack.Screen name="Aboutus" options={{ headerShown: false, statusBarTranslucent: true }} component={Aboutus} />
             <Stack.Screen name="Deleteaccount" options={{ headerShown: false, statusBarTranslucent: true }} component={Deleteaccount} />
+
+            <Stack.Screen name="InCall" options={{ headerShown: false, statusBarTranslucent: true }} component={InCallScreen} />
+            <Stack.Screen name="Plans" options={{ headerShown: false, statusBarTranslucent: true }} component={Plans} />
+            <Stack.Screen name="Wallet" options={{ headerShown: false, statusBarTranslucent: true }} component={Wallet} />
         </Stack.Navigator>
     );
 };

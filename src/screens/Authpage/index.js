@@ -1,15 +1,17 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { SafeAreaView, StyleSheet, Platform } from 'react-native';
+import React, { useContext, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { ThemeContext } from '../../components/ThemeContext';
 import LoginScreen from './Login';
 import OtpScreen from './Otp';
 import WellcomeScreen from './Wellcomescreen';
 import TermsCondition from './TermsCondition';
 import Signup from './Signup';
-import { navigate, goBack } from '../../navigation/RootNavigation';
+import { navigate } from '../../navigation/RootNavigation';
 
 
 
 export default function AuthPage() {
+    const { theme } = useContext(ThemeContext);
     const [pageSection, setPageSection] = useState(1);
     const [logindataPage, setlogindataPage] = useState(1);
     const [oTpdataPage, setOtpdataPage] = useState(1);
@@ -22,13 +24,13 @@ export default function AuthPage() {
         }
     }
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
             {pageSection === 3 && <LoginScreen setPageSection={setPageSection} renderSection={renderSection} setlogindataPage={setlogindataPage} />}
             {pageSection === 4 && <OtpScreen setPageSection={setPageSection} renderSection={renderSection} logindataPage={logindataPage} setlogindataPage={setlogindataPage} setOtpdataPage={setOtpdataPage} />}
             {pageSection === 5 && <Signup setPageSection={setPageSection} renderSection={renderSection} oTpdataPage={oTpdataPage} />}
             {pageSection === 1 && <WellcomeScreen setPageSection={setPageSection} renderSection={renderSection} />}
             {pageSection === 2 && <TermsCondition setPageSection={setPageSection} renderSection={renderSection} />}
-        </SafeAreaView>
+        </View>
     );
 }
 const styles = StyleSheet.create({
@@ -36,7 +38,6 @@ const styles = StyleSheet.create({
         flex: 1,
         width: '100%',
         height: '100%',
-        backgroundColor: '#fff',
     },
 
 });

@@ -8,7 +8,7 @@ import { TouchableWithoutFeedback } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
 
-export default function HeaderMenu({ visible, onClose, onSyncContacts, onProfile, syncLoading }) {
+export default function HeaderMenu({ visible, onClose, onProfile, onSyncData, syncing }) {
     const { theme } = useContext(ThemeContext);
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -42,15 +42,18 @@ export default function HeaderMenu({ visible, onClose, onSyncContacts, onProfile
 
     if (!visible) return null;
 
+    // Contact sync yahan se hata diya gaya hai — wo ab sirf OTP success par
+    // aur Settings → Contact Sync se chalta hai.
+    // Ye Sync Data chaaron chat tabs ka manual full refresh hai.
     const ITEMS = [
         {
-            icon: 'sync-outline',
-            label: syncLoading ? 'Syncing...' : 'Sync Contacts',
-            sublabel: 'Update your contact list',
+            icon: 'refresh-outline',
+            label: syncing ? 'Syncing...' : 'Sync Data',
+            sublabel: 'Refresh all chat tabs',
             color: '#1199ff',
             bg: iconBgs.sync,
-            onPress: onSyncContacts,
-            disabled: syncLoading,
+            onPress: onSyncData,
+            disabled: syncing,
         },
         {
             icon: 'person-outline',
@@ -86,7 +89,7 @@ export default function HeaderMenu({ visible, onClose, onSyncContacts, onProfile
                                         disabled={item.disabled}
                                     >
                                         <View style={[styles.iconWrap, { backgroundColor: item.bg }]}>
-                                            {item.disabled && item.label.includes('Sync') ? (
+                                            {item.disabled ? (
                                                 <ActivityIndicator size="small" color={item.color} />
                                             ) : (
                                                 <Ionicons name={item.icon} size={18} color={item.color} />

@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import * as VideoThumbnails from 'expo-video-thumbnails';
+import { memo, useEffect, useState } from 'react';
 
 import { useTranslation } from 'react-i18next';
 import {
@@ -14,23 +15,34 @@ import moment from 'moment';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// Muted video thumbnail — hook ko .map() ke andar call na karna pade isliye alag component
-const VideoThumb = ({ uri, style }) => {
-    const player = useVideoPlayer(uri, (p) => {
-        p.muted = true;
-        p.loop = false;
-    });
+// Video ka thumbnail ek baar bana kar cache — pehle har video message ke liye poora
+// video player banta tha (memory + network bhari, lambi chat me list atak jati thi).
+const thumbCache = new Map();
+const VideoThumb = memo(({ uri, style }) => {
+    const [thumb, setThumb] = useState(thumbCache.get(uri) ?? null);
+    useEffect(() => {
+        if (!uri || thumbCache.has(uri)) { setThumb(thumbCache.get(uri) ?? null); return undefined; }
+        let alive = true;
+        VideoThumbnails.getThumbnailAsync(uri, { time: 500 })
+            .then(({ uri: t }) => { thumbCache.set(uri, t); if (alive) setThumb(t); })
+            .catch(() => { });
+        return () => { alive = false; };
+    }, [uri]);
+    return thumb
+        ? <Image source={{ uri: thumb }} style={style} resizeMode="cover" />
+        : <View style={[style, { backgroundColor: '#1b1b1b' }]} />;
+});
 
-    return (
-        <VideoView
-            style={style}
-            player={player}
-            contentFit="cover"
-            nativeControls={false}
-            allowsFullscreen={false}
-            allowsPictureInPicture={false}
-        />
-    );
+// Document ka icon file type ke hisaab se (har file PDF nahi hoti)
+const docIcon = (att) => {
+    const name = `${att?.filename ?? ''} ${att?.fileType ?? ''} ${att?.url ?? ''}`.toLowerCase();
+    if (name.includes('pdf')) return 'file-pdf-box';
+    if (/\b(image|jpe?g|png|gif|webp|heic)\b/.test(name)) return 'file-image';
+    if (/\b(docx?|msword|wordprocessing)\b/.test(name)) return 'file-word-box';
+    if (/\b(xlsx?|csv|spreadsheet|excel)\b/.test(name)) return 'file-excel-box';
+    if (/\b(pptx?|presentation|powerpoint)\b/.test(name)) return 'file-powerpoint-box';
+    if (/\b(zip|rar|7z)\b/.test(name)) return 'folder-zip';
+    return 'file-document';
 };
 
 const MessageBubble = ({
@@ -38,6 +50,7 @@ const MessageBubble = ({
     setImageModalUri, setVideoModalUri, openDocInBrowser,
     setReplyMsg, setShowEmoji, fmtTime,
     isSelectMode, isHighlighted, isSelected, onSelect, onReplyPress, isMatch,
+    openPopup, retryMessage,
 }) => {
     const { t } = useTranslation();
     const isMine = item.sender?._id === MY_USER_ID || item.sender === MY_USER_ID;
@@ -62,8 +75,30 @@ const MessageBubble = ({
     const deletedC = isDark ? '#8696a0' : '#888888';
     const replyBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
 
-    const handlePress = () => isSelectMode ? onSelect(item) : null;
-    const handleLongPress = () => !item.isDeleted && onSelect(item);
+    const isFailed = isMine && item.status === 'failed';
+    // Tap: select mode me select/unselect, failed message par retry
+    const handlePress = () => {
+        if (isSelectMode) return onSelect(item);
+        if (isFailed) retryMessage?.(item);
+    };
+    // Long press: actions popup (reply, forward, star, react, delete...). Select mode me toggle.
+    const handleLongPress = () => {
+        if (item.isDeleted) return;
+        if (isFailed) return openPopup?.(item); // Retry / Delete
+        if (item.isOptimistic) return;
+        if (isSelectMode || !openPopup) return onSelect(item);
+        openPopup(item);
+    };
+    // Reactions ko emoji ke hisaab se group karo: ❤️ 2  👍 1
+    const reactionGroups = Object.entries(
+        (item.reactions ?? []).reduce((acc, r) => {
+            if (r?.emoji) acc[r.emoji] = (acc[r.emoji] ?? 0) + 1;
+            return acc;
+        }, {})
+    );
+    const isStarred = !!item.starredBy?.some((u) => (u?._id ?? u) === MY_USER_ID);
+    // Media par tap: select mode me select, warna full-screen viewer
+    const openMedia = (open) => () => (isSelectMode ? onSelect(item) : open());
 
 
     const Shawtime = moment(item.createdAt).format('hh:mm A');
@@ -102,6 +137,12 @@ const MessageBubble = ({
                                 {item.sender?.name ?? 'User'}
                             </Text>
                         )}
+                        {item.isForwarded && !item.isDeleted && (
+                            <View style={styles.forwardedRow}>
+                                <Ionicons name="arrow-redo" size={12} color={timeColor} />
+                                <Text style={[styles.forwardedText, { color: timeColor }]}>Forwarded</Text>
+                            </View>
+                        )}
                         {item.replyTo && (
                             <TouchableOpacity
                                 activeOpacity={0.7}
@@ -130,7 +171,13 @@ const MessageBubble = ({
                         ) : (
                             <View style={styles.contentContainer}>
                                 {item.messageType === 'image' && item.attachments?.map((att, i) => (
-                                    <View key={i} style={styles.mediaWrap}>
+                                    <Pressable
+                                        key={i}
+                                        style={styles.mediaWrap}
+                                        onPress={openMedia(() => setImageModalUri(getFullUrl(att.url)))}
+                                        onLongPress={handleLongPress}
+                                        delayLongPress={200}
+                                    >
                                         <Image source={{ uri: getFullUrl(att.url) }} style={styles.msgMedia} resizeMode="cover" />
                                         <TouchableOpacity
                                             style={styles.zoomBtn}
@@ -139,13 +186,22 @@ const MessageBubble = ({
                                         >
                                             <Ionicons name="expand" size={16} color="#fff" />
                                         </TouchableOpacity>
-                                    </View>
+                                    </Pressable>
                                 ))}
 
                                 {item.messageType === 'video' && item.attachments?.map((att, i) => (
-                                    <View key={i} style={styles.videoThumbWrap}>
-                                        <VideoThumb uri={getFullUrl(att.url)} style={styles.msgMedia} />
-                                        <View style={styles.videoOverlay}>
+                                    <Pressable
+                                        key={i}
+                                        style={styles.videoThumbWrap}
+                                        onPress={openMedia(() => setVideoModalUri(getFullUrl(att.url)))}
+                                        onLongPress={handleLongPress}
+                                        delayLongPress={200}
+                                    >
+                                        {/* Native video view touch kha leta hai — overlay upar rahe isliye pointerEvents none */}
+                                        <View pointerEvents="none" style={styles.msgMedia}>
+                                            <VideoThumb uri={getFullUrl(att.url)} style={styles.msgMedia} />
+                                        </View>
+                                        <View pointerEvents="none" style={styles.videoOverlay}>
                                             <Ionicons name="play" size={30} color="#fff" />
                                         </View>
                                         <TouchableOpacity
@@ -155,7 +211,7 @@ const MessageBubble = ({
                                         >
                                             <Ionicons name="expand" size={16} color="#fff" />
                                         </TouchableOpacity>
-                                    </View>
+                                    </Pressable>
                                 ))}
 
                                 {item.messageType === 'audio' && item.attachments?.map((att, i) => (
@@ -165,8 +221,8 @@ const MessageBubble = ({
                                 ))}
 
                                 {item.messageType === 'document' && item.attachments?.map((att, i) => (
-                                    <TouchableOpacity key={i} style={styles.docRow} onPress={() => openDocInBrowser(att.url)}>
-                                        <MaterialCommunityIcons name="file-pdf-box" size={24} color="#fff" />
+                                    <TouchableOpacity key={i} style={styles.docRow} onPress={openMedia(() => openDocInBrowser(att.url))} onLongPress={handleLongPress}>
+                                        <MaterialCommunityIcons name={docIcon(att)} size={24} color="#fff" />
                                         <Text style={styles.docName} numberOfLines={1}>{att.filename || 'Document'}</Text>
                                     </TouchableOpacity>
                                 ))}
@@ -190,6 +246,10 @@ const MessageBubble = ({
 
                         {/* Time + Ticks */}
                         <View style={styles.timeRow}>
+                            {isStarred && <Ionicons name="star" size={10} color={timeColor} />}
+                            {item.isEdited && !item.isDeleted && (
+                                <Text style={[styles.timeText, { color: timeColor }]}>edited</Text>
+                            )}
                             <Text style={[styles.timeText, { color: timeColor }]}>{Shawtime}</Text>
                             <Ticks
                                 status={item.status}
@@ -198,7 +258,19 @@ const MessageBubble = ({
                                 myId={MY_USER_ID}
                             />
                         </View>
+                        {isFailed && (
+                            <Text style={styles.failedText}>Not sent · tap to retry</Text>
+                        )}
                     </View>
+                    {reactionGroups.length > 0 && !item.isDeleted && (
+                        <View style={[styles.reactionRow, { backgroundColor: isDark ? '#1f2c34' : '#ffffff' }]}>
+                            {reactionGroups.map(([emoji, count]) => (
+                                <Text key={emoji} style={styles.reactionText}>
+                                    {emoji}{count > 1 ? <Text style={[styles.reactionCount, { color: timeColor }]}> {count}</Text> : null}
+                                </Text>
+                            ))}
+                        </View>
+                    )}
                 </View>
 
                 {isSelectMode && isMine && (
@@ -237,6 +309,12 @@ const styles = StyleSheet.create({
     selectCircle: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: '#1296f3', alignItems: 'center', justifyContent: 'center' },
     selectCircleChecked: { backgroundColor: '#1296f3' },
     deletedText: { fontSize: 13, fontStyle: 'italic', padding: 4 },
+    forwardedRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3, paddingHorizontal: 2 },
+    forwardedText: { fontSize: 11, fontStyle: 'italic' },
+    failedText: { color: '#e74c3c', fontSize: 11, marginTop: 2, textAlign: 'right' },
+    reactionRow: { flexDirection: 'row', gap: 4, marginTop: -6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
+    reactionText: { fontSize: 14 },
+    reactionCount: { fontSize: 11 },
 });
 
 export default MessageBubble;

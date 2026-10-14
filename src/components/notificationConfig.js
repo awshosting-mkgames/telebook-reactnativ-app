@@ -23,6 +23,13 @@ export const ENTITY_ROUTE_MAP = {
         screen:    'Channeldetailscreen',
         getParams: (d) => ({ channelId: d.entityId }),
     },
+    // App kill hone par incoming call ka FCM push tap karne par yahan aata hai.
+    // agora token yahan nahi hota (sirf accept response mein milta) — InCallScreen
+    // khud accept karke token lega (callHelpers.acceptCall).
+    call: {
+        screen:    'InCall',
+        getParams: (d) => ({ callId: d.entityId, type: d.callType, isIncoming: true }),
+    },
     promo: {
         screen:    'PromoScreen',
         getParams: (d) => ({ promoId: d.entityId }),

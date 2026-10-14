@@ -11,13 +11,23 @@ const BASE_URL = Config.Main_url;
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
+// displayAvatar processChat me pehle se poora URL hai — dobara MEDIA_URL mat jodo
 const resolveAvatar = (path) => {
     if (!path) return DEFAULT_AVATAR;
-    return Config?.MEDIA_URL + path;
+    return /^(https?:|file:|data:)/.test(path) ? path : Config?.MEDIA_URL + path;
+};
+
+const previewOf = (m) => {
+    if (!m || m.isDeleted) return '';
+    if (m.messageType === 'image') return '📷 Photo';
+    if (m.messageType === 'video') return '🎥 Video';
+    if (m.messageType === 'audio') return '🎤 Voice';
+    if (m.messageType === 'document') return '📄 Document';
+    return m.content ?? '';
 };
 
 const ForwardContactModal = ({ visible, onClose, onForward }) => {
-    const chats = useSelector((state) => state.chatList?.chats ?? []);
+    const chats = useSelector((state) => state.chatList?.tabs?.All ?? []);
     const loading = useSelector((state) => state.chatList?.loading ?? false);
 
     const [searchText, setSearchText] = useState('');
@@ -32,12 +42,12 @@ const ForwardContactModal = ({ visible, onClose, onForward }) => {
 
     const filteredChats = useMemo(() => {
         if (!searchText.trim()) return chats;
-        const q = searchText.toLowerCase();
+        const q = searchText.toLowerCase().trim();
+        const digits = q.replace(/\D/g, '');
         return chats.filter(
             (c) =>
                 c.displayName?.toLowerCase().includes(q) ||
-                c.displayUser?.phone?.toLowerCase().includes(q) ||
-                c.displayUser?.phoneNumber?.toLowerCase().includes(q)
+                (digits.length > 0 && String(c.displayUser?.mobile ?? '').includes(digits))
         );
     }, [searchText, chats]);
 
@@ -70,9 +80,9 @@ const ForwardContactModal = ({ visible, onClose, onForward }) => {
                 />
                 <View style={s.chatInfo}>
                     <Text style={s.chatName} numberOfLines={1}>{item.displayName}</Text>
-                    {item.lastMessage?.content ? (
+                    {previewOf(item.latestMessage) ? (
                         <Text style={s.chatLastMsg} numberOfLines={1}>
-                            {item.lastMessage.content}
+                            {previewOf(item.latestMessage)}
                         </Text>
                     ) : null}
                 </View>

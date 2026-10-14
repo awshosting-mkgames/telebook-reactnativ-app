@@ -7,15 +7,11 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as VideoThumbnails from 'expo-video-thumbnails';
-import apiService from '../../services/apiService';
+import Toast from 'react-native-toast-message';
 import { ThemeContext } from '../../components/ThemeContext';
 import { useSelector, useDispatch } from 'react-redux';
-
-import { settotalappData } from '../../redex/slices/totalappDataSlice';
 import Config from '../../services/config';
-import { appendFile } from '../../utils/uploadFile';
-const BASE_URL = Config.Main_url;
+import { uploadProfilePhoto } from '../../services/profileSync';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
@@ -29,8 +25,9 @@ const pickMedia = async (mediaTypes, allowsMultiple = false) => {
     const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes,
         allowsMultipleSelection: allowsMultiple,
+        allowsEditing: !allowsMultiple,
+        aspect: [1, 1],
         quality: 0.85,
-        videoMaxDuration: 30,
     });
     if (result.canceled) return null;
     return result.assets;
@@ -44,8 +41,9 @@ const pickFromCamera = async (mediaTypes) => {
     }
     const result = await ImagePicker.launchCameraAsync({
         mediaTypes,
+        allowsEditing: true,
+        aspect: [1, 1],
         quality: 0.85,
-        videoMaxDuration: 30,
     });
     if (result.canceled) return null;
     return result.assets;
@@ -78,11 +76,13 @@ const AvatarScreen = ({ navigation }) => {
     const { theme } = useContext(ThemeContext);
      const dispatch  = useDispatch();
     const maniAllData = useSelector((state) => state.totalappData);
-    console.log(maniAllData);
-    const MY_USER_ID  = maniAllData?.userId ?? '';
     const userData    = maniAllData?.user ?? null;
+    const currentPhoto = userData?.profilePicture ? Config.MEDIA_URL + userData.profilePicture : null;
 
-    const [profileUri,   setProfileUri]   = useState(null);
+    // Pura picker asset rakhte hain (mimeType / web File ke liye), sirf uri nahi
+    const [profileAsset, setProfileAsset] = useState(null);
+    const profileUri = profileAsset?.uri ?? null;
+    const setPicked = (assets) => { if (assets?.[0]) setProfileAsset(assets[0]); };
     const [profileLoading, setProfileLoading] = useState(false);
 
     const [statusItems,  setStatusItems]  = useState([]);   // { uri, type, thumbnail? }
@@ -99,14 +99,12 @@ const AvatarScreen = ({ navigation }) => {
         Alert.alert('Profile Photo', 'Choose source', [
             {
                 text: 'Camera', onPress: async () => {
-                    const assets = await pickFromCamera(ImagePicker.MediaTypeOptions.Images);
-                    if (assets) setProfileUri(assets[0].uri);
+                    setPicked(await pickFromCamera(['images']));
                 }
             },
             {
                 text: 'Gallery', onPress: async () => {
-                    const assets = await pickMedia(ImagePicker.MediaTypeOptions.Images);
-                    if (assets) setProfileUri(assets[0].uri);
+                    setPicked(await pickMedia(['images']));
                 }
             },
             { text: 'Cancel', style: 'cancel' },
@@ -114,41 +112,22 @@ const AvatarScreen = ({ navigation }) => {
     };
 
     const uploadProfile = async () => {
-        if (!profileUri) return Alert.alert('No photo selected', 'Please pick a profile photo first.');
+        if (!profileAsset) {
+            Toast.show({ type: 'info', text1: 'No photo selected', text2: 'Pick a profile photo first' });
+            return;
+        }
         setProfileLoading(true);
         try {
-            const formData = new FormData();
-            await appendFile(formData, 'profilePicture', {
-                uri: profileUri,
-                name: 'profile.jpg',
-                type: 'image/jpeg',
-            });
-            const res = await apiService({
-                method: 'PUT',
-                endpoint: 'users/profile',
-                data: formData,
-                isMultipart:true
-                
-            });
-            console.log("res_____-----------_",res)
-            if(res?.success){
-                updateUserInStore(res?.data?.user)
-            }
+            const res = await uploadProfilePhoto(dispatch, profileAsset);
+            if (!res.ok) throw new Error(res.message);
+            setProfileAsset(null);
+            Toast.show({ type: 'success', text1: 'Profile photo updated' });
+            navigation.goBack();
         } catch (e) {
-            console.error(e);
-            Alert.alert('Error', 'Failed to upload profile photo.');
+            Toast.show({ type: 'error', text1: 'Upload failed', text2: e?.message || 'Please try again' });
         } finally {
             setProfileLoading(false);
         }
-    };
-
-     const updateUserInStore = (newUserData) => {
-            dispatch(
-                settotalappData({
-                ...maniAllData,   
-                user: newUserData,            
-                })
-            );
     };
 
    
@@ -173,9 +152,9 @@ const AvatarScreen = ({ navigation }) => {
                     <Text style={[styles.sectionSub, { color: sub }]}>Your profile photo is visible to all contacts</Text>
 
                     <View style={styles.profileRow}>
-                        <TouchableOpacity onPress={handleProfileSource} style={styles.avatarWrap} activeOpacity={0.8}>
-                            {profileUri ? (
-                                <Image source={{ uri: profileUri }} style={styles.avatarPreview} />
+                        <TouchableOpacity onPress={Platform.OS === 'web' ? () => pickMedia(['images']).then(setPicked) : handleProfileSource} style={styles.avatarWrap} activeOpacity={0.8}>
+                            {profileUri || currentPhoto ? (
+                                <Image source={{ uri: profileUri || currentPhoto }} style={styles.avatarPreview} />
                             ) : (
                                 <View style={[styles.avatarPlaceholder, { backgroundColor: isDark ? '#2a2a2a' : '#f0f4ff' }]}>
                                     <Ionicons name="person" size={44} color="#0084ff" />
@@ -187,11 +166,11 @@ const AvatarScreen = ({ navigation }) => {
                         </TouchableOpacity>
 
                         <View style={styles.profileBtns}>
-                            <TouchableOpacity style={styles.sourceBtn} onPress={() => pickFromCamera(ImagePicker.MediaTypeOptions.Images).then(a => a && setProfileUri(a[0].uri))}>
+                            <TouchableOpacity style={styles.sourceBtn} onPress={() => pickFromCamera(['images']).then(setPicked)}>
                                 <Ionicons name="camera-outline" size={18} color="#0084ff" />
                                 <Text style={styles.sourceBtnText}>Camera</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.sourceBtn} onPress={() => pickMedia(ImagePicker.MediaTypeOptions.Images).then(a => a && setProfileUri(a[0].uri))}>
+                            <TouchableOpacity style={styles.sourceBtn} onPress={() => pickMedia(['images']).then(setPicked)}>
                                 <Ionicons name="images-outline" size={18} color="#0084ff" />
                                 <Text style={styles.sourceBtnText}>Gallery</Text>
                             </TouchableOpacity>
@@ -199,9 +178,9 @@ const AvatarScreen = ({ navigation }) => {
                     </View>
 
                     <TouchableOpacity
-                        style={[styles.uploadBtn, profileLoading && { opacity: 0.7 }]}
+                        style={[styles.uploadBtn, (profileLoading || !profileAsset) && { opacity: 0.6 }]}
                         onPress={uploadProfile}
-                        disabled={profileLoading}
+                        disabled={profileLoading || !profileAsset}
                     >
                         {profileLoading
                             ? <ActivityIndicator color="#fff" size="small" />

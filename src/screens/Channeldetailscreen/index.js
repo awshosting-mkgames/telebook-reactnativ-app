@@ -13,8 +13,9 @@ import {
     FlatList,
     Image,
     Modal,
-    SafeAreaView,
+    Platform,
     ScrollView,
+    Share,
     StatusBar,
     StyleSheet,
     Text,
@@ -22,14 +23,23 @@ import {
     TouchableWithoutFeedback,
     View
 } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemeContext } from '../../components/ThemeContext';
+import { claimPlayback, useExclusivePlayback } from '../../utils/playbackManager';
 import apiService from '../../services/apiService';
 import Config from '../../services/config';
-const BASE_URL = Config.Main_url;
 const STORAGE_KEY = 'DOWNLOAD_DIR_URI';
+const HIT = { top: 10, bottom: 10, left: 10, right: 10 };
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_W = SCREEN_W - 24;
+// Media ki width = slider ki page width, warna multi-media post me slide adhi ruk jati thi
+const MEDIA_W = CARD_W - 26;
+// Feed me media ka box — pehle video square (w x w) tha, isliye portrait video ke
+// upar-neeche bahut kaali jagah bachti thi
+const MEDIA_H = Math.round(MEDIA_W * 0.78);
 
 
 const PALETTES = {
@@ -267,6 +277,8 @@ function VideoZoomModal({ visible, uri, onClose }) {
         p.loop = false;
     });
 
+    useExclusivePlayback(player);
+
     // Keep the player's source in sync with whichever attachment was tapped
     useEffect(() => {
         if (uri) {
@@ -276,6 +288,7 @@ function VideoZoomModal({ visible, uri, onClose }) {
 
     useEffect(() => {
         if (visible) {
+            claimPlayback(player);
             player.play();
         } else {
             player.pause();
@@ -309,33 +322,50 @@ function VideoZoomModal({ visible, uri, onClose }) {
 }
 
 /* ─── Media Types Components ─────────────────────────── */
-function VideoSlide({ uri, fullscreen }) {
+function VideoSlide({ uri, fullscreen, onPlayingChange }) {
     const [playing, setPlaying] = useState(false);
-    const w = fullscreen ? SCREEN_W : CARD_W - 25;
+    const w = fullscreen ? SCREEN_W : MEDIA_W;
+    const h = fullscreen ? SCREEN_H : MEDIA_H;
 
     const player = useVideoPlayer(uri, (p) => {
         p.loop = false;
     });
 
+    useExclusivePlayback(player);
+
     useEffect(() => {
         const sub = player.addListener('playingChange', ({ isPlaying }) => {
             setPlaying(isPlaying);
+            onPlayingChange?.(isPlaying);
         });
         return () => sub.remove();
-    }, [player]);
+    }, [player, onPlayingChange]);
 
     return (
-        <TouchableWithoutFeedback onPress={() => { playing ? player.pause() : player.play(); }}>
-            <View style={[vs.container, { width: w, height: w }]}>
+        <TouchableWithoutFeedback onPress={() => {
+            if (playing) { player.pause(); return; }
+            claimPlayback(player);
+            player.play();
+        }}>
+            <View style={[vs.container, { width: w, height: h }]}>
                 <VideoView
                     player={player}
                     style={vs.video}
                     contentFit="contain"
                     nativeControls={false}
                     allowsFullscreen={fullscreen}
+                    // Android par default SurfaceView RN ke views ke upar draw hota hai,
+                    // isliye play button video ke peeche chala jata tha
+                    surfaceType={Platform.OS === 'android' && !fullscreen ? 'textureView' : 'surfaceView'}
                 />
-                {!playing && !fullscreen && (
-                    <View style={vs.playOverlay}><View style={vs.playCircle}><Ionicons name="play" size={28} color="#fff" style={{ marginLeft: 3 }} /></View></View>
+                {/* Play button ab caller (FeedVideo) render karta hai — Android par
+                    video surface apne bheetar ke overlay ko dhak leta hai */}
+                {!playing && !fullscreen && !onPlayingChange && (
+                    <View style={vs.playOverlay}>
+                        <View style={vs.playCircle}>
+                            <Ionicons name="play" size={26} color="#fff" style={{ marginLeft: 3 }} />
+                        </View>
+                    </View>
                 )}
             </View>
         </TouchableWithoutFeedback>
@@ -351,6 +381,8 @@ function AudioSlide({ uri, fullscreen, pal }) {
         p.loop = false;
         p.timeUpdateEventInterval = 0.5;
     });
+
+    useExclusivePlayback(player);
 
     useEffect(() => {
         const playingSub = player.addListener('playingChange', ({ isPlaying }) => setIsPlaying(isPlaying));
@@ -374,11 +406,40 @@ function AudioSlide({ uri, fullscreen, pal }) {
                 ))}
             </View>
             <View style={au.controls}>
-                <TouchableOpacity onPress={() => isPlaying ? player.pause() : player.play()} style={[au.playBtn, { backgroundColor: pal.accent }]}>
+                <TouchableOpacity
+                    onPress={() => {
+                        if (isPlaying) { player.pause(); return; }
+                        claimPlayback(player);
+                        player.play();
+                    }}
+                    style={[au.playBtn, { backgroundColor: pal.accent }]}
+                >
                     <Ionicons name={isPlaying ? 'pause' : 'play'} size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={[au.timeText, { color: pal.textMuted }]}>{formatTime(position * 1000)} / {formatTime(duration * 1000)}</Text>
             </View>
+        </View>
+    );
+}
+
+// Feed ka video: play button aur expand dono video ke bahar sibling hain,
+// warna Android par video surface unhe dhak leta hai
+function FeedVideo({ uri, onExpand }) {
+    const [playing, setPlaying] = useState(false);
+    return (
+        // Wrapper ki size video jitni — absolute overlay isi ke andar rahe
+        <View style={{ width: MEDIA_W, height: MEDIA_H }}>
+            <VideoSlide uri={uri} onPlayingChange={setPlaying} />
+            {/* Android par poore size ka overlay video surface ke peeche chala jata
+                hai — isliye play button chhota absolute view hai */}
+            {!playing && (
+                <View pointerEvents="none" style={vs.playCircleFloating}>
+                    <Ionicons name="play" size={26} color="#fff" style={{ marginLeft: 3 }} />
+                </View>
+            )}
+            <TouchableOpacity style={sl.expandIcon} onPress={onExpand} hitSlop={HIT}>
+                <Ionicons name="expand" size={14} color="#fff" />
+            </TouchableOpacity>
         </View>
     );
 }
@@ -393,29 +454,41 @@ function MediaSlider({ attachments, onOpenZoom, onOpenVideoZoom, pal }) {
             <FlatList
                 data={attachments}
                 keyExtractor={(_, i) => String(i)}
-                horizontal pagingEnabled
-                onScroll={e => setActiveIdx(Math.round(e.nativeEvent.contentOffset.x / CARD_W))}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={MEDIA_W}
+                decelerationRate="fast"
+                onScroll={e => setActiveIdx(Math.round(e.nativeEvent.contentOffset.x / MEDIA_W))}
+                scrollEventThrottle={16}
                 renderItem={({ item, index }) => {
                     const uri = getImageUrl(item?.url || item);
                     if (isAudio(item)) return <TouchableOpacity onPress={() => onOpenZoom(index)}><AudioSlide uri={uri} pal={pal} /></TouchableOpacity>;
-                    if (isVideo(item)) return <TouchableOpacity onPress={() => onOpenVideoZoom(index)}><VideoSlide uri={uri} /><View style={sl.expandIcon}><Ionicons name="expand" size={14} color="#fff" /></View></TouchableOpacity>;
+                    if (isVideo(item)) return <FeedVideo uri={uri} onExpand={() => onOpenVideoZoom(index)} />;
                     return (
-                        <TouchableOpacity onPress={() => onOpenZoom(index)}>
-                            <Image source={{ uri }} style={[sl.img, { backgroundColor: pal.imgBg, width: CARD_W - 26 }]} resizeMode="cover" />
+                        <TouchableOpacity onPress={() => onOpenZoom(index)} activeOpacity={0.9}>
+                            <Image source={{ uri }} style={[sl.img, { backgroundColor: pal.imgBg, width: MEDIA_W }]} resizeMode="cover" />
                             <View style={sl.expandIcon}><Ionicons name="expand" size={14} color="#fff" /></View>
                         </TouchableOpacity>
                     );
                 }}
             />
-            <View style={sl.badge}>
-                <Text style={sl.badgeText}>{attachments.length > 1 ? `${activeIdx + 1}/${attachments.length}` : 'Media'}</Text>
-            </View>
+            {attachments.length > 1 ? (
+                <View style={sl.badge}>
+                    <Text style={sl.badgeText}>{activeIdx + 1}/{attachments.length}</Text>
+                </View>
+            ) : (isVideo(current) || isAudio(current)) ? (
+                <View style={sl.badge}>
+                    <Ionicons name={isAudio(current) ? 'musical-notes' : 'videocam'} size={12} color="#fff" />
+                </View>
+            ) : null}
         </View>
     );
 }
 
 const MessageBubble = ({ item, pal }) => {
     const attachments = item?.attachments ?? [];
+    const viewCount = item?.views || item?.viewedBy?.length || 0;
     const [zoomOpen, setZoomOpen] = useState(false);
     const [videoZoomOpen, setVideoZoomOpen] = useState(false);
     const [zoomStart, setZoomStart] = useState(0);
@@ -431,7 +504,13 @@ const MessageBubble = ({ item, pal }) => {
                 </>
             )}
             {!!item?.content && <Text style={[mb.text, { color: pal.textPrimary }]}>{item.content}</Text>}
-            <View style={mb.footer}><Text style={[mb.time, { color: pal.textMuted }]}>{timeAgo(item?.createdAt)}</Text></View>
+            <View style={mb.footer}>
+                {/* views server ke viewedBy se — pehle post par koi stat nahi dikhti thi */}
+                <Ionicons name="eye-outline" size={13} color={pal.textMuted} />
+                <Text style={[mb.time, { color: pal.textMuted }]}>{formatCount(viewCount)}</Text>
+                <View style={[mb.dotSep, { backgroundColor: pal.textMuted }]} />
+                <Text style={[mb.time, { color: pal.textMuted }]}>{timeAgo(item?.createdAt)}</Text>
+            </View>
         </View>
     );
 };
@@ -439,92 +518,323 @@ const MessageBubble = ({ item, pal }) => {
 export default function ChannelDetailScreen({ navigation, route }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
 
     const pal = PALETTES[theme?.mode] ?? PALETTES.light;
     const { channelId } = route.params ?? {};
     const [channel, setChannel] = useState(null);
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [imageUri, setimageUri] = useState('');
+    const [showInfo, setShowInfo] = useState(false);
+    const [showMenu, setShowMenu] = useState(false);
 
     const [following, setFollowing] = useState(false);
     const [loadingFollow, setLoadingFollow] = useState(false);
 
     const fetchData = useCallback(async () => {
-        setLoading(true);
         try {
             const cRes = await apiService({ method: 'GET', endpoint: `channels/${channelId}` });
-            const channelData = cRes?.data?.channel || cRes;
+            const channelData = cRes?.data?.channel || cRes?.data || null;
+            if (!channelData) return;
             setChannel(channelData);
-            setFollowing(channelData?.isSubscribed);
-            const imageUri1 = channelData.channelIcon ? `${BASE_URL?.MEDIA_URL}${channelData.channelIcon}` : 'https://api.dicebear.com/9.x/thumbs/png?seed=Community';
-            setimageUri(imageUri1)
-
-        } finally { setLoading(false); }
+            setFollowing(!!channelData?.isSubscribed);
+            setimageUri(channelData.channelIcon ? `${Config.MEDIA_URL}${channelData.channelIcon}` : '');
+        } catch (e) {
+            console.log('Channel fetch error:', e);
+        }
     }, [channelId]);
-    const fetchDatatwo = useCallback(async () => {
 
+    const fetchMessages = useCallback(async () => {
         try {
             const mRes = await apiService({ method: 'GET', endpoint: `channels/${channelId}/messages` });
-            setMessages(mRes?.messages || mRes?.data?.messages || []);
-        } finally { }
+            setMessages(mRes?.data?.messages ?? []);
+        } catch (e) {
+            console.log('Channel messages error:', e);
+        }
     }, [channelId]);
 
+    const loadAll = useCallback(async ({ silent = false } = {}) => {
+        if (silent) setRefreshing(true); else setLoading(true);
+        await Promise.all([fetchData(), fetchMessages()]);
+        setLoading(false);
+        setRefreshing(false);
+    }, [fetchData, fetchMessages]);
 
-    useEffect(() => { fetchData(); fetchDatatwo(); }, [fetchData]);
+    useEffect(() => { loadAll(); }, [loadAll]);
 
-    const handleFollow = async () => {
+    // Screen par wapas aane par naye posts / subscriber count aa jayein
+    useFocusEffect(
+        useCallback(() => { loadAll({ silent: true }); }, [loadAll])
+    );
+
+    const doFollow = async (nextFollowing) => {
+        const prevFollowing = following;
+        const delta = nextFollowing ? 1 : -1;
+
+        setFollowing(nextFollowing);
+        setChannel(prev => prev && ({
+            ...prev,
+            isSubscribed: nextFollowing,
+            subscriberCount: Math.max(0, (prev.subscriberCount ?? 0) + delta),
+        }));
+        setLoadingFollow(true);
+
         try {
-            await apiService({
+            // apiService throw nahi karta — success check ke bina fail hone par bhi
+            // button badla hua dikhta rehta tha
+            const res = await apiService({
                 method: 'PUT',
-                endpoint: following
-                    ? `channels/${channel._id}/unsubscribe`
-                    : `channels/${channel._id}/subscribe`,
+                endpoint: nextFollowing
+                    ? `channels/${channelId}/subscribe`
+                    : `channels/${channelId}/unsubscribe`,
                 data: {},
             });
+            if (!res?.success) throw new Error(res?.error?.message || 'failed');
             fetchData();
         } catch (e) {
-
+            setFollowing(prevFollowing);
+            setChannel(prev => prev && ({
+                ...prev,
+                isSubscribed: prevFollowing,
+                subscriberCount: Math.max(0, (prev.subscriberCount ?? 0) - delta),
+            }));
+            Alert.alert('Error', 'Something went wrong, please try again');
         } finally {
             setLoadingFollow(false);
         }
     };
 
-    return (
-        <SafeAreaView style={[sc.container, { backgroundColor: pal.bg }]}>
-            <StatusBar backgroundColor={pal.statusBg} barStyle={pal.statusBar} />
-            <View style={sc.topBar}>
-                <TouchableOpacity onPress={() => navigation.goBack()}><Ionicons name="arrow-back" size={24} color="#fff" /></TouchableOpacity>
-                <View style={sc.topInfo}>
-                    <View>
-                        <Image source={{ uri: imageUri }} style={sc.avatar} />
-                    </View>
-                    <View>
-                        <Text style={sc.topTitle}>{channel?.channelName || 'Channel'}</Text>
-                        <Text style={sc.topSubCount}>{formatCount(channel?.subscriberCount || 0)} subscribers</Text>
-                    </View>
+    const handleFollow = () => {
+        if (loadingFollow) return;
+        if (!following) return doFollow(true);
 
-                </View>
+        Alert.alert('Unsubscribe?', `You will stop receiving posts from ${channel?.channelName ?? 'this channel'}.`, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Unsubscribe', style: 'destructive', onPress: () => doFollow(false) },
+        ]);
+    };
+
+    const shareChannel = async () => {
+        setShowMenu(false);
+        try {
+            const link = channel?.inviteLink
+                ? `${Config.Main_url}c/${channel.inviteLink}`
+                : Config.Main_url;
+            await Share.share({
+                title: channel?.channelName,
+                message: `Check out "${channel?.channelName}" on Telebook: ${link}`,
+            });
+        } catch (e) {
+            console.log('Share error:', e);
+        }
+    };
+
+    const copyInviteLink = () => {
+        if (!channel?.inviteLink) return;
+        Clipboard.setString(`${Config.Main_url}c/${channel.inviteLink}`);
+        Alert.alert('Copied', 'Invite link copied to clipboard');
+    };
+
+    const subscriberCount = channel?.subscriberCount ?? channel?.subscribers?.length ?? 0;
+    const postCount = channel?.totalMessages ?? messages.length;
+
+    const ChannelIcon = ({ size }) => (
+        imageUri ? (
+            <Image source={{ uri: imageUri }} style={{ width: size, height: size, borderRadius: size / 2 }} />
+        ) : (
+            <View style={[
+                { width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' },
+                { backgroundColor: 'rgba(255,255,255,0.25)' },
+            ]}>
+                <Ionicons name="megaphone" size={size * 0.45} color="#fff" />
             </View>
-            {loading ? <ActivityIndicator size="large" color={pal.accent} style={{ marginTop: 50 }} /> : (
+        )
+    );
+
+    return (
+        <View style={[sc.container, { backgroundColor: pal.bg }]}>
+            <StatusBar backgroundColor={pal.statusBg} barStyle={pal.statusBar} />
+
+            {/* HEADER — baaki app ke header jaisa (avatar + naam + subscribers + menu) */}
+            <View style={sc.topBar}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={sc.iconBtn} hitSlop={HIT}>
+                    <Ionicons name="arrow-back" size={22} color="#fff" />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={sc.topInfo} activeOpacity={0.7} onPress={() => setShowInfo(true)}>
+                    <ChannelIcon size={38} />
+                    <View style={{ flex: 1 }}>
+                        <Text style={sc.topTitle} numberOfLines={1}>{channel?.channelName || 'Channel'}</Text>
+                        <Text style={sc.topSubCount} numberOfLines={1}>
+                            {formatCount(subscriberCount)} {subscriberCount === 1 ? 'subscriber' : 'subscribers'}
+                        </Text>
+                    </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => setShowMenu(true)} style={sc.iconBtn} hitSlop={HIT}>
+                    <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
+                </TouchableOpacity>
+            </View>
+
+            {loading ? (
+                <ActivityIndicator size="large" color={pal.accent} style={{ marginTop: 50 }} />
+            ) : (
                 <FlatList
                     data={messages}
                     keyExtractor={(it, i) => it?._id || String(i)}
                     renderItem={({ item }) => <MessageBubble item={item} pal={pal} />}
-                    contentContainerStyle={{ paddingBottom: 50 }}
+                    contentContainerStyle={{ paddingTop: 8, paddingBottom: 110 + insets.bottom, flexGrow: 1 }}
+                    refreshing={refreshing}
+                    onRefresh={() => loadAll({ silent: true })}
+                    ListEmptyComponent={
+                        <View style={sc.emptyWrap}>
+                            <View style={[sc.emptyIconWrap, { backgroundColor: pal.card, borderColor: pal.cardBorder }]}>
+                                <Ionicons name="megaphone-outline" size={34} color={pal.accent} />
+                            </View>
+                            <Text style={[sc.emptyTitle, { color: pal.textPrimary }]}>No posts yet</Text>
+                            <Text style={[sc.emptyText, { color: pal.textMuted }]}>
+                                New posts from this channel will show up here
+                            </Text>
+                        </View>
+                    }
                 />
             )}
-            <View style={sc.followFooter}>
+
+            {/* SUBSCRIBE BAR — pehle ek floating pill tha jiska style hi apply nahi hota tha */}
+            <View style={[
+                sc.footerBar,
+                { backgroundColor: pal.card, borderTopColor: pal.cardBorder, paddingBottom: 12 + insets.bottom },
+            ]}>
                 <TouchableOpacity
                     onPress={handleFollow}
                     disabled={loadingFollow}
-                    style={following} >
-                    <Text style={[sc.followText, { color: '#fff' }]}>
-                        {following ? t('Unfollow') : t('Follow')}
-                    </Text>
+                    activeOpacity={0.85}
+                    style={[
+                        sc.followBtn,
+                        following
+                            ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: pal.accent }
+                            : { backgroundColor: pal.accent },
+                        loadingFollow && { opacity: 0.6 },
+                    ]}
+                >
+                    {loadingFollow ? (
+                        <ActivityIndicator size="small" color={following ? pal.accent : '#fff'} />
+                    ) : (
+                        <>
+                            <Ionicons
+                                name={following ? 'checkmark-circle' : 'add-circle-outline'}
+                                size={18}
+                                color={following ? pal.accent : '#fff'}
+                            />
+                            <Text style={[sc.followText, { color: following ? pal.accent : '#fff' }]}>
+                                {following ? 'Subscribed' : 'Subscribe'}
+                            </Text>
+                        </>
+                    )}
                 </TouchableOpacity>
             </View>
-        </SafeAreaView>
+
+            {/* MENU */}
+            <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+                <TouchableOpacity style={sc.menuOverlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
+                    <View style={[sc.menuBox, { backgroundColor: pal.card }]}>
+                        <TouchableOpacity style={sc.menuItem} onPress={() => { setShowMenu(false); setShowInfo(true); }} activeOpacity={0.7}>
+                            <Ionicons name="information-circle-outline" size={18} color={pal.accent} />
+                            <Text style={[sc.menuText, { color: pal.textPrimary }]}>Channel info</Text>
+                        </TouchableOpacity>
+                        <View style={[sc.menuDivider, { backgroundColor: pal.cardBorder }]} />
+                        <TouchableOpacity style={sc.menuItem} onPress={shareChannel} activeOpacity={0.7}>
+                            <Ionicons name="share-social-outline" size={18} color={pal.accent} />
+                            <Text style={[sc.menuText, { color: pal.textPrimary }]}>Share channel</Text>
+                        </TouchableOpacity>
+                        {following && (
+                            <>
+                                <View style={[sc.menuDivider, { backgroundColor: pal.cardBorder }]} />
+                                <TouchableOpacity style={sc.menuItem} onPress={() => { setShowMenu(false); handleFollow(); }} activeOpacity={0.7}>
+                                    <Ionicons name="close-circle-outline" size={18} color="#EF4444" />
+                                    <Text style={[sc.menuText, { color: '#EF4444' }]}>Unsubscribe</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* INFO SHEET — description/category/invite link pehle kahin dikhte hi nahi the */}
+            <Modal visible={showInfo} transparent animationType="slide" onRequestClose={() => setShowInfo(false)}>
+                <TouchableOpacity style={sc.sheetOverlay} activeOpacity={1} onPress={() => setShowInfo(false)}>
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        style={[sc.sheet, { backgroundColor: pal.card, paddingBottom: 20 + insets.bottom }]}
+                    >
+                        <View style={[sc.sheetHandle, { backgroundColor: pal.cardBorder }]} />
+
+                        <View style={sc.sheetHead}>
+                            <View style={sc.sheetIcon}><ChannelIcon size={72} /></View>
+                            <Text style={[sc.sheetTitle, { color: pal.textPrimary }]} numberOfLines={2}>
+                                {channel?.channelName || 'Channel'}
+                            </Text>
+                            <Text style={[sc.sheetSub, { color: pal.textMuted }]}>
+                                {formatCount(subscriberCount)} {subscriberCount === 1 ? 'subscriber' : 'subscribers'}
+                                {postCount ? ` · ${formatCount(postCount)} ${postCount === 1 ? 'post' : 'posts'}` : ''}
+                            </Text>
+                        </View>
+
+                        {!!channel?.channelDescription && (
+                            <Text style={[sc.sheetDesc, { color: pal.textDesc }]}>{channel.channelDescription}</Text>
+                        )}
+
+                        <View style={sc.chipRow}>
+                            {!!channel?.category && (
+                                <View style={[sc.chip, { borderColor: pal.cardBorder }]}>
+                                    <Ionicons name="pricetag-outline" size={13} color={pal.textMuted} />
+                                    <Text style={[sc.chipText, { color: pal.textMuted }]}>{channel.category}</Text>
+                                </View>
+                            )}
+                            <View style={[sc.chip, { borderColor: pal.cardBorder }]}>
+                                <Ionicons name={channel?.isPrivate ? 'lock-closed-outline' : 'earth-outline'} size={13} color={pal.textMuted} />
+                                <Text style={[sc.chipText, { color: pal.textMuted }]}>
+                                    {channel?.isPrivate ? 'Private' : 'Public'}
+                                </Text>
+                            </View>
+                            {!!channel?.createdAt && (
+                                <View style={[sc.chip, { borderColor: pal.cardBorder }]}>
+                                    <Ionicons name="calendar-outline" size={13} color={pal.textMuted} />
+                                    <Text style={[sc.chipText, { color: pal.textMuted }]}>
+                                        {new Date(channel.createdAt).toLocaleDateString()}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {!!channel?.inviteLink && (
+                            <TouchableOpacity
+                                style={[sc.linkRow, { borderColor: pal.cardBorder }]}
+                                onPress={copyInviteLink}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="link-outline" size={18} color={pal.accent} />
+                                <Text style={[sc.linkText, { color: pal.textDesc }]} numberOfLines={1}>
+                                    {`${Config.Main_url}c/${channel.inviteLink}`}
+                                </Text>
+                                <Ionicons name="copy-outline" size={17} color={pal.textMuted} />
+                            </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity
+                            style={[sc.sheetBtn, { backgroundColor: pal.accent }]}
+                            onPress={shareChannel}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="share-social-outline" size={18} color="#fff" />
+                            <Text style={sc.sheetBtnText}>Share channel</Text>
+                        </TouchableOpacity>
+                    </TouchableOpacity>
+                </TouchableOpacity>
+            </Modal>
+        </View>
     );
 }
 
@@ -548,12 +858,21 @@ const videoModal = StyleSheet.create({
 const vs = StyleSheet.create({
     container: { backgroundColor: '#000', borderRadius: 10, overflow: 'hidden' },
     video: { width: '100%', height: '100%' },
-    playOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
-    playCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(18,150,243,0.9)', justifyContent: 'center', alignItems: 'center' },
+    playOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+    playCircleFloating: {
+        position: 'absolute',
+        top: MEDIA_H / 2 - 27,
+        left: MEDIA_W / 2 - 27,
+        width: 54, height: 54, borderRadius: 27,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        alignItems: 'center', justifyContent: 'center',
+        borderWidth: 2, borderColor: 'rgba(255,255,255,0.9)',
+    },
+    playCircle: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.9)' },
 });
 
 const au = StyleSheet.create({
-    container: { borderRadius: 12, padding: 15, width: CARD_W - 25, borderWidth: 1 },
+    container: { borderRadius: 12, padding: 15, width: MEDIA_W, borderWidth: 1 },
     fullscreen: { width: SCREEN_W * 0.9, alignSelf: 'center' },
     waveRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 12, height: 40 },
     bar: { width: 4, borderRadius: 2 },
@@ -564,7 +883,7 @@ const au = StyleSheet.create({
 
 const sl = StyleSheet.create({
     wrapper: { marginBottom: 10 },
-    img: { height: 230, borderRadius: 12 },
+    img: { height: MEDIA_H, borderRadius: 12 },
     badge: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 },
     badgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
     expandIcon: { position: 'absolute', bottom: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 15, padding: 6 },
@@ -573,23 +892,72 @@ const sl = StyleSheet.create({
 const mb = StyleSheet.create({
     wrap: { marginHorizontal: 12, marginVertical: 6, borderRadius: 15, padding: 12, borderWidth: 1 },
     text: { fontSize: 15, lineHeight: 22 },
-    footer: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 },
+    footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8, gap: 5 },
     time: { fontSize: 11 },
+    dotSep: { width: 3, height: 3, borderRadius: 2, opacity: 0.6 },
 });
 
 const sc = StyleSheet.create({
     container: { flex: 1 },
-    topBar: { flexDirection: 'row', alignItems: 'center', padding: 15, paddingTop: 45, backgroundColor: "#1296f3" },
-    topInfo: { marginLeft: 15, flexDirection: "row", gap: 10 },
-    topTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-    topSubCount: { color: 'rgba(255,255,255,0.7)', fontSize: 12 },
-    followFooter: { position: "absolute", bottom: 50, right: 20, paddingHorizontal: 15, paddingVertical: 10, backgroundColor: "#1296f3", borderRadius: 25, borderBottomWidth: StyleSheet.hairlineWidth },
-    followBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, alignItems: 'center', justifyContent: 'center', minWidth: 90 },
-    followText: { fontSize: 13, fontWeight: '700' },
-    avatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        marginRight: 12,
+
+    // Header — Chat/Broadcast screens jaisa
+    topBar: {
+        height: 90,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+        backgroundColor: '#1296f3',
+        gap: 8,
     },
+    iconBtn: { padding: 6 },
+    topInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+    topTitle: { color: '#fff', fontSize: 17, fontWeight: '600' },
+    topSubCount: { color: '#d0eeff', fontSize: 12, marginTop: 1 },
+
+    // Empty state
+    emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, gap: 8, paddingBottom: 60 },
+    emptyIconWrap: { width: 84, height: 84, borderRadius: 42, alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginBottom: 4 },
+    emptyTitle: { fontSize: 16, fontWeight: '700' },
+    emptyText: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
+
+    // Subscribe bar
+    footerBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
+    followBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14 },
+    followText: { fontSize: 15, fontWeight: '700' },
+
+    // Menu
+    menuOverlay: {
+        flex: 1,
+        paddingTop: (Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 44) + 50,
+        paddingRight: 10,
+        alignItems: 'flex-end',
+    },
+    menuBox: {
+        borderRadius: 12, paddingVertical: 6, minWidth: 195,
+        elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 8,
+    },
+    menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16 },
+    menuText: { fontSize: 15, fontWeight: '500' },
+    menuDivider: { height: 0.5, marginHorizontal: 8 },
+
+    // Info sheet
+    sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 20, paddingTop: 10, maxHeight: '88%' },
+    sheetHandle: { width: 38, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+    sheetHead: { alignItems: 'center', gap: 6 },
+    sheetIcon: { marginBottom: 6 },
+    sheetTitle: { fontSize: 19, fontWeight: '700', textAlign: 'center' },
+    sheetSub: { fontSize: 13 },
+    sheetDesc: { fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: 14 },
+
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 16 },
+    chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: 1 },
+    chipText: { fontSize: 12, fontWeight: '600', textTransform: 'capitalize' },
+
+    linkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12, marginTop: 18 },
+    linkText: { flex: 1, fontSize: 12 },
+
+    sheetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, marginTop: 14 },
+    sheetBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

@@ -11,12 +11,11 @@ import apiService from '../../../services/apiService';
 import { ThemeContext } from '../../../components/ThemeContext';
 import Config from '../../../services/config';
 import { appendFile } from '../../../utils/uploadFile';
-const BASE_URL = Config.Main_url;
 
 const getImg = (path) => {
     if (!path) return null;
     if (typeof path === 'string' && path.startsWith('http')) return path;
-    return `${BASE_URL?.MEDIA_URL}/${path}`;
+    return `${Config.MEDIA_URL}${path}`;
 };
 
 export default function EditChannelPopup({ visible, onClose, channel, onUpdated }) {

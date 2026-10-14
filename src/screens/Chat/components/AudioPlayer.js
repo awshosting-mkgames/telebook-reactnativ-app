@@ -9,6 +9,7 @@ import {
     Text, TouchableOpacity,
     View,
 } from 'react-native';
+import { claimPlayback, useExclusivePlayback } from '../../../utils/playbackManager';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -18,6 +19,9 @@ const AudioPlayer = ({ url }) => {
     const player = useAudioPlayer(url ? { uri: url } : null);
     const status = useAudioPlayerStatus(player);
     const progressAnim = useRef(new Animated.Value(0)).current;
+
+    // Koi dusra audio/video chale to ye apne aap ruk jaye
+    useExclusivePlayback(player);
 
     // expo-audio seconds mein kaam karta hai (expo-av milliseconds mein karta tha)
     const position = status?.currentTime ?? 0;
@@ -54,6 +58,7 @@ const AudioPlayer = ({ url }) => {
             if (duration > 0 && position >= duration - 0.1) {
                 await player.seekTo(0);
             }
+            claimPlayback(player); // pehle se baj raha koi bhi player band karo
             player.play();
         } catch (e) {
             Alert.alert('Error', 'Audio play nahi ho saka');

@@ -13,7 +13,8 @@ const ChatHeader = ({
     isSelectMode, selectedCount, onCancelSelect, onForwardSelected,
     onDeleteSelected, onCopySelected, MY_USER_ID, fmtTime,
     isSearchMode, searchText, onSearchChange, onOpenSearch, onCloseSearch,
-    onClearChat, getFullUrl,
+    onClearChat, getFullUrl, isBlocked, onToggleBlock,
+    onVoiceCall, onVideoCall, callsAvailable,
 }) => {
     const [menuVisible, setMenuVisible] = useState(false);
     const { theme } = useContext(ThemeContext);
@@ -101,16 +102,24 @@ const ChatHeader = ({
                     ) : isGroup ? (
                         <Text style={styles.sub}>Group</Text>
                     ) : (
-                        <Text style={styles.sub} numberOfLines={1}>{fmtTime(lastSeenValue)}</Text>
+                        lastSeenValue ? (
+                        <Text style={styles.sub} numberOfLines={1}>last seen {fmtTime(lastSeenValue)}</Text>
+                    ) : null
                     )}
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={gotouserDetails} style={{ marginRight: 14 }}>
-                    <Ionicons name="videocam" size={22} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={gotouserDetails} style={{ marginRight: 14 }}>
-                    <Ionicons name="call" size={20} color="#fff" />
-                </TouchableOpacity>
+                {/* Group calling backend contract mein nahi hai — sirf 1:1 chat ke liye,
+                    aur sirf tabhi jab server par calling configured ho (calls/config.available). */}
+                {!isGroup && callsAvailable && (
+                    <>
+                        <TouchableOpacity onPress={onVideoCall} style={{ marginRight: 14 }}>
+                            <Ionicons name="videocam" size={22} color="#fff" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={onVoiceCall} style={{ marginRight: 14 }}>
+                            <Ionicons name="call" size={20} color="#fff" />
+                        </TouchableOpacity>
+                    </>
+                )}
                 <TouchableOpacity onPress={() => setMenuVisible(true)} style={{ marginRight: 4 }}>
                     <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
                 </TouchableOpacity>
@@ -137,6 +146,19 @@ const ChatHeader = ({
                             <Ionicons name="trash-outline" size={18} color="#e74c3c" />
                             <Text style={[styles.menuText, { color: '#e74c3c' }]}>Clear chat</Text>
                         </TouchableOpacity>
+                        {!!onToggleBlock && (
+                            <>
+                                <View style={[styles.menuDivider, { backgroundColor: dividerC }]} />
+                                <TouchableOpacity
+                                    style={styles.menuItem}
+                                    onPress={() => { setMenuVisible(false); onToggleBlock(); }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Ionicons name={isBlocked ? 'checkmark-circle-outline' : 'ban-outline'} size={18} color={isBlocked ? '#25A55F' : '#e67e22'} />
+                                    <Text style={[styles.menuText, { color: menuText }]}>{isBlocked ? 'Unblock' : 'Block'}</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
                     </View>
                 </Pressable>
             </Modal>

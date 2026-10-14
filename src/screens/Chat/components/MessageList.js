@@ -278,7 +278,7 @@ const MessageList = ({
                 </View>
             );
         },
-        [highlightedMsgId, isSelectMode, selectedMsgIds, theme, messages, matchIdSet],
+        [highlightedMsgId, isSelectMode, selectedMsgIds, theme, messages, matchIdSet, openPopup, retryMessage, MY_USER_ID, isGroup],
     );
 
     const ListFooterComponent = () => {

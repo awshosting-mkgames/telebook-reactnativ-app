@@ -28,3 +28,7 @@ export { default as PrivacyPolicyScreen } from './PrivacyPolicy';
 
 export { default as Aboutus } from './Aboutus';
 export { default as Deleteaccount } from './Deleteaccount';
+
+export { default as InCallScreen } from './InCallScreen';
+export { default as Plans } from './Plans';
+export { default as Wallet } from './Wallet';

@@ -7,7 +7,11 @@ import { persistStore, persistReducer } from 'redux-persist';
 const persistConfig = {
     key: 'root',
     storage: AsyncStorage,
-   whitelist: ['userData', 'totalappData', 'chatList', 'contacts']
+    // contacts aur chatList jaan-boojh kar nahi hain: dono ka persistent store
+    // SQL hai (services/contactsDb.js, services/chatsDb.js). Dono jagah rakhne
+    // se data har change par AsyncStorage me dobara likha jata, aur rehydrate
+    // par purana shape Redux ke naye shape ko overwrite kar deta.
+    whitelist: ['userData', 'totalappData'],
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);

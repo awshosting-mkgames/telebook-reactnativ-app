@@ -24,7 +24,11 @@
         "POST_NOTIFICATIONS",
         "WAKE_LOCK",
         "VIBRATE",
-        "READ_MEDIA_VIDEO"
+        "READ_MEDIA_VIDEO",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "BLUETOOTH_CONNECT",
+        "USE_FULL_SCREEN_INTENT"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -71,7 +75,8 @@
       "@react-native-firebase/auth",
       "@react-native-firebase/messaging",
       "expo-video",
-      "expo-audio"
+      "expo-audio",
+      "expo-sqlite"
     ],
     "owner": "mmh25"
   }

@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect, useContext } from 'react';
+import React, { useState, useMemo, useContext } from 'react';
 import {
-    View, Text, TextInput, FlatList, TouchableOpacity,
-    StyleSheet, ActivityIndicator, Image, Platform, StatusBar,
+    View, Text, TextInput, SectionList, FlatList, TouchableOpacity,
+    StyleSheet, ActivityIndicator, Image, Platform, StatusBar, Share,
 } from 'react-native';
 
 // Avatar with fallback initials
@@ -43,26 +43,44 @@ const FindContact = ({ navigation, route }) => {
     const isDark = theme.text === '#FFFFFF';
 
     const allContacts = useSelector((state) => state.contacts?.contacts ?? []);
-    const loading = useSelector((state) => state.contacts?.loading ?? false);
+    const loading = useSelector((state) => state.contacts?.syncing ?? false);
 
     const [searchText, setSearchText] = useState('');
     const [selectedContacts, setSelectedContacts] = useState([]);
-    const [showContacts, setShowContacts] = useState([]);
 
-    useEffect(() => {
-        if (allContacts && allContacts.length > 0) {
-            setShowContacts(allContacts.filter((item) => item?.isRegistered));
-        }
-
-    }, [allContacts]);
-
+    // Select sirf app par registered contacts ho sakte hain, par list me baaki
+    // contacts bhi "invite" ke saath dikhte hain — warna jis phone me koi app
+    // user nahi hai, uske liye screen puri khali lagti thi.
+    // Redux se direct derive karte hain — beech me state rakhne se list sync ke
+    // baad stale reh jati thi.
     const filteredContacts = useMemo(() => {
-        if (!searchText.trim()) return showContacts;
-        const q = searchText.toLowerCase();
-        return showContacts.filter(
+        const q = searchText.trim().toLowerCase();
+        if (!q) return allContacts ?? [];
+        return (allContacts ?? []).filter(
             (c) => c.name?.toLowerCase().includes(q) || c.phone?.includes(q)
         );
-    }, [searchText, showContacts]);
+    }, [searchText, allContacts]);
+
+    const sections = useMemo(() => {
+        const onApp = filteredContacts.filter((c) => c?.isRegistered);
+        const toInvite = filteredContacts.filter((c) => !c?.isRegistered);
+        return [
+            { key: 'onApp', title: `On Telebook (${onApp.length})`, data: onApp },
+            { key: 'invite', title: `Not on Telebook (${toInvite.length})`, data: toInvite },
+        ].filter((section) => section.data.length > 0);
+    }, [filteredContacts]);
+
+    const inviteContact = async () => {
+        try {
+            await Share.share({
+                title: 'App Install',
+                message:
+                    'Hey! Install the Telebook app and start using it. Download it from this link: https://telebookservices.com/download',
+            });
+        } catch (err) {
+            console.log('Share error:', err);
+        }
+    };
 
     const toggleSelect = (contact) => {
         setSelectedContacts((prev) => {
@@ -100,6 +118,7 @@ const FindContact = ({ navigation, route }) => {
     // ── Contact row ───────────────────────────────────────────────
     const renderItem = ({ item }) => {
         const selected = isSelected(item.id);
+        const registered = !!item?.isRegistered;
         return (
             <TouchableOpacity
                 style={[
@@ -109,12 +128,12 @@ const FindContact = ({ navigation, route }) => {
                         borderBottomColor: borderColor,
                     },
                 ]}
-                onPress={() => toggleSelect(item)}
+                onPress={() => (registered ? toggleSelect(item) : inviteContact())}
                 activeOpacity={0.7}
             >
                 <View style={styles.avatarWrapper}>
                     <AvatarImg uri={getAvatar(item)} name={item.name} size={50} />
-                    {item.isRegistered && (
+                    {registered && (
                         <View style={[styles.onlineDot, { borderColor: selected ? selectedBg : cardBg }]} />
                     )}
                 </View>
@@ -126,13 +145,17 @@ const FindContact = ({ navigation, route }) => {
                         {item.phone}
                     </Text>
                 </View>
-                <View style={[
-                    styles.checkbox,
-                    { borderColor: selected ? '#4491f2' : (isDark ? '#333' : '#ccc') },
-                    selected && styles.checkboxSelected,
-                ]}>
-                    {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
-                </View>
+                {registered ? (
+                    <View style={[
+                        styles.checkbox,
+                        { borderColor: selected ? '#4491f2' : (isDark ? '#333' : '#ccc') },
+                        selected && styles.checkboxSelected,
+                    ]}>
+                        {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                    </View>
+                ) : (
+                    <Text style={styles.inviteText}>Invite</Text>
+                )}
             </TouchableOpacity>
         );
     };
@@ -223,11 +246,19 @@ const FindContact = ({ navigation, route }) => {
                     <Text style={[styles.loadingText, { color: textSecondary }]}>Loading contacts...</Text>
                 </View>
             ) : (
-                <FlatList
-                    data={filteredContacts}
-                    keyExtractor={(item) => item.id}
+                <SectionList
+                    sections={sections}
+                    keyExtractor={(item, index) => String(item?.id ?? item?.phone ?? index)}
                     renderItem={renderItem}
+                    renderSectionHeader={({ section }) => (
+                        <Text style={[styles.sectionHeader, { color: textSecondary, backgroundColor: bgColor }]}>
+                            {section.title}
+                        </Text>
+                    )}
+                    stickySectionHeadersEnabled={false}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
                     contentContainerStyle={{ paddingBottom: 120 }}
                     ListEmptyComponent={
                         <View style={styles.emptyBox}>
@@ -238,7 +269,9 @@ const FindContact = ({ navigation, route }) => {
                                 {searchText ? 'No results found' : 'No contacts yet'}
                             </Text>
                             <Text style={[styles.emptyText, { color: emptyTextClr }]}>
-                                {searchText ? `"${searchText}" nahi mila` : 'Registered contacts yahan dikhenge'}
+                                {searchText
+                                    ? `No match for "${searchText}"`
+                                    : 'Your phone contacts will appear here.\nTry Settings → Sync Contacts to refresh.'}
                             </Text>
                         </View>
                     }
@@ -292,6 +325,8 @@ const styles = StyleSheet.create({
     searchBar: { flexDirection: 'row', alignItems: 'center', margin: 12, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, gap: 8 },
     searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
     countText: { paddingHorizontal: 16, paddingBottom: 6, fontSize: 12 },
+    sectionHeader: { paddingHorizontal: 16, paddingVertical: 6, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
+    inviteText: { color: '#4491f2', fontSize: 13, fontWeight: '600', marginLeft: 10 },
 
     contactItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5 },
     avatarWrapper: { position: 'relative' },

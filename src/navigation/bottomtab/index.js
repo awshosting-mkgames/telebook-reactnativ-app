@@ -1,11 +1,17 @@
 import React, { useContext } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { Freechat, Channels, Call, Updates } from '../../screens';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
 
 const Tab = createBottomTabNavigator();
+
+// Tab bar ka apna usable area (icon + label). System nav bar / home indicator
+// ki jagah iske alawa hai aur neeche safe-area inset se add hoti hai.
+const TAB_BAR_HEIGHT = 60;
+const TAB_BAR_PADDING_BOTTOM = 10;
 
 const TAB_CONFIG = [
     {
@@ -34,6 +40,7 @@ const SCREENS = { Chats: Freechat, Updates, Channels, Calls: Call };
 
 export default function BottomTabNavigator() {
     const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
 
     const isDark = theme.mode === 'light';
     const activeColor = theme.main || '#1199ff';
@@ -74,9 +81,13 @@ export default function BottomTabNavigator() {
 
                     tabBarStyle: {
                         backgroundColor: theme.background,
-                        height: Platform.OS === 'ios' ? 84 : 68,
+                        // Android edge-to-edge (gradle.properties: edgeToEdgeEnabled=true)
+                        // mein system nav bar app ke upar draw hota hai. Fixed height
+                        // dene par labels nav buttons ke peeche chale jate the, isliye
+                        // bottom inset height aur padding dono mein jodna zaruri hai.
+                        height: TAB_BAR_HEIGHT + insets.bottom,
                         paddingTop: 8,
-                        paddingBottom: Platform.OS === 'ios' ? 24 : 10,
+                        paddingBottom: TAB_BAR_PADDING_BOTTOM + insets.bottom,
                         borderTopWidth: 0.5,
                         borderTopColor: borderColor,
                         elevation: 8,

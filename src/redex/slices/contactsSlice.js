@@ -1,84 +1,41 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import apiService from '../../services/apiService';
+import { createSlice } from '@reduxjs/toolkit';
 
+// Redux me sirf current contacts rehte hain. Persistent copy SQL me hai
+// (src/services/contactsDb.js) — isliye ye slice redux-persist me nahi hai.
 const initialState = {
-    contacts:  [],
-    loading:   false,
-    saving:    false,
-    error:     null,
-    hasSynced: false, // pehli sync ho chuki hai → auto-sync dobara nahi hogi
+    contacts: [],
+    syncing: false,
+    lastSyncedAt: null,
 };
 
-// ── GET: server pe cached contacts lo → Redux mein save karo ─────────────────
-export const fetchCachedContacts = createAsyncThunk(
-    'contacts/fetchCached',
-    async (_, thunkAPI) => {
-        try {
-            const response = await apiService({
-                method:   'GET',
-                endpoint: 'contact-cache',
-            });
-            const raw = response?.data?.data;
-            if (raw && typeof raw === 'string') {
-                return JSON.parse(raw); 
-            }
-            return response?.data?.contacts ?? response?.data ?? [];
-        } catch (error) {
-            return thunkAPI.rejectWithValue(error.message);
-        }
-    }
-);
-
-// ── PUT: processed contacts server pe save karo + Redux update karo ──────────
-export const saveContacts = createAsyncThunk(
-    'contacts/save',
-    async (processedContacts, thunkAPI) => {
-        try {
-            await apiService({
-                method:   'PUT',
-                endpoint: 'contact-cache',
-                data:     { data: JSON.stringify(processedContacts) },
-            });
-             console.log("====================================Put Conatct Ca;;;;;;;;",processedContacts)
-            return processedContacts; // same data Redux mein bhi set hoga
-        } catch (error) {
-            return thunkAPI.rejectWithValue(error.message);
-        }
-    }
-);
-
-// ── Slice ─────────────────────────────────────────────────────────────────────
 const contactsSlice = createSlice({
     name: 'contacts',
     initialState,
     reducers: {
-        clearContacts: (state) => {
-            state.contacts  = [];
-            state.hasSynced = false;
-            state.error     = null;
+        // SQL se padhe hue contacts Redux me set karo
+        setContacts: (state, action) => {
+            state.contacts = action.payload ?? [];
         },
-    },
-    extraReducers: (builder) => {
-        builder
-            // GET cached
-            .addCase(fetchCachedContacts.pending,   (state)         => { state.loading = true;  state.error = null; })
-            .addCase(fetchCachedContacts.fulfilled, (state, action) => { state.loading = false; state.contacts = action.payload; })
-            .addCase(fetchCachedContacts.rejected,  (state, action) => { state.loading = false; state.error = action.payload; })
-
-            // PUT save
-            .addCase(saveContacts.pending,   (state)         => { state.saving = true;  state.error = null; })
-            .addCase(saveContacts.fulfilled, (state, action) => {
-                state.saving    = false;
-                state.contacts  = action.payload; // processed data Redux mein
-                state.hasSynced = true;           // sync complete flag
-            })
-            .addCase(saveContacts.rejected,  (state, action) => {
-                state.saving    = false;
-                state.hasSynced = false;
-                state.error     = action.payload;
-            });
+        syncStarted: (state) => {
+            state.syncing = true;
+        },
+        syncFinished: (state, action) => {
+            state.syncing = false;
+            if (action.payload) state.lastSyncedAt = action.payload;
+        },
+        clearContacts: (state) => {
+            state.contacts = [];
+            state.syncing = false;
+            state.lastSyncedAt = null;
+        },
     },
 });
 
-export const { clearContacts } = contactsSlice.actions;
+export const {
+    setContacts,
+    syncStarted,
+    syncFinished,
+    clearContacts,
+} = contactsSlice.actions;
+
 export default contactsSlice.reducer;

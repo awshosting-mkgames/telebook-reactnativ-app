@@ -75,6 +75,10 @@ const CreateChannelPopup = ({ visible, onClose }) => {
                 setChannelName('');
                 setImage(null);
                 onClose();
+            } else if (response.error?.code === 'PLAN_LIMIT') {
+                Toast.show({ type: 'error', text1: 'Plan limit reached', text2: response.error.message });
+            } else {
+                Toast.show({ type: 'error', text1: 'Failed', text2: response.error?.message || 'Try again' });
             }
         } catch (error) {
             Toast.show({ type: 'error', text1: 'Failed', text2: 'Try again' });

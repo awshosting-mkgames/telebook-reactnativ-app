@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>*{box-sizing:border-box}html{color-scheme:light dark}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>TeleBook Socket Contract</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;1,400&display=swap">
+<style>
+  :root{
+    --ground:#F2F4F6; --surface:#FFFFFF; --surface-2:#E9ECF1; --ink:#161B22; --muted:#5B6675;
+    --faint:#8A94A3; --line:#D8DDE4; --line-strong:#B8C0CB;
+    --send:#2B4C7E; --send-bg:#E7EDF6; --recv:#12665F; --recv-bg:#E6F2F0;
+    --block:#B8351F; --block-bg:#FBEDEA; --warn:#8A5A00; --warn-bg:#FBF2DF; --code-bg:#EDEFF3;
+    --sans:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:"IBM Plex Serif",Georgia,serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --ground:#0E1218; --surface:#161C24; --surface-2:#1D2530; --ink:#E3E8EF; --muted:#93A0B1;
+    --faint:#6E7C8D; --line:#28313D; --line-strong:#3A4553;
+    --send:#7BA5E0; --send-bg:#16223A; --recv:#4FBFB0; --recv-bg:#0F2523;
+    --block:#F0785F; --block-bg:#2A1814; --warn:#DCA63C; --warn-bg:#26200F; --code-bg:#111820; } }
+  :root[data-theme="dark"]{
+    --ground:#0E1218; --surface:#161C24; --surface-2:#1D2530; --ink:#E3E8EF; --muted:#93A0B1;
+    --faint:#6E7C8D; --line:#28313D; --line-strong:#3A4553;
+    --send:#7BA5E0; --send-bg:#16223A; --recv:#4FBFB0; --recv-bg:#0F2523;
+    --block:#F0785F; --block-bg:#2A1814; --warn:#DCA63C; --warn-bg:#26200F; --code-bg:#111820; }
+
+  body{background:var(--ground);color:var(--ink);font-family:var(--serif);font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:880px;margin:0 auto;padding-block:40px 72px;padding-left:20px;padding-right:20px;}
+  p{margin:0 0 1em;max-width:70ch;}
+  h1,h2,h3{font-family:var(--sans);text-wrap:balance;margin:0;}
+  code{font-family:var(--mono);font-size:.86em;background:var(--code-bg);padding:.1em .35em;border-radius:3px;}
+
+  .eyebrow{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--send);display:flex;align-items:center;gap:9px;}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--line);}
+  h1{font-size:clamp(30px,6vw,44px);font-weight:700;line-height:1.1;letter-spacing:-.02em;margin:16px 0 12px;}
+  .standfirst{font-size:18.5px;line-height:1.55;color:var(--muted);max-width:62ch;margin-bottom:26px;}
+  .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:44px;}
+  .fact{background:var(--surface);padding:11px 14px;}
+  .fact dt{font-family:var(--sans);font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:3px;}
+  .fact dd{font-family:var(--mono);font-size:12.5px;margin:0;word-break:break-word;}
+
+  section{margin-bottom:50px;}
+  h2{font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding-bottom:9px;border-bottom:2px solid var(--ink);margin-bottom:20px;}
+  h3{font-size:17px;font-weight:600;margin:26px 0 8px;}
+
+  .rules{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--send);padding:20px 22px;}
+  .rules h2{border:0;padding:0;margin-bottom:12px;color:var(--send);}
+  ol.rl{margin:0;padding-left:22px;font-family:var(--sans);font-size:15px;}
+  ol.rl li{margin-bottom:10px;padding-left:4px;}
+  ol.rl li b{font-weight:600;}
+  ol.rl .why{display:block;font-family:var(--serif);color:var(--muted);font-size:14.5px;margin-top:2px;}
+
+  .legend{display:flex;flex-wrap:wrap;gap:10px 18px;font-family:var(--sans);font-size:12.5px;margin:0 0 14px;color:var(--muted);}
+  .dir{display:inline-block;font-family:var(--sans);font-size:10.5px;font-weight:600;letter-spacing:.07em;padding:2px 7px;border-radius:2px;white-space:nowrap;}
+  .d-send{background:var(--send-bg);color:var(--send);}
+  .d-recv{background:var(--recv-bg);color:var(--recv);}
+  .d-dep{background:var(--block-bg);color:var(--block);}
+
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);background:var(--surface);margin-bottom:16px;}
+  table{border-collapse:collapse;width:100%;min-width:640px;font-family:var(--sans);font-size:13.5px;}
+  th{text-align:left;font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  tr:last-child td{border-bottom:0;}
+  td.ev{font-family:var(--mono);font-size:12.5px;white-space:nowrap;font-weight:500;}
+  td.pl{font-family:var(--mono);font-size:12px;color:var(--muted);}
+  td.sc{font-size:12.5px;color:var(--muted);white-space:nowrap;}
+
+  pre{font-family:var(--mono);font-size:12.3px;line-height:1.6;background:var(--code-bg);border:1px solid var(--line);padding:14px 16px;overflow-x:auto;margin:0 0 16px;}
+  pre code{background:none;padding:0;font-size:inherit;}
+  .c{color:var(--faint);}
+  .k{color:var(--send);}
+  .s{color:var(--recv);}
+
+  .seq{display:grid;grid-template-columns:auto 1fr;gap:0;border:1px solid var(--line);background:var(--surface);margin-bottom:16px;font-family:var(--sans);font-size:13.5px;}
+  .seq .n{padding:9px 12px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--faint);text-align:right;}
+  .seq .t{padding:9px 14px;border-bottom:1px solid var(--line);}
+  .seq .n:nth-last-child(2),.seq .t:last-child{border-bottom:0;}
+  .seq .who{font-weight:600;}
+
+  .ticks{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:16px;}
+  .tk{background:var(--surface);padding:12px 14px;font-family:var(--sans);}
+  .tk .glyph{font-size:20px;line-height:1;letter-spacing:-3px;}
+  .tk .nm{font-weight:600;font-size:14px;margin-top:6px;}
+  .tk .rule{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:4px;}
+
+  .note{background:var(--warn-bg);border-left:3px solid var(--warn);padding:11px 15px;font-size:14.5px;margin:0 0 16px;}
+  .note strong{font-family:var(--sans);font-weight:600;color:var(--warn);}
+  .note p:last-child{margin-bottom:0;}
+  .dont{background:var(--block-bg);border-left:3px solid var(--block);padding:11px 15px;font-size:14.5px;margin:0 0 16px;}
+  .dont strong{font-family:var(--sans);font-weight:600;color:var(--block);}
+
+  ul.check{list-style:none;padding:0;margin:0 0 16px;font-family:var(--sans);font-size:14.5px;}
+  ul.check li{padding:9px 0 9px 30px;border-bottom:1px solid var(--line);position:relative;}
+  ul.check li::before{content:"";position:absolute;left:4px;top:12px;width:13px;height:13px;border:1.5px solid var(--line-strong);border-radius:2px;}
+  ul.check li .exp{display:block;color:var(--muted);font-size:13.5px;margin-top:2px;}
+
+  footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);font-family:var(--sans);font-size:12.5px;color:var(--faint);}
+  :focus-visible{outline:2px solid var(--send);outline-offset:2px;}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Frontend integration &middot; Socket.IO</div>
+  <h1>TeleBook Socket Contract</h1>
+  <p class="standfirst">Every socket event the backend sends and accepts, what each one expects, and the exact
+  client code for connecting, messaging, read ticks and push notifications. Following the five rules below is what
+  makes online status and read ticks behave correctly.</p>
+  <dl class="facts">
+    <div class="fact"><dt>Server</dt><dd>https://api.telebookservices.com</dd></div>
+    <div class="fact"><dt>Client</dt><dd>socket.io-client v4 · websocket</dd></div>
+    <div class="fact"><dt>Auth</dt><dd>JWT in handshake</dd></div>
+    <div class="fact"><dt>Backend version</dt><dd>18 Sep 2026</dd></div>
+  </dl>
+</header>
+
+<section class="rules">
+  <h2>The five rules</h2>
+  <ol class="rl">
+    <li><b>Connect with the JWT in the handshake</b> — <code>io(URL, { auth: { token } })</code>.
+      <span class="why">The server identifies the user from the token, puts the socket in that user's room and marks them online. No <code>setup</code> event is needed.</span></li>
+    <li><b>Send messages over REST only</b> — <code>POST /api/messages</code>. Never emit <code>new-message</code>.
+      <span class="why">The server delivers to every recipient and sends push notifications itself. The socket <code>new-message</code> event is now ignored.</span></li>
+    <li><b>On every <code>message-received</code>, emit <code>message-delivered</code></b>; if that chat is open on screen, also emit <code>message-read</code>.
+      <span class="why">This is what turns the sender's single tick into double grey and then double blue.</span></li>
+    <li><b>Disconnect the socket when the app goes to background</b>, reconnect when it becomes active.
+      <span class="why">Push notifications are sent only when a user has no live socket. A socket left open in background means the user looks online and receives no notifications.</span></li>
+    <li><b>Emit <code>join-chat</code> when a chat screen opens and <code>leave-chat</code> when it closes</b> — and re-join after every reconnect.
+      <span class="why">Typing indicators, deletions, edits and reactions are sent only to sockets inside the chat room.</span></li>
+  </ol>
+</section>
+
+<section>
+  <h2>What changed on the backend</h2>
+  <p>Two reported issues were caused on the server and are fixed there. Nothing in the app needs to change for the
+  fixes to take effect, but the rules above are what let them work fully.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Issue</th><th>Cause</th><th>Now</th></tr></thead>
+    <tbody>
+      <tr><td>Push notifications arrived while the user was online</td>
+          <td>Online status expired after 30 s unless the app sent <code>heartbeat</code> every 25 s. A reconnect or a second device could also wipe it.</td>
+          <td>The server tracks every open socket itself. A user is online while any socket is connected. <code>heartbeat</code> is no longer needed.</td></tr>
+      <tr><td>Sender stayed on a single tick after the receiver read the message from another screen</td>
+          <td>Opening a chat loads messages over REST, which saved the read but never told the sender.</td>
+          <td><code>GET /api/messages/:chatId</code> and <code>PUT /api/messages/:id/read</code> now emit <code>message-read-update</code> to the sender, the same event the socket path sends.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Connecting</h2>
+  <p>One socket for the whole app, created after login. This service handles authentication, reconnects,
+  the background rule and re-joining the open chat.</p>
+<pre><code><span class="c">// services/socket.js</span>
+<span class="k">import</span> { io } <span class="k">from</span> <span class="s">'socket.io-client'</span>;
+<span class="k">import</span> { AppState } <span class="k">from</span> <span class="s">'react-native'</span>;
+
+<span class="k">const</span> SOCKET_URL = <span class="s">'https://api.telebookservices.com'</span>;
+
+<span class="k">let</span> socket = <span class="k">null</span>;
+<span class="k">let</span> appStateSub = <span class="k">null</span>;
+<span class="k">let</span> openChatId = <span class="k">null</span>;           <span class="c">// the chat currently on screen</span>
+
+<span class="k">export function</span> connectSocket(token) {
+  <span class="k">if</span> (socket) <span class="k">return</span> socket;
+
+  socket = io(SOCKET_URL, {
+    transports: [<span class="s">'websocket'</span>],
+    auth: { token },                   <span class="c">// rule 1 — server reads the user from this</span>
+    reconnection: <span class="k">true</span>,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 10000,
+  });
+
+  socket.on(<span class="s">'connect'</span>, () =&gt; {
+    <span class="c">// Rooms are per socket. After any reconnect the chat room is gone —</span>
+    <span class="c">// join it again (rule 5). The personal room is rejoined by the server.</span>
+    <span class="k">if</span> (openChatId) socket.emit(<span class="s">'join-chat'</span>, openChatId);
+  });
+
+  socket.on(<span class="s">'connected'</span>, () =&gt; { <span class="c">/* server has marked this user online */</span> });
+  socket.on(<span class="s">'connect_error'</span>, (err) =&gt; console.warn(<span class="s">'socket:'</span>, err.message));
+
+  <span class="c">// Rule 4 — background means offline, so push notifications reach the user</span>
+  appStateSub = AppState.addEventListener(<span class="s">'change'</span>, (state) =&gt; {
+    <span class="k">if</span> (state === <span class="s">'active'</span>) {
+      <span class="k">if</span> (!socket.connected) socket.connect();
+    } <span class="k">else if</span> (state === <span class="s">'background'</span>) {
+      socket.disconnect();             <span class="c">// not on 'inactive' — iOS enters that briefly</span>
+    }
+  });
+
+  <span class="k">return</span> socket;
+}
+
+<span class="k">export function</span> disconnectSocket() {     <span class="c">// call on logout</span>
+  appStateSub?.remove();
+  socket?.disconnect();
+  socket = <span class="k">null</span>;
+  openChatId = <span class="k">null</span>;
+}
+
+<span class="k">export const</span> getSocket = () =&gt; socket;
+<span class="k">export const</span> setOpenChat = (chatId) =&gt; { openChatId = chatId; };
+<span class="k">export const</span> getOpenChat = () =&gt; openChatId;</code></pre>
+  <div class="note"><p><strong>Why disconnect instead of staying connected in background:</strong> the backend sends a push
+  only to users with no live socket. Disconnecting is also what sets <em>last seen</em> correctly.</p></div>
+</section>
+
+<section>
+  <h2>Message lifecycle</h2>
+  <p>The full path of one message from A to B, and which side does what.</p>
+  <div class="seq">
+    <div class="n">1</div><div class="t"><span class="who">A</span> calls <code>POST /api/messages</code> with <code>{ chatId, content, messageType }</code>. The response is the saved message — show it with a single tick.</div>
+    <div class="n">2</div><div class="t"><span class="who">Server</span> emits <code>message-received</code> to every other member. Members with no live socket also get a push notification.</div>
+    <div class="n">3</div><div class="t"><span class="who">B</span> receives <code>message-received</code> and emits <code>message-delivered</code> — even if B is on another screen.</div>
+    <div class="n">4</div><div class="t"><span class="who">Server</span> emits <code>message-delivered-update</code> to A. A shows double grey.</div>
+    <div class="n">5a</div><div class="t"><span class="who">B</span>, if that chat is already open: emits <code>message-read</code>.</div>
+    <div class="n">5b</div><div class="t"><span class="who">B</span>, if B opens the chat later: calls <code>GET /api/messages/:chatId</code>. The server marks every unread message as read — nothing to emit.</div>
+    <div class="n">6</div><div class="t"><span class="who">Server</span> emits <code>message-read-update</code> to A for each message, in both 5a and 5b. A shows double blue.</div>
+  </div>
+
+  <h3>Sending</h3>
+<pre><code><span class="k">const</span> { data } = <span class="k">await</span> api.post(<span class="s">'/api/messages'</span>, {
+  chatId, content, messageType: <span class="s">'text'</span>,   <span class="c">// 'text' | 'image' | 'video' | 'audio' | 'document' | 'emoji'</span>
+  replyTo,                                 <span class="c">// optional message _id</span>
+  attachments,                             <span class="c">// optional — upload first via POST /api/users/media</span>
+});
+addToChat(data.message);                   <span class="c">// single tick</span>
+<span class="c">// Do NOT emit 'new-message'. The server has already delivered it.</span></code></pre>
+
+  <h3>Receiving</h3>
+<pre><code><span class="k">import</span> { getSocket, getOpenChat } <span class="k">from</span> <span class="s">'./socket'</span>;
+<span class="k">import</span> { AppState } <span class="k">from</span> <span class="s">'react-native'</span>;
+
+socket.on(<span class="s">'message-received'</span>, (message) =&gt; {
+  <span class="k">const</span> chatId = message.chat?._id ?? message.chat;
+
+  socket.emit(<span class="s">'message-delivered'</span>, { messageId: message._id });          <span class="c">// always — rule 3</span>
+
+  <span class="k">const</span> onScreen = chatId === getOpenChat() &amp;&amp; AppState.currentState === <span class="s">'active'</span>;
+  <span class="k">if</span> (onScreen) {
+    socket.emit(<span class="s">'message-read'</span>, { messageId: message._id, chatId });      <span class="c">// only when actually visible</span>
+  }
+
+  upsertMessage(message);                  <span class="c">// chat screen, chat-list preview, unread badge</span>
+});</code></pre>
+
+  <h3>Opening and closing a chat</h3>
+<pre><code><span class="k">export async function</span> openChat(chatId) {
+  setOpenChat(chatId);
+  getSocket()?.emit(<span class="s">'join-chat'</span>, chatId);                     <span class="c">// rule 5</span>
+  <span class="k">const</span> { data } = <span class="k">await</span> api.get(<span class="s">`/api/messages/${chatId}`</span>);
+  <span class="c">// This call marks all unread messages as read and notifies their senders.</span>
+  <span class="c">// It also resets this chat's unseenCount to 0 on the server.</span>
+  <span class="k">return</span> data;
+}
+
+<span class="k">export function</span> closeChat(chatId) {
+  getSocket()?.emit(<span class="s">'leave-chat'</span>, chatId);
+  setOpenChat(<span class="k">null</span>);
+}</code></pre>
+
+  <h3>Showing ticks</h3>
+  <p>For messages you sent. Update the message's <code>deliveredTo</code> / <code>readBy</code> arrays when the
+  update events arrive, then derive the tick from them:</p>
+  <div class="ticks">
+    <div class="tk"><div class="glyph">✓</div><div class="nm">Sent</div><div class="rule">saved; no recipient in deliveredTo</div></div>
+    <div class="tk"><div class="glyph">✓✓</div><div class="nm">Delivered</div><div class="rule">every recipient in deliveredTo</div></div>
+    <div class="tk"><div class="glyph" style="color:#2B7BD9">✓✓</div><div class="nm">Read</div><div class="rule">every recipient in readBy</div></div>
+  </div>
+<pre><code>socket.on(<span class="s">'message-delivered-update'</span>, ({ messageId, userId, chatId }) =&gt;
+  addReceipt(messageId, <span class="s">'deliveredTo'</span>, userId));
+
+socket.on(<span class="s">'message-read-update'</span>, ({ messageId, userId, chatId }) =&gt; {
+  addReceipt(messageId, <span class="s">'readBy'</span>, userId);
+  addReceipt(messageId, <span class="s">'deliveredTo'</span>, userId);   <span class="c">// read implies delivered</span>
+});
+
+<span class="k">export function</span> tickState(message, myId, chatUsers) {
+  <span class="k">const</span> others = chatUsers.map((u) =&gt; String(u._id)).filter((id) =&gt; id !== String(myId));
+  <span class="k">const</span> has = (list, id) =&gt; (list || []).some((r) =&gt; String(r.user) === id);
+  <span class="k">if</span> (others.every((id) =&gt; has(message.readBy, id)))      <span class="k">return</span> <span class="s">'read'</span>;
+  <span class="k">if</span> (others.every((id) =&gt; has(message.deliveredTo, id))) <span class="k">return</span> <span class="s">'delivered'</span>;
+  <span class="k">return</span> <span class="s">'sent'</span>;
+}</code></pre>
+  <p>In groups, <code>every</code> means blue ticks appear once all members have read. Use <code>some</code> if the product wants blue on first read.</p>
+</section>
+
+<section>
+  <h2>Event reference</h2>
+  <div class="legend">
+    <span><span class="dir d-send">APP → SERVER</span> you emit</span>
+    <span><span class="dir d-recv">SERVER → APP</span> you listen</span>
+    <span><span class="dir d-dep">DEPRECATED</span> remove</span>
+  </div>
+
+  <h3>App → Server</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Event</th><th>Payload</th><th>When</th></tr></thead>
+    <tbody>
+      <tr><td class="ev">message-delivered</td><td class="pl">{ messageId }</td><td>On every <code>message-received</code></td></tr>
+      <tr><td class="ev">message-read</td><td class="pl">{ messageId, chatId }</td><td>Message received while its chat is on screen</td></tr>
+      <tr><td class="ev">join-chat</td><td class="pl">chatId</td><td>Chat screen opens; again after each reconnect</td></tr>
+      <tr><td class="ev">leave-chat</td><td class="pl">chatId</td><td>Chat screen closes</td></tr>
+      <tr><td class="ev">typing</td><td class="pl">{ chatId }</td><td>User starts typing</td></tr>
+      <tr><td class="ev">stop-typing</td><td class="pl">{ chatId }</td><td>Stops typing or sends</td></tr>
+      <tr><td class="ev">get-user-status</td><td class="pl">{ userId }</td><td>Opening a chat, to show online / last seen</td></tr>
+      <tr><td class="ev">delete-message</td><td class="pl">{ messageId, chatId }</td><td>Relay only — the REST delete already notifies</td></tr>
+      <tr><td class="ev">edit-message</td><td class="pl">{ messageId, chatId, newContent }</td><td>Edit your own message — saved (same as <code>PUT /api/messages/:id</code>)</td></tr>
+      <tr><td class="ev">message-reaction</td><td class="pl">{ messageId, chatId, emoji }</td><td>After <code>PUT /api/messages/:id/react</code> succeeds</td></tr>
+      <tr><td class="ev">user-added-to-group</td><td class="pl">{ chat, newUserId }</td><td>After <code>PUT /api/chats/group/add</code></td></tr>
+      <tr><td class="ev">user-removed-from-group</td><td class="pl">{ chat, removedUserId }</td><td>After <code>PUT /api/chats/group/remove</code></td></tr>
+      <tr><td class="ev">group-info-updated</td><td class="pl">{ chat }</td><td>After rename / description change</td></tr>
+      <tr><td class="ev">new-status</td><td class="pl">statusData</td><td>After <code>POST /api/status</code></td></tr>
+      <tr><td class="ev">join-channel</td><td class="pl">channelId</td><td>Channel screen opens</td></tr>
+      <tr><td class="ev">leave-channel</td><td class="pl">channelId</td><td>Channel screen closes</td></tr>
+      <tr><td class="ev">call-user</td><td class="pl">{ to, offer, from, callType }</td><td>Start a call — <code>to</code> is a userId</td></tr>
+      <tr><td class="ev">answer-call</td><td class="pl">{ to, answer }</td><td>Accept</td></tr>
+      <tr><td class="ev">ice-candidate</td><td class="pl">{ to, candidate }</td><td>WebRTC ICE</td></tr>
+      <tr><td class="ev">end-call</td><td class="pl">{ to }</td><td>Hang up</td></tr>
+      <tr><td class="ev">reject-call</td><td class="pl">{ to }</td><td>Decline</td></tr>
+      <tr><td class="ev">new-message <span class="dir d-dep">DEPRECATED</span></td><td class="pl">—</td><td>Ignored by the server. Remove it.</td></tr>
+      <tr><td class="ev">heartbeat <span class="dir d-dep">DEPRECATED</span></td><td class="pl">—</td><td>No longer needed. Safe to remove.</td></tr>
+      <tr><td class="ev">setup <span class="dir d-dep">LEGACY</span></td><td class="pl">{ _id }</td><td>Only without a token. With a token it is optional and the <code>_id</code> is ignored.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Server → App</h3>
+  <p>The <em>Reaches</em> column matters: events sent to a chat room arrive only if you emitted <code>join-chat</code>.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Event</th><th>Payload</th><th>Reaches</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td class="ev">connected</td><td class="pl">—</td><td class="sc">this socket</td><td>User marked online</td></tr>
+      <tr><td class="ev">message-received</td><td class="pl">message (populated sender, chat)</td><td class="sc">user room</td><td>New message, also group-created system message</td></tr>
+      <tr><td class="ev">message-delivered-update</td><td class="pl">{ messageId, userId, chatId }</td><td class="sc">sender</td><td>A recipient got the message</td></tr>
+      <tr><td class="ev">message-read-update</td><td class="pl">{ messageId, userId, chatId }</td><td class="sc">sender</td><td>A recipient read the message</td></tr>
+      <tr><td class="ev">user-online</td><td class="pl">userId</td><td class="sc">everyone</td><td>User came online</td></tr>
+      <tr><td class="ev">user-offline</td><td class="pl">userId</td><td class="sc">everyone</td><td>User's last socket closed</td></tr>
+      <tr><td class="ev">user-status-result</td><td class="pl">{ userId, status }</td><td class="sc">this socket</td><td>Reply to <code>get-user-status</code>; <code>'online' | 'offline'</code></td></tr>
+      <tr><td class="ev">typing</td><td class="pl">{ chatId, userId }</td><td class="sc">chat room</td><td>Someone is typing</td></tr>
+      <tr><td class="ev">stop-typing</td><td class="pl">{ chatId, userId }</td><td class="sc">chat room</td><td>Stopped typing</td></tr>
+      <tr><td class="ev">messages-deleted</td><td class="pl">{ messageIds, chatId }</td><td class="sc">chat room</td><td>From <code>DELETE /api/messages</code></td></tr>
+      <tr><td class="ev">message-deleted</td><td class="pl">{ messageId, chatId }</td><td class="sc">chat room</td><td>From the <code>delete-message</code> relay</td></tr>
+      <tr><td class="ev">message-edited</td><td class="pl">{ messageId, newContent, chatId, editedAt }</td><td class="sc">chat room</td><td>A message was edited</td></tr>
+      <tr><td class="ev">edit-message-error</td><td class="pl">{ messageId, message }</td><td class="sc">this socket</td><td>Your edit was refused</td></tr>
+      <tr><td class="ev">message-reaction-update</td><td class="pl">{ messageId, emoji, userId }</td><td class="sc">chat room</td><td>Reaction added</td></tr>
+      <tr><td class="ev">added-to-group</td><td class="pl">chat</td><td class="sc">added user</td><td>You were added</td></tr>
+      <tr><td class="ev">removed-from-group</td><td class="pl">chatId</td><td class="sc">removed user</td><td>You were removed</td></tr>
+      <tr><td class="ev">group-updated</td><td class="pl">chat</td><td class="sc">members</td><td>Members or group info changed</td></tr>
+      <tr><td class="ev">status-update</td><td class="pl">statusData</td><td class="sc">everyone</td><td>New status posted</td></tr>
+      <tr><td class="ev">channel-message-received</td><td class="pl">channel message</td><td class="sc">channel room</td><td>New channel post</td></tr>
+      <tr><td class="ev">channel-message-deleted</td><td class="pl">{ channelId, messageId }</td><td class="sc">channel room</td><td>Post deleted</td></tr>
+      <tr><td class="ev">incoming-call</td><td class="pl">{ from, offer, callType }</td><td class="sc">callee</td><td>Ring</td></tr>
+      <tr><td class="ev">call-answered</td><td class="pl">answer</td><td class="sc">caller</td><td>Callee accepted</td></tr>
+      <tr><td class="ev">ice-candidate</td><td class="pl">candidate</td><td class="sc">peer</td><td>WebRTC ICE</td></tr>
+      <tr><td class="ev">call-ended</td><td class="pl">—</td><td class="sc">peer</td><td>Other side hung up</td></tr>
+      <tr><td class="ev">call-rejected</td><td class="pl">—</td><td class="sc">caller</td><td>Callee declined</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note"><p><strong>Edits are saved.</strong> <code>edit-message</code> (or <code>PUT /api/messages/:id</code>) updates the message for everyone and marks it <code>isEdited</code>. Reactions are saved by <code>PUT /api/messages/:id/react</code> — call that first, then emit <code>message-reaction</code>.</p></div>
+</section>
+
+<section>
+  <h2>Presence and typing</h2>
+<pre><code>socket.on(<span class="s">'user-online'</span>,  (userId) =&gt; setPresence(userId, <span class="s">'online'</span>));
+socket.on(<span class="s">'user-offline'</span>, (userId) =&gt; setPresence(userId, <span class="s">'offline'</span>, <span class="k">new</span> Date()));
+
+<span class="c">// When a chat opens, ask once — don't wait for a broadcast</span>
+socket.emit(<span class="s">'get-user-status'</span>, { userId: otherUserId });
+socket.on(<span class="s">'user-status-result'</span>, ({ userId, status }) =&gt; setPresence(userId, status));
+
+<span class="c">// Typing — debounce so it isn't sent on every keystroke</span>
+<span class="k">let</span> typingTimer;
+<span class="k">function</span> onChangeText(text) {
+  <span class="k">if</span> (!typingTimer) socket.emit(<span class="s">'typing'</span>, { chatId });
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() =&gt; { socket.emit(<span class="s">'stop-typing'</span>, { chatId }); typingTimer = <span class="k">null</span>; }, 2000);
+}
+socket.on(<span class="s">'typing'</span>,      ({ chatId, userId }) =&gt; showTyping(chatId, userId, <span class="k">true</span>));
+socket.on(<span class="s">'stop-typing'</span>, ({ chatId, userId }) =&gt; showTyping(chatId, userId, <span class="k">false</span>));</code></pre>
+  <p>A user counts as online while any of their devices has a live socket. Closing one of two phones does not mark them offline.</p>
+</section>
+
+<section>
+  <h2>Push notifications</h2>
+  <p>The server sends a push only when the recipient has <strong>no live socket</strong> — the app is in background
+  (rule 4), closed, or offline. While the app is open, messages arrive as <code>message-received</code> instead.</p>
+  <h3>Register the device token</h3>
+<pre><code><span class="c">// At login</span>
+<span class="k">await</span> api.post(<span class="s">'/api/auth/verify-otp'</span>, {
+  userId, otp,
+  fcmToken, deviceType: Platform.OS,       <span class="c">// 'android' | 'ios' | 'web'</span>
+  deviceId,                                <span class="c">// stable per install — replaces this device's old token</span>
+});
+
+<span class="c">// Whenever Firebase rotates the token</span>
+messaging().onTokenRefresh((token) =&gt;
+  api.post(<span class="s">'/api/notifications/save-token'</span>, { token, deviceType: Platform.OS, deviceId }));</code></pre>
+  <h3>Payload</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Field</th><th>Example</th><th>Use</th></tr></thead>
+    <tbody>
+      <tr><td class="ev">notification.title</td><td class="pl">"Rahul" / "Team • Rahul"</td><td>Sender, or group name and sender</td></tr>
+      <tr><td class="ev">notification.body</td><td class="pl">"hello" / "📷 Image"</td><td>Text preview, or media type</td></tr>
+      <tr><td class="ev">data.entity</td><td class="pl">"chat"</td><td>Screen type to open</td></tr>
+      <tr><td class="ev">data.entityId</td><td class="pl">"673a1f8c…"</td><td>Chat id — navigate to it on tap</td></tr>
+      <tr><td class="ev">data.senderId</td><td class="pl">"673a1f8c…"</td><td></td></tr>
+      <tr><td class="ev">data.senderName</td><td class="pl">"Rahul"</td><td></td></tr>
+      <tr><td class="ev">data.isGroup</td><td class="pl">"true" / "false"</td><td>A <em>string</em> — compare with <code>=== 'true'</code></td></tr>
+    </tbody>
+  </table></div>
+  <div class="note"><p><strong>Force-closed app:</strong> if the OS kills the app without closing the socket, the
+  server needs up to about 85 seconds to notice. Messages in that window arrive without a push. Normal backgrounding
+  does not have this gap because rule 4 closes the socket immediately.</p></div>
+</section>
+
+<section>
+  <h2>Common mistakes</h2>
+  <div class="dont"><p><strong>Emitting <code>new-message</code> after sending.</strong> The server ignores it — by the
+  time the REST call returns, every recipient has already been sent the message. Leaving it in only adds traffic.</p></div>
+  <div class="dont"><p><strong>Not re-joining the chat room after a reconnect.</strong> Typing, deletes and reactions
+  stop arriving silently. The <code>connect</code> handler in the service above takes care of it.</p></div>
+  <div class="dont"><p><strong>Emitting <code>message-read</code> for a chat that isn't visible.</strong> The sender
+  sees blue ticks for a message nobody read. Check the open chat and <code>AppState.currentState === 'active'</code>.</p></div>
+  <div class="dont"><p><strong>Keeping the socket connected in background.</strong> The user looks online and gets no
+  push notifications.</p></div>
+  <div class="dont"><p><strong>Reading <code>data.isGroup</code> as a boolean.</strong> FCM data values are strings;
+  <code>"false"</code> is truthy.</p></div>
+</section>
+
+<section>
+  <h2>Test before release</h2>
+  <p>Two phones, users A and B. Each item should pass.</p>
+  <ul class="check">
+    <li>A and B both open, B on the chat list. A sends a message.
+      <span class="exp">B gets no push notification. B's chat list updates. A sees double grey.</span></li>
+    <li>B then opens the chat.
+      <span class="exp">A's ticks turn blue within about a second.</span></li>
+    <li>Both on the same chat screen, chatting.
+      <span class="exp">Blue ticks immediately; typing indicator shows on both sides.</span></li>
+    <li>B sends the app to background. A sends a message.
+      <span class="exp">B gets a push. Tapping it opens that chat.</span></li>
+    <li>B turns on airplane mode for 20 seconds, then off.
+      <span class="exp">B reconnects on its own; typing and reactions still work in the open chat.</span></li>
+    <li>B signed in on two phones; close the app on one.
+      <span class="exp">A still sees B as online.</span></li>
+  </ul>
+</section>
+
+<footer>TeleBook backend team &middot; socket contract for backend release of 18 September 2026 &middot;
+Event names and payloads were taken from the server source, not written from memory.</footer>
+</div>
+<style>
+@page{ size:A4; margin:13mm 12mm; }
+@media print{
+  :root{ --ground:#fff; --surface:#fff; --surface-2:#F1F3F6; --ink:#161B22; --muted:#4C5663; --faint:#6E7885;
+    --line:#C9D0D9; --line-strong:#A6AFBB; --send:#2B4C7E; --send-bg:#E7EDF6; --recv:#0F5A54; --recv-bg:#E6F2F0;
+    --block:#A62E1A; --block-bg:#FAEBE8; --warn:#7A4F00; --warn-bg:#FBF3E2; --code-bg:#F2F4F7; }
+  body{background:#fff!important;font-size:10pt;line-height:1.5}
+  .wrap{max-width:none;padding:0}
+  h1{font-size:22pt} .standfirst{font-size:11pt}
+  .rules,.seq,.ticks,.note,.dont,.facts,ul.check li,pre{break-inside:avoid;page-break-inside:avoid}
+  tr{break-inside:avoid;page-break-inside:avoid}
+  h2,h3{break-after:avoid;page-break-after:avoid}
+  table{min-width:0;font-size:8.6pt} td.ev,td.pl{font-size:8pt;white-space:normal;word-break:break-word}
+  .tablewrap{overflow:visible}
+  pre{font-size:7.9pt;white-space:pre-wrap;word-break:break-word;overflow:visible}
+  section{margin-bottom:24px}
+}
+</style>
+</body>
+</html>

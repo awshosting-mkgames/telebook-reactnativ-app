@@ -1,11 +1,10 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
-    SafeAreaView,
     ScrollView,
-    StatusBar,
     StyleSheet,
     Text,
     TextInput,
@@ -14,12 +13,17 @@ import {
 } from 'react-native';
 import Toast from "react-native-toast-message";
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 import { getStoredToken } from '../../../components/notification';
 import { ThemeContext } from '../../../components/ThemeContext';
 import { settotalappData } from '../../../redex/slices/totalappDataSlice';
 import apiService from '../../../services/apiService';
+import { contactSync } from '../../../services/contactSync';
+import { getDeviceId } from '../../../services/deviceId';
 import { saveData } from '../../../services/staticStorage';
+import { getUiColors } from '../../../utils/uiColors';
+import AuthHeader from '../AuthHeader';
 
 const OTP_LENGTH = 4;
 
@@ -27,6 +31,9 @@ const OtpScreen = ({ setPageSection, renderSection, logindataPage, setlogindataP
     const { t } = useTranslation();
     const dispatch = useDispatch();
     const { theme } = useContext(ThemeContext);
+    const c = getUiColors(theme);
+    const insets = useSafeAreaInsets();
+    const [focusedIndex, setFocusedIndex] = useState(0);
     const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(''));
     const [loading, setLoading] = useState(false);
     const [fcmTokensend, setfcmTokensend] = useState('');
@@ -42,30 +49,39 @@ const OtpScreen = ({ setPageSection, renderSection, logindataPage, setlogindataP
     }, []);
 
     const handleChange = (text, index) => {
-        if (/^\d?$/.test(text)) {
-            const newOtp = [...otp];
-            newOtp[index] = text;
+        const digits = text.replace(/\D/g, '');
+        const newOtp = [...otp];
+        if (digits.length > 1) {
+            // Paste / SMS autofill: poora code ek saath aaya
+            digits.slice(0, OTP_LENGTH - index).split('').forEach((d, i) => { newOtp[index + i] = d; });
             setOtp(newOtp);
-            if (text && index < OTP_LENGTH - 1) {
-                inputs.current[index + 1].focus();
-            }
+            const last = Math.min(index + digits.length, OTP_LENGTH) - 1;
+            inputs.current[last]?.focus();
+            return;
+        }
+        newOtp[index] = digits;
+        setOtp(newOtp);
+        if (digits && index < OTP_LENGTH - 1) {
+            inputs.current[index + 1]?.focus();
         }
     };
 
     const handleBackspace = (key, index) => {
         if (key === 'Backspace' && !otp[index] && index > 0) {
-            inputs.current[index - 1].focus();
+            inputs.current[index - 1]?.focus();
         }
     };
 
     const handleOtpVerfiy = async () => {
+        if (loading) return;
         const str = otp.join('');
-        if (str.length !== 4) {
+        if (str.length !== OTP_LENGTH) {
             Toast.show({ type: "error", text1: t('otpError'), text2: "Please enter all 4 digits" });
             return;
         }
         try {
             setLoading(true);
+            const deviceId = await getDeviceId();
             const res = await apiService({
                 method: 'POST',
                 endpoint: 'auth/verify-otp',
@@ -75,6 +91,7 @@ const OtpScreen = ({ setPageSection, renderSection, logindataPage, setlogindataP
                     userId: logindataPage?.userId,
                     fcmToken: fcmTokensend,
                     deviceType: 'android',
+                    deviceId,
                     otp: str,
                     language: lang || 'en',
                 }
@@ -86,6 +103,13 @@ const OtpScreen = ({ setPageSection, renderSection, logindataPage, setlogindataP
                 await saveData('token', Data?.token);
                 await saveData('userId', Data?.user?.id);
                 await saveData('IsLogin', true);
+
+                // OTP success par contact sync. Await nahi kar rahe: permission
+                // dialog aur 1000+ contacts me waqt lagta hai, user ko OTP screen
+                // par rokna nahi hai. Token upar save ho chuka hai isliye sync ki
+                // API call authenticate ho jayegi.
+                contactSync(dispatch);
+
                 if (Data?.isNewUser) {
                     dispatch(settotalappData({ user: Data?.user, isLogin: false, apiToken: Data?.token, userId: Data?.user?.id }));
                     setOtpdataPage(res?.data);
@@ -134,94 +158,92 @@ const OtpScreen = ({ setPageSection, renderSection, logindataPage, setlogindataP
     const filledCount = otp.filter(d => d !== '').length;
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor="#1199ff" barStyle="light-content" />
+        <View style={[styles.container, { backgroundColor: c.bg, paddingTop: insets.top }]}>
+            <AuthHeader title="Verify OTP" onBack={() => renderSection(3)} c={c} />
 
-            {/* Header */}
-            <View style={[styles.header, { borderBottomColor: theme.borderColor || '#eee' }]}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => renderSection(3)}>
-                    <Ionicons name="arrow-back" size={24} color={theme.text} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: theme.text }]}>Verify OTP</Text>
-                <View style={{ width: 40 }} />
-            </View>
-
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-                <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
-                    {/* Icon */}
-                    <View style={[styles.iconBox, { backgroundColor: theme.inputBackground || '#EEF4FF' }]}>
-                        <Text style={styles.iconEmoji}>🔐</Text>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+                <ScrollView
+                    contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View style={[styles.iconBox, { backgroundColor: c.primarySoft }]}>
+                        <Ionicons name="shield-checkmark" size={40} color={c.primary} />
                     </View>
 
-                    <Text style={[styles.title, { color: theme.text }]}>Enter verification code</Text>
-                    <Text style={[styles.subtitle, { color: theme.subText || '#888' }]}>
-                        We sent a 4-digit code to
+                    <Text style={[styles.title, { color: c.text }]}>Enter verification code</Text>
+                    <Text style={[styles.subtitle, { color: c.subText }]}>
+                        We sent a {OTP_LENGTH}-digit code to
                     </Text>
 
                     {/* Phone + Change */}
                     <View style={styles.phoneRow}>
-                        <Text style={[styles.phone, { color: theme.text }]}>
+                        <Text style={[styles.phone, { color: c.text }]}>
                             +91 {logindataPage?.phonenumber}
                         </Text>
-                        <TouchableOpacity onPress={() => renderSection(3)} style={styles.changeBtn}>
-                            <Ionicons name="create-outline" size={14} color="#1294F2" />
-                            <Text style={styles.changeText}>Change</Text>
+                        <TouchableOpacity onPress={() => renderSection(3)} style={[styles.changeBtn, { backgroundColor: c.primarySoft }]}>
+                            <Ionicons name="create-outline" size={14} color={c.primary} />
+                            <Text style={[styles.changeText, { color: c.primary }]}>Change</Text>
                         </TouchableOpacity>
                     </View>
 
                     {/* OTP Inputs */}
                     <View style={styles.otpRow}>
-                        {otp.map((digit, index) => (
-                            <TextInput
-                                key={index}
-                                ref={(ref) => (inputs.current[index] = ref)}
-                                style={[
-                                    styles.otpBox,
-                                    digit ? styles.activeBox : null,
-                                    { backgroundColor: theme.inputBackground || '#f5f5f5', color: theme.text, borderColor: digit ? '#1294F2' : (theme.borderColor || '#ddd') }
-                                ]}
-                                keyboardType="number-pad"
-                                maxLength={1}
-                                value={digit}
-                                onChangeText={(text) => handleChange(text, index)}
-                                onKeyPress={({ nativeEvent }) => handleBackspace(nativeEvent.key, index)}
-                            />
-                        ))}
-                    </View>
-
-                    {/* Progress dots */}
-                    <View style={styles.progressRow}>
-                        {otp.map((_, i) => (
-                            <View
-                                key={i}
-                                style={[styles.dot, i < filledCount ? styles.dotFilled : styles.dotEmpty]}
-                            />
-                        ))}
+                        {otp.map((digit, index) => {
+                            const active = focusedIndex === index;
+                            return (
+                                <TextInput
+                                    key={index}
+                                    ref={(ref) => (inputs.current[index] = ref)}
+                                    style={[
+                                        styles.otpBox,
+                                        {
+                                            backgroundColor: c.card,
+                                            color: c.text,
+                                            borderColor: active || digit ? c.primary : c.border,
+                                        },
+                                    ]}
+                                    keyboardType="number-pad"
+                                    textContentType="oneTimeCode"
+                                    autoComplete={index === 0 ? 'sms-otp' : 'off'}
+                                    autoFocus={index === 0}
+                                    selectTextOnFocus
+                                    maxLength={OTP_LENGTH}
+                                    value={digit}
+                                    onFocus={() => setFocusedIndex(index)}
+                                    onChangeText={(text) => handleChange(text, index)}
+                                    onKeyPress={({ nativeEvent }) => handleBackspace(nativeEvent.key, index)}
+                                />
+                            );
+                        })}
                     </View>
 
                     {/* Verify Button */}
                     <TouchableOpacity
-                        style={[styles.verifyBtn, loading && styles.btnDisabled, filledCount < 4 && styles.btnInactive]}
+                        style={[styles.verifyBtn, { backgroundColor: filledCount === OTP_LENGTH && !loading ? c.primary : c.primaryDisabled }]}
                         onPress={handleOtpVerfiy}
                         disabled={loading}
-                        activeOpacity={0.8}
+                        activeOpacity={0.85}
                     >
-                        <Text style={styles.verifyText}>{loading ? 'Verifying...' : t('submit')}</Text>
+                        {loading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text style={styles.verifyText}>{t('submit')}</Text>
+                        )}
                     </TouchableOpacity>
 
                     {/* Resend */}
                     <View style={styles.resendRow}>
-                        <Text style={[styles.resendText, { color: theme.subText || '#999' }]}>
+                        <Text style={[styles.resendText, { color: c.subText }]}>
                             Didn't receive code?
                         </Text>
-                        <TouchableOpacity onPress={resendOtp} disabled={loading}>
-                            <Text style={styles.resendLink}>{t('resendCode')}</Text>
+                        <TouchableOpacity onPress={resendOtp} disabled={loading} hitSlop={8}>
+                            <Text style={[styles.resendLink, { color: c.primary }]}>{t('resendCode')}</Text>
                         </TouchableOpacity>
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
     );
 };
 
@@ -230,32 +252,10 @@ export default OtpScreen;
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: 0.5,
-    },
-    backBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    headerTitle: {
-        fontSize: 17,
-        fontWeight: '600',
     },
     content: {
         paddingHorizontal: 24,
-        paddingBottom: 60,
-        paddingTop: 32,
+        paddingTop: 36,
         alignItems: 'center',
     },
     iconBox: {
@@ -266,19 +266,16 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: 24,
     },
-    iconEmoji: {
-        fontSize: 40,
-    },
     title: {
-        fontSize: 22,
-        fontWeight: '700',
+        fontSize: 24,
+        fontWeight: '800',
         textAlign: 'center',
         marginBottom: 8,
     },
     subtitle: {
         fontSize: 14,
         textAlign: 'center',
-        marginBottom: 10,
+        marginBottom: 8,
     },
     phoneRow: {
         flexDirection: 'row',
@@ -288,74 +285,46 @@ const styles = StyleSheet.create({
     },
     phone: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
     },
     changeBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
         paddingHorizontal: 10,
-        paddingVertical: 4,
-        backgroundColor: '#EEF4FF',
+        paddingVertical: 5,
         borderRadius: 20,
     },
     changeText: {
         fontSize: 12,
-        color: '#1294F2',
-        fontWeight: '500',
+        fontWeight: '600',
     },
     otpRow: {
         flexDirection: 'row',
-        gap: 12,
-        marginBottom: 16,
-    },
-    otpBox: {
-        width: 62,
-        height: 62,
-        borderRadius: 14,
-        borderWidth: 1.5,
-        textAlign: 'center',
-        fontSize: 24,
-        fontWeight: '700',
-    },
-    activeBox: {
-        borderColor: '#1294F2',
-    },
-    progressRow: {
-        flexDirection: 'row',
-        gap: 8,
+        gap: 14,
         marginBottom: 32,
     },
-    dot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-    },
-    dotFilled: {
-        backgroundColor: '#1294F2',
-    },
-    dotEmpty: {
-        backgroundColor: '#ddd',
+    otpBox: {
+        width: 60,
+        height: 64,
+        borderRadius: 16,
+        borderWidth: 1.5,
+        textAlign: 'center',
+        fontSize: 26,
+        fontWeight: '700',
     },
     verifyBtn: {
         width: '100%',
         height: 54,
-        backgroundColor: '#1294F2',
         borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 24,
     },
-    btnDisabled: {
-        backgroundColor: '#85B7EB',
-    },
-    btnInactive: {
-        backgroundColor: '#B0CFEF',
-    },
     verifyText: {
         color: '#fff',
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
     },
     resendRow: {
         flexDirection: 'row',
@@ -367,7 +336,6 @@ const styles = StyleSheet.create({
     },
     resendLink: {
         fontSize: 14,
-        color: '#1294F2',
-        fontWeight: '600',
+        fontWeight: '700',
     },
 });

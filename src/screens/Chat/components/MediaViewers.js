@@ -15,11 +15,21 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { claimPlayback, useExclusivePlayback } from '../../../utils/playbackManager';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 // ───────────────── DOWNLOAD ─────────────────
-const downloadFile = async (uri, setLoading) => {
+// Extension URL (uploads/…/file.mp4) se — pehle video bhi .jpg / image/jpeg ban kar save hota tha
+const MIME_BY_EXT = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic', mp4: 'video/mp4', mov: 'video/quicktime', m4v: 'video/x-m4v', '3gp': 'video/3gpp', webm: 'video/webm' };
+const fileInfo = (uri, fallbackExt) => {
+    const last = (uri ?? '').split('?')[0].split('/').pop() ?? '';
+    const ext = (last.includes('.') ? last.split('.').pop() : fallbackExt).toLowerCase();
+    return { ext, mime: MIME_BY_EXT[ext] ?? (fallbackExt === 'mp4' ? 'video/mp4' : 'image/jpeg') };
+};
+
+const downloadFile = async (uri, setLoading, fallbackExt = 'jpg') => {
+    const { ext, mime } = fileInfo(uri, fallbackExt);
     try {
         setLoading(true);
         // Web: let the browser download it. No-op (false) on native.
@@ -29,15 +39,15 @@ const downloadFile = async (uri, setLoading) => {
             const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
             if (!permissions.granted) return;
 
-            const fileName = `download_${Date.now()}.jpg`;
+            const fileName = `download_${Date.now()}.${ext}`;
             const tempUri = FileSystem.cacheDirectory + fileName;
             const { uri: localUri } = await FileSystem.downloadAsync(uri, tempUri);
-            const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, fileName, 'image/jpeg');
+            const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, fileName, mime);
             const fileData = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
             await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, fileData, { encoding: FileSystem.EncodingType.Base64 });
         } else {
             if (!(await requestLibraryPermission())) return;
-            const fileUri = FileSystem.documentDirectory + `file_${Date.now()}.jpg`;
+            const fileUri = FileSystem.documentDirectory + `file_${Date.now()}.${ext}`;
             const { uri: localUri } = await FileSystem.downloadAsync(uri, fileUri);
             await saveToLibrary(localUri);
         }
@@ -50,10 +60,16 @@ const downloadFile = async (uri, setLoading) => {
 };
 
 // ───────────────── SHARE ─────────────────
-const shareFile = async (uri) => {
+const shareFile = async (uri, fallbackExt = 'jpg') => {
     try {
         if (!(await Sharing.isAvailableAsync())) { Alert.alert('Error', 'Sharing not supported'); return; }
-        await Sharing.shareAsync(uri);
+        // expo-sharing sirf local file share karta hai — pehle cache me download karo
+        let localUri = uri;
+        if (/^https?:/.test(uri ?? '')) {
+            const { ext } = fileInfo(uri, fallbackExt);
+            ({ uri: localUri } = await FileSystem.downloadAsync(uri, `${FileSystem.cacheDirectory}share_${Date.now()}.${ext}`));
+        }
+        await Sharing.shareAsync(localUri);
     } catch (e) {
         Alert.alert('Error', 'Share failed');
     }
@@ -96,9 +112,12 @@ export const VideoModal = ({ visible, uri, onClose }) => {
         uri ? { uri } : null,
         (player) => {
             player.loop = false;
+            claimPlayback(player);
             player.play();
         }
     );
+
+    useExclusivePlayback(player);
 
     useEffect(() => {
         if (!visible && player) {
@@ -131,7 +150,7 @@ export const VideoModal = ({ visible, uri, onClose }) => {
                     <View style={styles.actions}>
                         <TouchableOpacity
                             onPress={() =>
-                                downloadFile(uri, setDownloading)
+                                downloadFile(uri, setDownloading, 'mp4')
                             }
                             disabled={downloading} >
                             {downloading ? (
@@ -146,7 +165,7 @@ export const VideoModal = ({ visible, uri, onClose }) => {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            onPress={() => shareFile(uri)}
+                            onPress={() => shareFile(uri, 'mp4')}
                         >
                             <Ionicons
                                 name="share-social-outline"

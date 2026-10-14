@@ -27,6 +27,7 @@ import {
 import apiService from '../../../services/apiService';
 import { ThemeContext } from '../../../components/ThemeContext';
 import { appendFile } from '../../../utils/uploadFile';
+import { claimPlayback, stopPlayback, useExclusivePlayback } from '../../../utils/playbackManager';
 
 export default function NewPostModal({ visible, onClose, channelId, onPosted }) {
     const { theme } = useContext(ThemeContext);
@@ -44,6 +45,8 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
     const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
     const audioPlayer = useAudioPlayer(recordedAudio?.uri ? { uri: recordedAudio.uri } : null);
     const audioPlayerStatus = useAudioPlayerStatus(audioPlayer);
+
+    useExclusivePlayback(audioPlayer);
     const audioPlaying = audioPlayerStatus?.playing ?? false;
 
     // ── Action Sheet state ──
@@ -166,6 +169,7 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
                 shouldRouteThroughEarpiece: false,
             });
 
+            stopPlayback(); // preview audio baj raha ho to record se pehle band karo
             await audioRecorder.prepareToRecordAsync();
             audioRecorder.record();
             setRecordingStatus('recording');
@@ -218,6 +222,7 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
             }
             await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
             await audioPlayer.seekTo(0);
+            claimPlayback(audioPlayer);
             audioPlayer.play();
         } catch (err) {
             Alert.alert('Playback error', err.message);

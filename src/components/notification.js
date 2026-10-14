@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApps } from '@react-native-firebase/app';
 import messaging from '@react-native-firebase/messaging';
 import * as Notifications from 'expo-notifications';
+import notifee, { AndroidCategory, AndroidImportance, AndroidVisibility, EventType } from '@notifee/react-native';
 import {
     PermissionsAndroid,
     Platform,
@@ -9,9 +10,18 @@ import {
 
 import { navigate } from '../navigation/RootNavigation';
 import { getRouteConfig } from './notificationConfig';
+import { rejectCall } from '../services/callHelpers';
+import apiService from '../services/apiService';
+import { getDeviceId } from '../services/deviceId';
+import { getData } from '../services/staticStorage';
+import Config from '../services/config';
 
 const TOKEN_KEY = 'FCM_TOKEN';
 const ANDROID_CHANNEL_ID = 'default_channel';
+// Alag channel — regular message notifications se importance/sound/vibration
+// alag honi chahiye (ringtone jaisa), aur channel settings pehli baar banne
+// ke baad badal nahi sakti isliye shuru se hi apna id.
+const CALL_CHANNEL_ID = 'incoming_calls';
 
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -37,13 +47,143 @@ export async function setupAndroidChannel() {
                 importance: Notifications.AndroidImportance.HIGH,
                 vibrationPattern: [0, 250, 250, 250],
                 lightColor: '#6C63FF',
-                sound: 'default',
+                // `sound` key jaan-boojh kar nahi di ja rahi: channel options mein
+                // string ko custom sound ka FILENAME maana jata hai (koi 'default'
+                // sentinel nahi hota), aur file na milne par expo error log karta hai.
+                // Key hatane par Android khud DEFAULT_NOTIFICATION_URI use karta hai.
                 enableVibrate: true,
                 lockscreenVisibility:
                     Notifications.AndroidNotificationVisibility.PUBLIC,
             }
         );
     }
+}
+
+// WhatsApp jaisa full-screen incoming-call notification (locked phone / app
+// killed par bhi ringing screen) — notifee ka alag channel, zyada importance
+// aur apna sound/vibration pattern taaki chat-message notification se alag dikhe.
+export async function setupCallChannel() {
+    if (Platform.OS !== 'android') return;
+    try {
+        await notifee.createChannel({
+            id: CALL_CHANNEL_ID,
+            name: 'Incoming calls',
+            importance: AndroidImportance.HIGH,
+            sound: 'default',
+            vibration: true,
+            // notifee reject karta hai agar pattern ka pehla value 0/non-positive
+            // ho ('channel.vibrationPattern' validation) — isliye [0,...] nahi,
+            // saare values > 0 hone chahiye.
+            vibrationPattern: [1000, 500, 1000, 500],
+            visibility: AndroidVisibility.PUBLIC,
+        });
+    } catch (e) {
+        console.log('❌ setupCallChannel error:', e);
+    }
+}
+
+// FCM data message {entity:'call', entityId, callType, callerName, callerPhoto}
+// se full-screen notification banata hai. App backgrounded/killed dono mein
+// yahi chalta hai — foreground mein socket (IncomingCallManager) ring overlay
+// dikhata hai, isliye wahan yeh dobara nahi bulaya jaata.
+export async function displayIncomingCallNotification(data = {}) {
+    const callId = data.entityId;
+    if (!callId) return;
+    const callType = data.callType === 'video' ? 'video' : 'audio';
+    // `callerPhoto` server se raw storage key (`uploads/...`) aati hai, poora
+    // URL nahi — aur jab photo hi nahi hoti to key `undefined` ke saath set
+    // rehti thi (notifee is par validation error deta hai: largeIcon ya to
+    // poora string URL/ImageResource hona chahiye ya key hi na ho). Isliye
+    // ab sirf tabhi largeIcon bhejte hain jab photo waqai maujood ho, aur
+    // usse poora URL bana ke.
+    const photoUrl = data.callerPhoto
+        ? (/^(https?:|file:|content:)/.test(data.callerPhoto) ? data.callerPhoto : `${Config.MEDIA_URL}${data.callerPhoto}`)
+        : null;
+    try {
+        await notifee.displayNotification({
+            id: `call_${callId}`,
+            title: data.callerName || 'Incoming call',
+            body: callType === 'video' ? 'Incoming video call' : 'Incoming voice call',
+            data: { entity: 'call', entityId: callId, callType },
+            android: {
+                channelId: CALL_CHANNEL_ID,
+                category: AndroidCategory.CALL,
+                importance: AndroidImportance.HIGH,
+                visibility: AndroidVisibility.PUBLIC,
+                ongoing: true,
+                autoCancel: false,
+                loopSound: true,
+                lightUpScreen: true,
+                smallIcon: 'ic_launcher',
+                ...(photoUrl ? { largeIcon: photoUrl } : {}),
+                // Locked device: poori screen par ring UI khud khul jaaye.
+                fullScreenAction: { id: 'default' },
+                // Notification shade/heads-up se bhi seedha accept/decline.
+                pressAction: { id: 'default' },
+                actions: [
+                    { title: 'Decline', pressAction: { id: 'decline' } },
+                    { title: 'Accept', pressAction: { id: 'accept', launchActivity: 'default' } },
+                ],
+            },
+        });
+    } catch (e) {
+        console.log('❌ displayIncomingCallNotification error:', e);
+    }
+}
+
+export async function cancelIncomingCallNotification(callId) {
+    if (!callId) return;
+    try {
+        await notifee.cancelNotification(`call_${callId}`);
+    } catch (e) {
+        // notification already gone — safe to ignore
+    }
+}
+
+// Decline ko app kholne ki zarurat nahi — seedha reject API call karke
+// notification hata do. Accept/body-tap InCallScreen par le jaate hain
+// (autoAccept sirf jab explicit "Accept" button dabaya ho).
+async function handleCallNotificationEvent({ type, detail }) {
+    const notification = detail?.notification;
+    const callId = notification?.data?.entityId;
+    if (!callId) return;
+    const pressActionId = detail?.pressAction?.id;
+
+    if (type === EventType.ACTION_PRESS && pressActionId === 'decline') {
+        rejectCall(callId);
+        await cancelIncomingCallNotification(callId);
+        return;
+    }
+
+    if (type === EventType.PRESS || (type === EventType.ACTION_PRESS && pressActionId === 'accept')) {
+        await cancelIncomingCallNotification(callId);
+        navigate('InCall', {
+            callId,
+            type: notification?.data?.callType,
+            isIncoming: true,
+            autoAccept: pressActionId === 'accept',
+        });
+    }
+}
+
+// App start se pehle (index.js top-level) register karna zaroori hai — tabhi
+// app killed state mein bhi "Decline" background event handle ho paata hai.
+export function registerCallBackgroundEvents() {
+    notifee.onBackgroundEvent(handleCallNotificationEvent);
+}
+
+// App open hone ke baad (foreground event + cold-start initial notification).
+export function setupCallForegroundHandlers() {
+    const unsub = notifee.onForegroundEvent(({ type, detail }) => {
+        handleCallNotificationEvent({ type, detail });
+    });
+
+    notifee.getInitialNotification().then((initial) => {
+        if (!initial) return;
+        handleCallNotificationEvent({ type: EventType.PRESS, detail: { notification: initial.notification, pressAction: initial.pressAction } });
+    });
+
+    return unsub;
 }
 
 export async function requestExpoNotificationPermission() {
@@ -137,8 +277,40 @@ export async function generateAndSaveFCMToken() {
     }
 }
 
+// Login ke baad ye hi endpoint token backend par (re)save karta hai — API doc
+// section 8, rule 3: "Send it again on every app start while logged in, and
+// whenever it changes." Yeh rule pehle poori tarah miss tha: na app-start par
+// dobara bheja ja raha tha, na refresh par — sirf login (verify-otp) ke waqt
+// ek baar. Reinstall / cleared data / backup-restore ke baad Firebase naya
+// token deta hai jiska koi refresh event bhi nahi aata — isliye app-start
+// wala call zaroori hai, sirf refresh listener kaafi nahi.
+export async function syncPushToken() {
+    try {
+        // Logged-in hi nahi hai to save-token call karne ka koi matlab nahi
+        // (apiService token na mile to Authorization header hi nahi bhejega,
+        // aur backend route private hai — 401 hi aata).
+        const authToken = await getData('token');
+        if (!authToken) return;
+
+        const msg = getMessagingSafe();
+        if (!msg) return;
+        const token = await msg.getToken();
+        if (!token) return;
+        await AsyncStorage.setItem(TOKEN_KEY, token);
+        const deviceId = await getDeviceId();
+        await apiService({
+            method: 'POST',
+            endpoint: 'notifications/save-token',
+            data: { token, deviceType: 'android', deviceId },
+        });
+    } catch (e) {
+        console.log('❌ syncPushToken error:', e);
+    }
+}
+
 /**
- * Token refresh listener
+ * Token refresh listener — refresh hote hi naya token backend ko bhi bhejta
+ * hai (pehle sirf AsyncStorage me save hota tha, backend ko kabhi nahi).
  */
 export function setupTokenRefreshListener(onNewToken) {
     const msg = getMessagingSafe();
@@ -152,6 +324,20 @@ export function setupTokenRefreshListener(onNewToken) {
             TOKEN_KEY,
             newToken
         );
+
+        try {
+            const authToken = await getData('token');
+            if (authToken) {
+                const deviceId = await getDeviceId();
+                await apiService({
+                    method: 'POST',
+                    endpoint: 'notifications/save-token',
+                    data: { token: newToken, deviceType: 'android', deviceId },
+                });
+            }
+        } catch (e) {
+            console.log('❌ token-refresh save-token error:', e);
+        }
 
         onNewToken?.(newToken);
     });
@@ -220,6 +406,10 @@ export function setupForegroundHandler() {
             JSON.stringify(remoteMessage, null, 2)
         );
 
+        // App foreground mein hai — socket (IncomingCallManager) ring overlay
+        // khud dikha deta hai, yahan dobara notification nahi dikhani.
+        if (remoteMessage?.data?.entity === 'call') return;
+
         await showLocalNotification(remoteMessage);
     });
 }
@@ -238,6 +428,23 @@ export function setupBackgroundHandler() {
                 '🌙 Background FCM:',
                 JSON.stringify(remoteMessage, null, 2)
             );
+
+            // App background/killed — yahi se WhatsApp jaisa full-screen
+            // ringing notification dikhana hai (socket yahan connected nahi
+            // hota, isliye IncomingCallManager ka overlay yahan kaam nahi karega).
+            //
+            // `action` do tarah ki aati hai: "incoming" (naya call — dikhao)
+            // aur "dismiss" (call cancel/reject/timeout ho gaya — jo already
+            // dikhi hui notification hai use hatao). Pehle "dismiss" ko bhi
+            // displayIncomingCallNotification() hi bula deta tha, jo galat
+            // UI (ya crash — callerPhoto na hone par) deta tha.
+            if (remoteMessage?.data?.entity === 'call') {
+                if (remoteMessage.data.action === 'dismiss') {
+                    await cancelIncomingCallNotification(remoteMessage.data.entityId);
+                } else {
+                    await displayIncomingCallNotification(remoteMessage.data);
+                }
+            }
         }
     );
 }
@@ -349,5 +556,20 @@ export async function getStoredToken() {
     } catch (e) {
         console.log('❌ getStoredToken error:', e);
         return null;
+    }
+}
+
+// Logout (API doc section 8, rule 4): backend se token hatane ke baad
+// Firebase ko bhi bata do ki yeh token ab is install ke kaam ka nahi —
+// warna agli baar getToken() wahi purana token de sakta hai jab tak OS khud
+// kabhi rotate na kare.
+export async function clearPushToken() {
+    try {
+        const msg = getMessagingSafe();
+        if (msg) await msg.deleteToken();
+    } catch (e) {
+        console.log('❌ clearPushToken error:', e);
+    } finally {
+        await AsyncStorage.removeItem(TOKEN_KEY);
     }
 }

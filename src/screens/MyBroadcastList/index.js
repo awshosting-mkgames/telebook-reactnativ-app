@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useCallback, useContext } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity, Image,
     SafeAreaView, StatusBar, Platform, ActivityIndicator, Alert,
-    Modal, TextInput, Pressable,
+    Modal, TextInput, Pressable, KeyboardAvoidingView, ScrollView,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,6 +22,7 @@ const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 export default function MyBroadcastList({ navigation }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
     const maniAllData = useSelector((s) => s.totalappData);
     const MY_USER_ID = maniAllData?.userData?._id ?? '';
 
@@ -47,12 +50,16 @@ export default function MyBroadcastList({ navigation }) {
         }
     }, []);
 
-    useEffect(() => { fetchBroadcasts(); }, [fetchBroadcasts]);
+    // Screen par wapas aate hi list dobara lao — warna details screen se
+    // delete/add karne ke baad purani list dikhti rehti thi.
+    useFocusEffect(
+        useCallback(() => { fetchBroadcasts(); }, [fetchBroadcasts])
+    );
 
 
     const pickIcon = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') return Alert.alert('Permission chahiye');
+        if (status !== 'granted') return Alert.alert('Permission required');
         const res = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
@@ -90,7 +97,7 @@ export default function MyBroadcastList({ navigation }) {
                 fetchBroadcasts();
             }
         } catch (e) {
-            Alert.alert('Error', 'Create nahi hua');
+            Alert.alert('Error', 'Could not create broadcast');
         } finally {
             setCreating(false);
         }
@@ -100,7 +107,7 @@ export default function MyBroadcastList({ navigation }) {
     const deleteBroadcast = (bcId) => {
         Alert.alert(
             'Delete Broadcast?',
-            'Yeh broadcast aur sab messages delete ho jayenge',
+            'This broadcast list and all its messages will be deleted',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -177,11 +184,12 @@ export default function MyBroadcastList({ navigation }) {
                     renderItem={renderItem}
                     refreshing={loading}
                     onRefresh={fetchBroadcasts}
+                    contentContainerStyle={{ paddingBottom: 100 + insets.bottom, flexGrow: 1 }}
                     ListEmptyComponent={
                         <View style={styles.emptyWrap}>
                             <Ionicons name="megaphone-outline" size={64} color="#ccc" />
-                            <Text style={styles.emptyTitle}>Koi Broadcast Nahi</Text>
-                            <Text style={styles.emptySub}>New broadcast create karo</Text>
+                            <Text style={styles.emptyTitle}>No broadcast lists yet</Text>
+                            <Text style={styles.emptySub}>Create a new broadcast list</Text>
                             <TouchableOpacity style={styles.createBtn} onPress={() => setShowCreate(true)}>
                                 <Text style={styles.createBtnText}>+ Create Broadcast</Text>
                             </TouchableOpacity>
@@ -189,52 +197,81 @@ export default function MyBroadcastList({ navigation }) {
                     }
                 />
             )}
+            <TouchableOpacity
+                style={[styles.fab, { bottom: 24 + insets.bottom }]}
+                onPress={() => navigation.navigate('FindContact', { createType: 'broadcast' })}
+                activeOpacity={0.85}
+            >
+                <Ionicons name="add" size={28} color="#fff" />
+            </TouchableOpacity>
+
             <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
-                <Pressable style={styles.overlay} onPress={() => setShowCreate(false)}>
-                    <Pressable style={[styles.sheet, { backgroundColor: theme.background === '#000' ? '#1a1a1a' : '#fff' }]}>
-                        <View style={styles.sheetHandle} />
-                        <Text style={[styles.sheetTitle, { color: theme.text }]}>New Broadcast List</Text>
-                        <TouchableOpacity style={styles.iconPicker} onPress={pickIcon}>
-                            {bcIcon ? (
-                                <Image source={{ uri: bcIcon.uri }} style={styles.pickedIcon} />
-                            ) : (
-                                <View style={styles.iconPlaceholder}>
-                                    <Ionicons name="camera" size={28} color="#888" />
-                                    <Text style={{ color: '#888', fontSize: 12, marginTop: 4 }}>Add Icon</Text>
+                {/* Keyboard sheet ko dhak leta tha — isliye sheet keyboard ke upar uthti hai */}
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
+                    <Pressable style={styles.overlay} onPress={() => setShowCreate(false)}>
+                        <Pressable
+                            style={[
+                                styles.sheet,
+                                {
+                                    backgroundColor: theme.background === '#000' ? '#1a1a1a' : '#fff',
+                                    paddingBottom: 20 + insets.bottom,
+                                },
+                            ]}
+                            onStartShouldSetResponder={() => true}
+                        >
+                            <ScrollView
+                                keyboardShouldPersistTaps="handled"
+                                showsVerticalScrollIndicator={false}
+                                contentContainerStyle={{ paddingBottom: 8 }}
+                            >
+                                <View style={styles.sheetHandle} />
+                                <Text style={[styles.sheetTitle, { color: theme.text }]}>New Broadcast List</Text>
+                                <TouchableOpacity style={styles.iconPicker} onPress={pickIcon}>
+                                    {bcIcon ? (
+                                        <Image source={{ uri: bcIcon.uri }} style={styles.pickedIcon} />
+                                    ) : (
+                                        <View style={styles.iconPlaceholder}>
+                                            <Ionicons name="camera" size={28} color="#888" />
+                                            <Text style={{ color: '#888', fontSize: 12, marginTop: 4 }}>Add Icon</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                                <View style={[styles.inputWrap, { backgroundColor: theme.background === '#000' ? '#2a2a2a' : '#f5f5f5' }]}>
+                                    <Ionicons name="megaphone-outline" size={18} color="#888" />
+                                    <TextInput
+                                        style={[styles.modalInput, { color: theme.text }]}
+                                        placeholder="Broadcast List Name *"
+                                        placeholderTextColor="#999"
+                                        value={bcName}
+                                        onChangeText={setBcName}
+                                    />
                                 </View>
-                            )}
-                        </TouchableOpacity>
-                        <View style={[styles.inputWrap, { backgroundColor: theme.background === '#000' ? '#2a2a2a' : '#f5f5f5' }]}>
-                            <Ionicons name="megaphone-outline" size={18} color="#888" />
-                            <TextInput
-                                style={[styles.modalInput, { color: theme.text }]}
-                                placeholder="Broadcast List Name *"
-                                placeholderTextColor="#999"
-                                value={bcName}
-                                onChangeText={setBcName}
-                            />
-                        </View>
-                        <View style={[styles.inputWrap, { backgroundColor: theme.background === '#000' ? '#2a2a2a' : '#f5f5f5' }]}>
-                            <Ionicons name="information-circle-outline" size={18} color="#888" />
-                            <TextInput
-                                style={[styles.modalInput, { color: theme.text }]}
-                                placeholder="Description (optional)"
-                                placeholderTextColor="#999"
-                                value={bcDesc}
-                                onChangeText={setBcDesc}
-                            />
-                        </View>
-                        <TouchableOpacity
-                            style={[styles.submitBtn, creating && { opacity: 0.7 }]}
-                            onPress={createBroadcast}
-                            disabled={creating} >
-                            {creating
-                                ? <ActivityIndicator color="#fff" />
-                                : <Text style={styles.submitText}>{t('CreateBroadcast')}</Text>
-                            }
-                        </TouchableOpacity>
+                                <View style={[styles.inputWrap, { backgroundColor: theme.background === '#000' ? '#2a2a2a' : '#f5f5f5' }]}>
+                                    <Ionicons name="information-circle-outline" size={18} color="#888" />
+                                    <TextInput
+                                        style={[styles.modalInput, { color: theme.text }]}
+                                        placeholder="Description (optional)"
+                                        placeholderTextColor="#999"
+                                        value={bcDesc}
+                                        onChangeText={setBcDesc}
+                                    />
+                                </View>
+                                <TouchableOpacity
+                                    style={[styles.submitBtn, creating && { opacity: 0.7 }]}
+                                    onPress={createBroadcast}
+                                    disabled={creating} >
+                                    {creating
+                                        ? <ActivityIndicator color="#fff" />
+                                        : <Text style={styles.submitText}>{t('CreateBroadcast')}</Text>
+                                    }
+                                </TouchableOpacity>
+                            </ScrollView>
+                        </Pressable>
                     </Pressable>
-                </Pressable>
+                </KeyboardAvoidingView>
             </Modal>
         </SafeAreaView>
     );
@@ -278,7 +315,7 @@ const styles = StyleSheet.create({
     },
 
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-    sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 40, paddingTop: 14 },
+    sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 24, paddingTop: 14, maxHeight: '90%' },
     sheetHandle: { width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2, alignSelf: 'center', marginBottom: 18 },
     sheetTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center', marginBottom: 20 },
 

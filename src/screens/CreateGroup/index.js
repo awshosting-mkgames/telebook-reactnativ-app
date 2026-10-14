@@ -106,8 +106,13 @@ const CreateGroup = ({ navigation, route }) => {
             const res = await apiService({ method: 'POST', endpoint: 'chats/group', data: fd, isMultipart: true });
             if (res.success) {
                 Alert.alert('Group Created!', `"${groupName}" successfully created`, [{ text: 'OK', onPress: () => navigation.navigate('tab') }]);
+            } else if (res?.error?.code === 'PLAN_LIMIT') {
+                Alert.alert('Plan limit reached', res.error.message, [
+                    { text: 'Upgrade', onPress: () => navigation.navigate('Plans') },
+                    { text: 'Cancel', style: 'cancel' },
+                ]);
             } else {
-                Alert.alert('Error', res?.message || 'Something went wrong');
+                Alert.alert('Error', res?.error?.message || 'Something went wrong');
             }
         } catch (e) {
             Alert.alert('Error', 'Group create nahi ho saka. Dobara try karo.');

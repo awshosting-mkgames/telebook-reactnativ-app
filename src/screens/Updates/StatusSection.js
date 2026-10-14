@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -8,30 +10,43 @@ import {
     Animated,
     FlatList,
     Image,
+    KeyboardAvoidingView,
     Modal,
     Platform,
     Pressable,
     StatusBar,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
 import apiService from '../../services/apiService';
 import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
-const BASE_URL = Config.Main_url;
-
+import { claimPlayback, useExclusivePlayback } from '../../utils/playbackManager';
 const STATUS_DURATION = 5000;
 const VIDEO_MAX_SECS = 30;
 const FALLBACK_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+const TEXT_BGS = ['#075e54', '#1296f3', '#6d4c9f', '#c62828', '#ef6c00', '#00897b', '#37474f'];
 
 const toArr = (v) => (Array.isArray(v) ? v : []);
+
+// Server relative path deta hai (uploads/...) — usko media host ke saath jodna hota hai.
 const imgUrl = (p) => {
     if (!p) return null;
     if (p.startsWith('http')) return p;
-    return `${BASE_URL?.MEDIA_URL}${p}`.replace(/([^:])\/\//g, '$1/');
+    return `${Config.MEDIA_URL}${p}`.replace(/([^:])\/\//g, '$1/');
+};
+
+// Server viewedBy me viewers rakhta hai — usi se ring grey/blue decide hota hai.
+const isSeenByMe = (status, myUserId) => {
+    if (!myUserId) return false;
+    if (status?.seen || status?.isViewed) return true;
+    const viewers = toArr(status?.viewedBy ?? status?.viewers ?? status?.views);
+    return viewers.some((v) => String(v?.user?._id ?? v?.user ?? v?._id ?? v) === String(myUserId));
 };
 const fmtTime = (d) => {
     if (!d) return '';
@@ -53,6 +68,7 @@ const getMediaType = (status) => {
 
 // ─── StatusViewer — fullscreen, no theme needed (always dark) ────────────────
 const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, onDelete }) => {
+    const insets = useSafeAreaInsets();
     const [groupIdx, setGroupIdx] = useState(startGroupIdx);
     const [statusIdx, setStatusIdx] = useState(0);
     const [videoDone, setVideoDone] = useState(false);
@@ -62,14 +78,17 @@ const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, o
     const currentGroup = groups[groupIdx];
     const currentStatus = currentGroup?.statuses?.[statusIdx];
     const totalInGroup = currentGroup?.statuses?.length ?? 0;
-    const isMine = currentGroup?.user === myUserId;
+    const isMine = String(currentGroup?.user?._id ?? currentGroup?.user ?? '') === String(myUserId ?? '');
     const mediaType = getMediaType(currentStatus);
     const mediaUrl = imgUrl(currentStatus?.mediaUrl);
+    const viewCount = toArr(currentStatus?.viewedBy ?? currentStatus?.viewers).length;
 
     const player = useVideoPlayer(null, (p) => {
         p.loop = false;
         p.timeUpdateEventInterval = 0.5;
     });
+
+    useExclusivePlayback(player);
 
     // Video source ko current status ke saath sync rakho
     useEffect(() => {
@@ -140,6 +159,7 @@ const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, o
         if (mediaType !== 'video' || !mediaUrl) return;
         const statusSub = player.addListener('statusChange', ({ status }) => {
             if (status === 'readyToPlay') {
+                claimPlayback(player);
                 player.play();
             }
         });
@@ -164,7 +184,7 @@ const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, o
 
     const handleDelete = () => {
         if (!currentStatus?._id) return;
-        Alert.alert('Delete Status', 'Is status ko delete karo?', [
+        Alert.alert('Delete status?', 'This status will be removed for everyone.', [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Delete', style: 'destructive',
@@ -180,7 +200,7 @@ const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, o
                                 : onClose();
                         } else goNext();
                     } else {
-                        Alert.alert('Error', 'Delete nahi hua');
+                        Alert.alert('Error', 'Could not delete the status');
                     }
                 },
             },
@@ -189,7 +209,8 @@ const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, o
 
     if (!visible || !currentGroup) return null;
 
-    const userName = currentGroup?.user?.name || 'Unknown';
+    // status/my me user sirf id hoti hai — isliye apne status par naam fallback
+    const userName = isMine ? 'My Status' : (currentGroup?.user?.name || 'Unknown');
     const avatar = imgUrl(currentGroup?.user?.profilePicture) || FALLBACK_AVATAR;
 
     return (
@@ -246,9 +267,20 @@ const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, o
                         <Text style={vs.statusText}>{currentStatus?.content || ''}</Text>
                     </View>
                 )}
-                {!!currentStatus?.content && mediaType !== 'text' && (
-                    <View style={vs.captionBox}>
-                        <Text style={vs.caption}>{currentStatus.content}</Text>
+                {/* Caption + (apne status par) views count — server viewedBy rakhta hai */}
+                {((!!currentStatus?.content && mediaType !== 'text') || isMine) && (
+                    <View style={[vs.bottomBar, { paddingBottom: 16 + insets.bottom }]}>
+                        {!!currentStatus?.content && mediaType !== 'text' && (
+                            <Text style={vs.caption}>{currentStatus.content}</Text>
+                        )}
+                        {isMine && (
+                            <View style={vs.viewsRow}>
+                                <Ionicons name="eye-outline" size={15} color="rgba(255,255,255,0.9)" />
+                                <Text style={vs.viewsText}>
+                                    {viewCount} {viewCount === 1 ? 'view' : 'views'}
+                                </Text>
+                            </View>
+                        )}
                     </View>
                 )}
                 <View style={vs.tapRow} pointerEvents="box-none">
@@ -275,14 +307,16 @@ const vs = StyleSheet.create({
     media: { flex: 1, width: '100%' },
     textBg: { justifyContent: 'center', alignItems: 'center', padding: 32 },
     statusText: { color: '#fff', fontSize: 26, fontWeight: '700', textAlign: 'center', lineHeight: 36 },
-    captionBox: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: 'rgba(0,0,0,0.45)' },
+    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingTop: 12, paddingBottom: Platform.OS === 'ios' ? 28 : 16, backgroundColor: 'rgba(0,0,0,0.45)', gap: 8, zIndex: 6 },
     caption: { color: '#fff', fontSize: 14 },
+    viewsRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    viewsText: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '600' },
     tapRow: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', zIndex: 5 },
     tapHalf: { flex: 1, height: '100%' },
 });
 
 // ─── MediaPickerSheet — theme-aware ──────────────────────────────────────────
-const MediaPickerSheet = ({ visible, uploading, onClose, onCamera, onGallery, onVideoGallery, isDark }) => (
+const MediaPickerSheet = ({ visible, uploading, onClose, onCamera, onGallery, onVideoGallery, onText, isDark }) => (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
         <TouchableOpacity style={mp.overlay} activeOpacity={1} onPress={onClose}>
             <TouchableOpacity activeOpacity={1} style={[mp.sheet, { backgroundColor: isDark ? '#1a1a1a' : '#fff' }]}>
@@ -313,6 +347,12 @@ const MediaPickerSheet = ({ visible, uploading, onClose, onCamera, onGallery, on
                             </View>
                             <Text style={[mp.label, { color: isDark ? '#ccc' : '#333' }]}>Video</Text>
                         </TouchableOpacity>
+                        <TouchableOpacity style={mp.option} onPress={onText}>
+                            <View style={[mp.iconBox, { backgroundColor: isDark ? '#132a25' : '#eaf7f3' }]}>
+                                <Ionicons name="text-outline" size={30} color="#00897b" />
+                            </View>
+                            <Text style={[mp.label, { color: isDark ? '#ccc' : '#333' }]}>Text</Text>
+                        </TouchableOpacity>
                     </View>
                 )}
                 <TouchableOpacity style={[mp.cancelBtn, { backgroundColor: isDark ? '#2a2a2a' : '#f1f1f1' }]} onPress={onClose}>
@@ -328,9 +368,9 @@ const mp = StyleSheet.create({
     sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingBottom: 40, paddingTop: 14 },
     handle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
     title: { fontSize: 17, fontWeight: '700', marginBottom: 24, textAlign: 'center' },
-    optionsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 24 },
-    option: { alignItems: 'center', gap: 10 },
-    iconBox: { width: 68, height: 68, borderRadius: 34, alignItems: 'center', justifyContent: 'center' },
+    optionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
+    option: { alignItems: 'center', gap: 10, flex: 1 },
+    iconBox: { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center' },
     label: { fontSize: 13, fontWeight: '600' },
     loadingBox: { alignItems: 'center', paddingVertical: 32, gap: 12 },
     loadingText: { fontSize: 14 },
@@ -338,20 +378,134 @@ const mp = StyleSheet.create({
     cancelText: { fontSize: 15, fontWeight: '600' },
 });
 
+// ─── TextStatusComposer — viewer text status dikha raha tha par banane ka
+// koi rasta nahi tha, isliye ye composer add kiya hai ────────────────────────
+const TextStatusComposer = ({ visible, posting, onClose, onPost }) => {
+    const insets = useSafeAreaInsets();
+    const [text, setText] = useState('');
+    const [bg, setBg] = useState(TEXT_BGS[0]);
+
+    useEffect(() => {
+        if (visible) { setText(''); setBg(TEXT_BGS[0]); }
+    }, [visible]);
+
+    return (
+        <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+            <KeyboardAvoidingView
+                style={[tc.container, { backgroundColor: bg }]}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
+                <View style={tc.header}>
+                    <TouchableOpacity onPress={onClose} style={tc.headerBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Ionicons name="close" size={26} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={tc.headerTitle}>Text status</Text>
+                    <Text style={tc.counter}>{text.length}/280</Text>
+                </View>
+
+                <TextInput
+                    style={tc.input}
+                    placeholder="Type a status"
+                    placeholderTextColor="rgba(255,255,255,0.65)"
+                    value={text}
+                    onChangeText={setText}
+                    multiline
+                    autoFocus
+                    maxLength={280}
+                    textAlign="center"
+                />
+
+                <View style={[tc.footer, { paddingBottom: 14 + insets.bottom }]}>
+                    <View style={tc.colorRow}>
+                        {TEXT_BGS.map((c) => (
+                            <TouchableOpacity
+                                key={c}
+                                onPress={() => setBg(c)}
+                                style={tc.swatchWrap}
+                                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                                activeOpacity={0.8}
+                            >
+                                <View style={[tc.swatch, { backgroundColor: c }, bg === c && tc.swatchActive]} />
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                    <TouchableOpacity
+                        style={[tc.postBtn, (!text.trim() || posting) && { opacity: 0.5 }]}
+                        onPress={() => onPost(text.trim(), bg)}
+                        disabled={!text.trim() || posting}
+                        activeOpacity={0.85}
+                    >
+                        {posting
+                            ? <ActivityIndicator size="small" color={bg} />
+                            : <Ionicons name="send" size={20} color={bg} />
+                        }
+                    </TouchableOpacity>
+                </View>
+            </KeyboardAvoidingView>
+        </Modal>
+    );
+};
+
+const tc = StyleSheet.create({
+    container: { flex: 1, paddingTop: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight || 24) + 10 },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 8, gap: 12 },
+    headerBtn: { padding: 4 },
+    headerTitle: { flex: 1, color: '#fff', fontSize: 16, fontWeight: '600' },
+    counter: { color: 'rgba(255,255,255,0.75)', fontSize: 12 },
+    input: { flex: 1, color: '#fff', fontSize: 26, fontWeight: '700', lineHeight: 34, paddingHorizontal: 28, textAlignVertical: 'center' },
+    footer: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
+    colorRow: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+    // Tap target 40px — 26px ka circle ismein center hota hai
+    swatchWrap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+    swatch: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: 'rgba(255,255,255,0.35)' },
+    swatchActive: { borderColor: '#fff', width: 30, height: 30, borderRadius: 15, borderWidth: 3 },
+    postBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+});
+
 // ─── StatusCard ───────────────────────────────────────────────────────────────
-const StatusCard = ({ group, isMe, onPress, onAddPress, isDark }) => {
-    const firstStatus = group?.statuses?.[0];
+const StatusCard = ({ group, isMe, myUserId, onPress, onAddPress, isDark }) => {
+    const statuses = toArr(group?.statuses);
+    const firstStatus = statuses[0];
     const mediaType = getMediaType(firstStatus);
-    const bg = imgUrl(firstStatus?.mediaUrl);
+    const bg = mediaType === 'text' ? null : imgUrl(firstStatus?.mediaUrl);
     const avatar = imgUrl(group?.user?.profilePicture) || FALLBACK_AVATAR;
-    const allSeen = group?.statuses?.every(s => s?.seen);
+    const allSeen = statuses.length > 0 && statuses.every((st) => isSeenByMe(st, myUserId));
     const name = isMe ? 'My Status' : (group?.user?.name || 'Unknown');
+
+    // Mera card, koi status nahi — pehle khali grey block dikhta tha.
+    // Ab saaf "Add status" card hai jo seedha picker kholta hai.
+    if (isMe && !firstStatus) {
+        return (
+            <TouchableOpacity
+                style={[
+                    sc.card,
+                    sc.addCard,
+                    {
+                        backgroundColor: isDark ? '#121212' : '#f4f7f9',
+                        borderColor: isDark ? '#2a2a2a' : '#dbe6ee',
+                    },
+                ]}
+                onPress={onAddPress}
+                activeOpacity={0.85}
+            >
+                <View style={sc.addAvatarWrap}>
+                    <Image source={{ uri: avatar }} style={sc.addAvatar} />
+                    <View style={sc.plusBadge}>
+                        <Ionicons name="add" size={13} color="#fff" />
+                    </View>
+                </View>
+                <Text style={[sc.addLabel, { color: isDark ? '#e0e0e0' : '#111' }]}>Add status</Text>
+                <Text style={[sc.addHint, { color: isDark ? '#666' : '#8a9aa6' }]}>Photo, video or text</Text>
+            </TouchableOpacity>
+        );
+    }
 
     return (
         <TouchableOpacity style={sc.card} onPress={onPress} activeOpacity={0.85}>
             {bg ? (
                 <View style={StyleSheet.absoluteFill}>
                     <Image source={{ uri: bg }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                    <View style={sc.scrim} />
                     {mediaType === 'video' && (
                         <View style={sc.playOverlay}>
                             <Ionicons name="play-circle" size={38} color="rgba(255,255,255,0.9)" />
@@ -359,29 +513,37 @@ const StatusCard = ({ group, isMe, onPress, onAddPress, isDark }) => {
                     )}
                 </View>
             ) : (
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isMe ? (isDark ? '#2a2a2a' : '#dedede') : (isDark ? '#1e1e1e' : '#f0f0f0') }]} />
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: firstStatus?.backgroundColor || (isDark ? '#1e1e1e' : '#0f6e63') }]}>
+                    {mediaType === 'text' && !!firstStatus?.content && (
+                        <Text style={sc.textPreview} numberOfLines={4}>{firstStatus.content}</Text>
+                    )}
+                </View>
             )}
-            {firstStatus && mediaType !== 'text' && (
+
+            {statuses.length > 1 ? (
+                <View style={sc.typeBadge}>
+                    <Text style={sc.countText}>{statuses.length}</Text>
+                </View>
+            ) : mediaType !== 'text' ? (
                 <View style={sc.typeBadge}>
                     <Ionicons name={mediaType === 'video' ? 'videocam' : 'image'} size={11} color="#fff" />
                 </View>
-            )}
-            {isMe ? (
-                <>
-                    <TouchableOpacity onPress={onAddPress} style={[sc.ring, { borderColor: allSeen ? '#aaa' : '#1296f3' }]}>
-                        <Image source={{ uri: avatar }} style={sc.avatar} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={sc.plusBtn} onPress={onAddPress}>
-                        <Ionicons name="add" size={13} color="#fff" />
-                    </TouchableOpacity>
-                </>
-            ) : (
-                <View style={[sc.ring, { borderColor: allSeen ? '#aaa' : '#1296f3' }]}>
+            ) : null}
+
+            <View style={sc.avatarWrap}>
+                <View style={[sc.ring, { borderColor: allSeen ? '#c4c4c4' : '#1296f3' }]}>
                     <Image source={{ uri: avatar }} style={sc.avatar} />
                 </View>
-            )}
+                {isMe && (
+                    <TouchableOpacity style={sc.plusBadge} onPress={onAddPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="add" size={13} color="#fff" />
+                    </TouchableOpacity>
+                )}
+            </View>
+
             <View style={sc.nameBox}>
                 <Text style={sc.name} numberOfLines={1}>{name}</Text>
+                <Text style={sc.nameSub} numberOfLines={1}>{fmtTime(firstStatus?.createdAt)}</Text>
             </View>
         </TouchableOpacity>
     );
@@ -389,17 +551,36 @@ const StatusCard = ({ group, isMe, onPress, onAddPress, isDark }) => {
 
 const sc = StyleSheet.create({
     card: { width: 108, height: 182, borderRadius: 14, marginRight: 12, overflow: 'hidden', backgroundColor: '#eee', justifyContent: 'flex-end' },
+    scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.12)' },
     playOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
-    typeBadge: { position: 'absolute', top: 8, right: 8, zIndex: 3, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10, padding: 4 },
-    ring: { position: 'absolute', top: 8, left: 8, borderWidth: 2.5, borderRadius: 22, padding: 2 },
-    avatar: { width: 36, height: 36, borderRadius: 18 },
-    plusBtn: { position: 'absolute', top: 32, left: 30, backgroundColor: '#1296f3', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
-    nameBox: { padding: 8, paddingTop: 4, backgroundColor: 'rgba(0,0,0,0.32)' },
-    name: { color: '#fff', fontSize: 12, fontWeight: '600' },
+    typeBadge: { position: 'absolute', top: 8, right: 8, zIndex: 3, backgroundColor: 'rgba(0,0,0,0.55)', minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center' },
+    countText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+    textPreview: { color: '#fff', fontSize: 13, fontWeight: '600', padding: 10, paddingTop: 58, textAlign: 'center' },
+
+    // Avatar + plus ek hi wrapper me — pehle plus ring ke beech me aa jata tha
+    avatarWrap: { position: 'absolute', top: 8, left: 8, zIndex: 4 },
+    ring: { borderWidth: 2.5, borderRadius: 23, padding: 2 },
+    avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#ddd' },
+    plusBadge: {
+        position: 'absolute', right: -3, bottom: -3,
+        backgroundColor: '#1296f3', width: 19, height: 19, borderRadius: 10,
+        alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff',
+    },
+
+    nameBox: { paddingHorizontal: 8, paddingTop: 6, paddingBottom: 8, backgroundColor: 'rgba(0,0,0,0.42)' },
+    name: { color: '#fff', fontSize: 12, fontWeight: '700' },
+    nameSub: { color: 'rgba(255,255,255,0.8)', fontSize: 10, marginTop: 1 },
+
+    // "Add status" card
+    addCard: { borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4 },
+    addAvatarWrap: { marginBottom: 10 },
+    addAvatar: { width: 54, height: 54, borderRadius: 27, backgroundColor: '#ddd' },
+    addLabel: { fontSize: 13, fontWeight: '700' },
+    addHint: { fontSize: 10, textAlign: 'center', paddingHorizontal: 8 },
 });
 
 // ─── StatusSection — main export ──────────────────────────────────────────────
-const StatusSection = ({ navigation, myUserId }) => {
+const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
     const { theme } = useContext(ThemeContext);
     const isDark = theme.text === '#FFFFFF';
 
@@ -407,9 +588,13 @@ const StatusSection = ({ navigation, myUserId }) => {
     const [myGroup, setMyGroup] = useState(null);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
+    const [posting, setPosting] = useState(false);
     const [showPicker, setShowPicker] = useState(false);
+    const [showTextComposer, setShowTextComposer] = useState(false);
     const [viewerVisible, setViewerVisible] = useState(false);
     const [viewerStartIdx, setViewerStartIdx] = useState(0);
+
+    const myProfile = useSelector((state) => state.totalappData?.user ?? null);
 
     const fetchStatuses = useCallback(async () => {
         try {
@@ -422,8 +607,17 @@ const StatusSection = ({ navigation, myUserId }) => {
             setAllGroups(groups.filter(g => g?.user?._id !== myUserId));
             const myStatuses = toArr(myRes?.data?.statuses ?? myRes?.data);
             if (myStatuses.length > 0) {
-                const firstUser = myStatuses[0]?.user || { _id: myUserId };
-                setMyGroup({ user: firstUser, statuses: myStatuses });
+                // API is list me user sirf id deta hai, isliye apni profile
+                // Redux se lete hain — warna viewer me "Unknown" dikhta tha.
+                const rawUser = myStatuses[0]?.user;
+                const user = typeof rawUser === 'object' && rawUser
+                    ? rawUser
+                    : {
+                        _id: myUserId,
+                        name: myProfile?.name || 'My Status',
+                        profilePicture: myProfile?.profilePicture,
+                    };
+                setMyGroup({ user, statuses: myStatuses });
             } else {
                 setMyGroup(null);
             }
@@ -432,9 +626,19 @@ const StatusSection = ({ navigation, myUserId }) => {
         } finally {
             setLoading(false);
         }
-    }, [myUserId]);
+    }, [myUserId, myProfile?.name, myProfile?.profilePicture]);
 
     useEffect(() => { fetchStatuses(); }, [fetchStatuses]);
+
+    // Screen par wapas aane par aur parent ke pull-to-refresh par dobara lao —
+    // warna naya status ya seen/unseen ring stale reh jata tha.
+    useFocusEffect(
+        useCallback(() => { fetchStatuses(); }, [fetchStatuses])
+    );
+
+    useEffect(() => {
+        if (refreshSignal) fetchStatuses();
+    }, [refreshSignal, fetchStatuses]);
 
     const uploadStatus = async (uri, type = 'image') => {
         try {
@@ -452,22 +656,44 @@ const StatusSection = ({ navigation, myUserId }) => {
             const apiRes = await apiService({ method: 'POST', endpoint: 'status', data: formData, isMultipart: true });
             const res = apiRes?.data;
             if (res?.success) {
-                Alert.alert('✅ Done', `${isVideo ? 'Video' : 'Photo'} status upload ho gaya!`);
                 fetchStatuses();
             } else {
                 Alert.alert('Error', res?.message || 'Upload failed');
             }
         } catch (e) {
-            Alert.alert('Error', 'Status upload nahi hua, dobara try karo');
+            Alert.alert('Error', 'Could not upload the status. Please try again.');
         } finally {
             setUploading(false);
+        }
+    };
+
+    // Text status — server mediaType 'text' + backgroundColor ke saath rakhta hai
+    const postTextStatus = async (content, backgroundColor) => {
+        if (!content) return;
+        try {
+            setPosting(true);
+            const apiRes = await apiService({
+                method: 'POST',
+                endpoint: 'status',
+                data: { content, backgroundColor, mediaType: 'text' },
+            });
+            if (apiRes?.data?.success) {
+                setShowTextComposer(false);
+                fetchStatuses();
+            } else {
+                Alert.alert('Error', apiRes?.data?.message || 'Could not post the status');
+            }
+        } catch (e) {
+            Alert.alert('Error', 'Could not post the status. Please try again.');
+        } finally {
+            setPosting(false);
         }
     };
 
     const openCamera = async () => {
         setShowPicker(false);
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== 'granted') { Alert.alert('Permission chahiye', 'Camera allow karo'); return; }
+        if (status !== 'granted') { Alert.alert('Permission required', 'Please allow camera access'); return; }
         const res = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.All, quality: 0.85, videoMaxDuration: VIDEO_MAX_SECS });
         if (!res.canceled) { const a = res.assets[0]; uploadStatus(a.uri, a.type === 'video' ? 'video' : 'image'); }
     };
@@ -475,7 +701,7 @@ const StatusSection = ({ navigation, myUserId }) => {
     const openImageGallery = async () => {
         setShowPicker(false);
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') { Alert.alert('Permission chahiye', 'Gallery allow karo'); return; }
+        if (status !== 'granted') { Alert.alert('Permission required', 'Please allow gallery access'); return; }
         const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.85 });
         if (!res.canceled) uploadStatus(res.assets[0].uri, 'image');
     };
@@ -483,7 +709,7 @@ const StatusSection = ({ navigation, myUserId }) => {
     const openVideoGallery = async () => {
         setShowPicker(false);
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') { Alert.alert('Permission chahiye', 'Gallery allow karo'); return; }
+        if (status !== 'granted') { Alert.alert('Permission required', 'Please allow gallery access'); return; }
         const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Videos, videoMaxDuration: VIDEO_MAX_SECS });
         if (!res.canceled) uploadStatus(res.assets[0].uri, 'video');
     };
@@ -502,43 +728,65 @@ const StatusSection = ({ navigation, myUserId }) => {
     const openViewer = (idx) => { setViewerStartIdx(idx); setViewerVisible(true); };
     const viewerGroups = [...(myGroup ? [myGroup] : []), ...allGroups];
 
+    const myCardGroup = myGroup || {
+        user: { _id: myUserId, name: 'My Status', profilePicture: myProfile?.profilePicture },
+        statuses: [],
+    };
+
     return (
         <View style={{ backgroundColor: theme.background }}>
-            <Text style={[ss.title, { color: isDark ? '#d0d0d0' : '#222' }]}>Status</Text>
+            <View style={ss.titleRow}>
+                <Text style={[ss.title, { color: isDark ? '#d0d0d0' : '#222' }]}>Status</Text>
+                <TouchableOpacity
+                    style={[ss.addChip, { backgroundColor: isDark ? '#0d1e2e' : '#e8f4fd' }]}
+                    onPress={() => setShowPicker(true)}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="add" size={15} color="#1296f3" />
+                    <Text style={ss.addChipText}>Add</Text>
+                </TouchableOpacity>
+            </View>
+
             {loading ? (
                 <ActivityIndicator color="#1296f3" style={{ marginVertical: 20 }} />
             ) : (
-                <FlatList
-                    data={allGroups}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
-                    keyExtractor={(item, i) => item?.user?._id || i.toString()}
-                    ListHeaderComponent={
-                        <StatusCard
-                            group={myGroup || { user: { name: 'My Status' }, statuses: [] }}
-                            isMe={true}
-                            isDark={isDark}
-                            onPress={() => myGroup?.statuses?.length ? openViewer(0) : setShowPicker(true)}
-                            onAddPress={() => setShowPicker(true)}
-                        />
-                    }
-                    renderItem={({ item, index }) => (
-                        <StatusCard
-                            group={item}
-                            isMe={false}
-                            isDark={isDark}
-                            onPress={() => openViewer(myGroup ? index + 1 : index)}
-                        />
+                <>
+                    <FlatList
+                        data={allGroups}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
+                        keyExtractor={(item, i) => item?.user?._id || i.toString()}
+                        ListHeaderComponent={
+                            <StatusCard
+                                group={myCardGroup}
+                                isMe
+                                myUserId={myUserId}
+                                isDark={isDark}
+                                onPress={() => (myGroup?.statuses?.length ? openViewer(0) : setShowPicker(true))}
+                                onAddPress={() => setShowPicker(true)}
+                            />
+                        }
+                        renderItem={({ item, index }) => (
+                            <StatusCard
+                                group={item}
+                                isMe={false}
+                                myUserId={myUserId}
+                                isDark={isDark}
+                                onPress={() => openViewer(myGroup ? index + 1 : index)}
+                            />
+                        )}
+                    />
+                    {/* Pehle ye line horizontal list ke andar aati thi aur card ke
+                        bagal me adhoori dikhti thi — ab row ke neeche hai */}
+                    {allGroups.length === 0 && (
+                        <Text style={[ss.emptyText, { color: isDark ? '#555' : '#9aa5ad' }]}>
+                            No recent updates from your contacts
+                        </Text>
                     )}
-                    ListEmptyComponent={
-                        <View style={ss.empty}>
-                            <Ionicons name="radio-button-off-outline" size={28} color={isDark ? '#444' : '#ccc'} />
-                            <Text style={[ss.emptyText, { color: isDark ? '#555' : '#aaa' }]}>Koi status nahi abhi</Text>
-                        </View>
-                    }
-                />
+                </>
             )}
+
             <MediaPickerSheet
                 visible={showPicker}
                 uploading={uploading}
@@ -547,13 +795,20 @@ const StatusSection = ({ navigation, myUserId }) => {
                 onCamera={openCamera}
                 onGallery={openImageGallery}
                 onVideoGallery={openVideoGallery}
+                onText={() => { setShowPicker(false); setShowTextComposer(true); }}
+            />
+            <TextStatusComposer
+                visible={showTextComposer}
+                posting={posting}
+                onClose={() => setShowTextComposer(false)}
+                onPost={postTextStatus}
             />
             <StatusViewer
                 visible={viewerVisible}
                 groups={viewerGroups}
                 startGroupIdx={viewerStartIdx}
                 myUserId={myUserId}
-                onClose={() => setViewerVisible(false)}
+                onClose={() => { setViewerVisible(false); fetchStatuses(); }}
                 onDelete={handleDelete}
             />
         </View>
@@ -561,9 +816,11 @@ const StatusSection = ({ navigation, myUserId }) => {
 };
 
 const ss = StyleSheet.create({
-    title: { fontSize: 16, fontWeight: '600', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
-    empty: { paddingLeft: 12, alignItems: 'center', paddingVertical: 20, gap: 6 },
-    emptyText: { fontSize: 13 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
+    title: { fontSize: 16, fontWeight: '600' },
+    addChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+    addChipText: { color: '#1296f3', fontSize: 13, fontWeight: '600' },
+    emptyText: { fontSize: 12, paddingHorizontal: 16, paddingBottom: 10 },
 });
 
 export default StatusSection;

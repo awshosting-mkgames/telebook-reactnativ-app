@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator, Animated, FlatList, Image, Keyboard,
-    KeyboardAvoidingView, Platform, ScrollView, StyleSheet,
+    Platform, StyleSheet,
     Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import Config from '../../../services/config';
@@ -36,8 +36,7 @@ const StickerPanel = ({ onSendSticker, isDark, getFullUrl }) => {
                 headers: { 'Content-Type': 'application/json' },
             });
             const json = await res.json();
-            console.log(json)
-            // API response: { success: true, data: [{ _id, name, url, category }] }
+            // API response: { success: true, data: [{ url, filename, fileType, fileSize }] }
             if (json?.success && Array.isArray(json?.data)) {
                 setStickers(json.data);
             } else if (Array.isArray(json)) {
@@ -77,17 +76,18 @@ const StickerPanel = ({ onSendSticker, isDark, getFullUrl }) => {
         );
     }
 
+    // Stickers /media se nahi, seedhe server se static milte hain: <BASE>/<url> (API doc 6.2)
     const getImageUrl = (url) => {
         if (!url) return null;
         if (url.startsWith('http')) return url;
-        return `${Config?.MEDIA_URL}${url}`;
+        return `${Config?.Main_url}${url}`;
     };
 
     return (
         <View style={[stickerStyles.container, { backgroundColor: panelBg }]}>
             <FlatList
                 data={stickers}
-                keyExtractor={(item, i) => item._id ?? item.id ?? i.toString()}
+                keyExtractor={(item, i) => item._id ?? item.url ?? i.toString()}
                 numColumns={3}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={stickerStyles.grid}
@@ -111,7 +111,7 @@ const StickerPanel = ({ onSendSticker, isDark, getFullUrl }) => {
                             style={[stickerStyles.stickerName, { color: nameColor }]}
                             numberOfLines={1}
                         >
-                            {item.name || 'Sticker'}
+                            {(item.name || item.filename || 'Sticker').replace(/\.[^.]+$/, '')}
                         </Text>
                     </TouchableOpacity>
                 )}
@@ -144,7 +144,8 @@ const TextInputSection = ({
     keyboardH, sending, sendMessage,
     isRecording, startRecording, stopRecording, cancelRecording,
     replyMsg, setReplyMsg, recordSecs, scaleAnim, fmtSecs,
-    setShowAttach, theme, openCamera, getFullUrl,
+    setShowAttach, theme, openCamera, getFullUrl, bottomInset = 0,
+    editMsg, onCancelEdit,
 }) => {
     const { t } = useTranslation();
 
@@ -168,23 +169,18 @@ const TextInputSection = ({
     const tabInactiveText = isDark ? '#8696a0' : '#888';
 
     const [inputHeight, setInputHeight] = useState(MIN_H);
-    const [dynamicPadding, setDynamicPadding] = useState(40);
     const [emojiTab, setEmojiTab] = useState('emoji'); // 'emoji' | 'sticker'
     const btnAnim = useRef(new Animated.Value(0)).current;
+    // Send par jaldi-jaldi do tap → ek hi message jaye
+    const sendLock = useRef(false);
+    const handleSendPress = () => {
+        if (sendLock.current || !inputText.trim()) return;
+        sendLock.current = true;
+        setTimeout(() => { sendLock.current = false; }, 400);
+        sendMessage({ content: inputText, messageType: 'text' });
+    };
 
     const showSend = inputText.trim().length > 0;
-
-    useEffect(() => {
-        const showSub = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-            () => setDynamicPadding(0),
-        );
-        const hideSub = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-            () => setDynamicPadding(30),
-        );
-        return () => { showSub.remove(); hideSub.remove(); };
-    }, []);
 
     useEffect(() => {
         Animated.spring(btnAnim, {
@@ -207,32 +203,42 @@ const TextInputSection = ({
 
     // ── Sticker send: direct message send karo, text input mein set mat karo ──
     const handleStickerSend = (sticker) => {
-        if (!sendMessage) return;
-        const stickerUrl = sticker.url?.startsWith('http')
-            ? sticker.url
-            : `${Config?.MEDIA_URL}${sticker.url}`;
+        if (!sendMessage || !sticker?.url) return;
+        const filename = sticker.filename || sticker.name || 'sticker.png';
+        const ext = (sticker.fileType || filename.split('.').pop() || 'png').replace(/^.*\//, '');
         sendMessage({
-            content: sticker.name || '',
+            content: '',
             messageType: 'image',
             uploadedData: {
-                url: sticker.url, // raw url (server relative ya absolute)
-                filename: sticker.name || 'sticker',
-                fileType: 'image',
-                fileSize: 0,
+                url: sticker.url, // server path — bubble me getFullUrl sahi base lagata hai
+                filename,
+                fileType: `image/${ext}`,
+                fileSize: sticker.fileSize ?? 0,
             },
         });
         setShowEmoji(false);
     };
 
     return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={0}
-        >
-            <View style={[styles.wrapper, { backgroundColor: wrapperBg, paddingBottom: dynamicPadding }]}>
+        // Keyboard handling parent (Chat screen) ka KeyboardAvoidingView karta hai.
+        // Yahan doosra KAV lagane se keyboard khulne par input do baar khisakta tha.
+        <View style={[styles.wrapper, { backgroundColor: wrapperBg, paddingBottom: bottomInset }]}>
+
+                {/* Edit Banner */}
+                {editMsg && (
+                    <View style={[styles.replyBanner, { backgroundColor: replyBanBg, borderLeftColor: '#8e44ad' }]}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.replyName, { color: '#8e44ad' }]}>Editing message</Text>
+                            <Text style={[styles.replyText, { color: replyTextC }]} numberOfLines={1}>{editMsg.content}</Text>
+                        </View>
+                        <TouchableOpacity onPress={onCancelEdit} style={styles.replyClose}>
+                            <Ionicons name="close" size={16} color={iconColor} />
+                        </TouchableOpacity>
+                    </View>
+                )}
 
                 {/* Reply Banner */}
-                {replyMsg && (
+                {replyMsg && !editMsg && (
                     <View style={[styles.replyBanner, { backgroundColor: replyBanBg }]}>
                         <View style={styles.replyAccent} />
                         <View style={{ flex: 1 }}>
@@ -321,10 +327,14 @@ const TextInputSection = ({
                 )}
 
                 {/* Input Row */}
-                <View style={[styles.inputRow, { paddingBottom: Platform.OS === 'ios' ? 20 : 10 }]}>
+                <View style={[styles.inputRow, { paddingBottom: 8 }]}>
 
                     <TouchableOpacity
-                        onPress={() => setShowEmoji(v => !v)}
+                        onPress={() => {
+                            // Emoji panel aur keyboard ek saath na khulein
+                            if (!showEmoji) Keyboard.dismiss();
+                            setShowEmoji(v => !v);
+                        }}
                         style={styles.iconBtn}
                     >
                         <Ionicons
@@ -368,12 +378,11 @@ const TextInputSection = ({
                         {showSend ? (
                             <TouchableOpacity
                                 style={styles.actionInner}
-                                onPress={() => sendMessage({ content: inputText, messageType: 'text' })}
-                                disabled={sending}
+                                onPress={handleSendPress}
                             >
                                 {sending
                                     ? <ActivityIndicator size="small" color="#fff" />
-                                    : <Ionicons name="send" size={18} color="#fff" style={{ marginLeft: 2 }} />
+                                    : <Ionicons name={editMsg ? 'checkmark' : 'send'} size={editMsg ? 22 : 18} color="#fff" style={{ marginLeft: editMsg ? 0 : 2 }} />
                                 }
                             </TouchableOpacity>
                         ) : (
@@ -382,16 +391,15 @@ const TextInputSection = ({
                                     styles.actionInner,
                                     isRecording && { backgroundColor: '#e74c3c', borderRadius: BTN_SMALL / 2 },
                                 ]}
-                                onPressIn={startRecording}
-                                onPressOut={stopRecording}
+                                // Tap = recording shuru; upar wale bar se Send / Cancel
+                                onPress={isRecording ? stopRecording : startRecording}
                             >
                                 <Ionicons name="mic" size={20} color="#fff" />
                             </TouchableOpacity>
                         )}
                     </Animated.View>
                 </View>
-            </View>
-        </KeyboardAvoidingView>
+        </View>
     );
 };
 

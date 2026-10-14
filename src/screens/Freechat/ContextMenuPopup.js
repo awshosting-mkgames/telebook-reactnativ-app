@@ -19,7 +19,7 @@ const lastMsgPreview = (lastMsg) => {
     return lastMsg.content || 'No messages yet';
 };
 
-export default function ContextMenuPopup({ visible, item, onClose, onPin, onDelete, onBlock, isPinned }) {
+export default function ContextMenuPopup({ visible, item, onClose, onPin, onDelete, onBlock, isPinned, isBlocked }) {
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -58,6 +58,13 @@ export default function ContextMenuPopup({ visible, item, onClose, onPin, onDele
 
     const handleBlock = () => {
         onClose();
+        if (isBlocked) {
+            Alert.alert('Unblock Contact', `Unblock ${item.displayName}?`, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Unblock', onPress: () => onBlock(item) },
+            ]);
+            return;
+        }
         Alert.alert(
             'Block Contact',
             `Block ${item.displayName}? They won't be able to send you messages.`,
@@ -79,8 +86,8 @@ export default function ContextMenuPopup({ visible, item, onClose, onPin, onDele
             show: true,
         },
         {
-            icon: 'ban-outline',
-            label: 'Block Contact',
+            icon: isBlocked ? 'checkmark-circle-outline' : 'ban-outline',
+            label: isBlocked ? 'Unblock Contact' : 'Block Contact',
             iconBg: '#fff3e0',
             iconColor: '#FF9500',
             textColor: '#1a1a1a',

@@ -46,7 +46,7 @@ const CreateBroadcast = ({ navigation, route }) => {
         setModalVisible(false);
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert('Permission Denied', 'Camera access chahiye');
+            Alert.alert('Permission denied', 'Camera access is required');
             return;
         }
         const result = await ImagePicker.launchCameraAsync({
@@ -62,7 +62,7 @@ const CreateBroadcast = ({ navigation, route }) => {
         setModalVisible(false);
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert('Permission Denied', 'Gallery access chahiye');
+            Alert.alert('Permission denied', 'Gallery access is required');
             return;
         }
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -83,11 +83,11 @@ const CreateBroadcast = ({ navigation, route }) => {
     // ── Create Group API ─────────────────────────────────────────────────────
     const handleCreateGroup = async () => {
         if (!groupName.trim()) {
-            Alert.alert('Group Name', 'Group ka naam likhna zarori hai');
+            Alert.alert('Name required', 'Please enter a broadcast name');
             return;
         }
-        if (members.length < 2) {
-            Alert.alert('Members', 'Kam se kam 2 members chahiye');
+        if (members.length < 1) {
+            Alert.alert('Members', 'Select at least 1 member');
             return;
         }
         setLoading(true);
@@ -117,12 +117,17 @@ const CreateBroadcast = ({ navigation, route }) => {
             console.log("response________", response)
             if (response.success === true) {
                 navigation.navigate('MyBroadcastList')
+            } else if (response?.error?.code === 'PLAN_LIMIT') {
+                Alert.alert('Plan limit reached', response.error.message, [
+                    { text: 'Upgrade', onPress: () => navigation.navigate('Plans') },
+                    { text: 'Cancel', style: 'cancel' },
+                ]);
             } else {
-                Alert.alert('Error', response?.message || 'Something went wrong! try again');
+                Alert.alert('Error', response?.error?.message || 'Something went wrong! try again');
             }
         } catch (err) {
             console.log('Create broadcasts error:', err);
-            Alert.alert('Error', 'broadcasts create nahi ho saka. Dobara try karo.');
+            Alert.alert('Error', 'Could not create the broadcast. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -147,7 +152,7 @@ const CreateBroadcast = ({ navigation, route }) => {
     return (
         <KeyboardAvoidingView
             style={[styles.container, { backgroundColor: theme.background }]}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
             <StatusBar
                 barStyle="light-content"
@@ -172,7 +177,12 @@ const CreateBroadcast = ({ navigation, route }) => {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                contentContainerStyle={{ paddingBottom: 40 }}
+            >
 
                 {/* ── Image + Name ── */}
                 <View
@@ -187,7 +197,7 @@ const CreateBroadcast = ({ navigation, route }) => {
                         ) : (
                             <View style={[styles.imagePlaceholder, { backgroundColor: theme.primary || '#4491f2' }]}>
                                 <Ionicons name="camera" size={34} color="#fff" />
-                                <Text style={styles.imagePlaceholderText}>Add Photo</Text>
+                                <Text style={styles.imagePlaceholderText}>Add photo</Text>
                             </View>
                         )}
                         <View style={[styles.editBadge, { borderColor: theme.background }]}>
@@ -199,12 +209,12 @@ const CreateBroadcast = ({ navigation, route }) => {
                         <Ionicons name="people" size={20} color={theme.primary || '#4491f2'} style={{ marginRight: 10 }} />
                         <TextInput
                             style={[styles.nameInput, { color: theme.text }]}
-                            placeholder="Broadcast ka naam likhein..."
+                            placeholder="Enter broadcast name..."
                             placeholderTextColor={isDark ? '#888888' : '#bbbbbb'}
                             value={groupName}
                             onChangeText={setGroupName}
                             maxLength={50}
-                            autoFocus
+                            returnKeyType="done"
                         />
                         {groupName.length > 0 && (
                             <TouchableOpacity onPress={() => setGroupName('')}>
@@ -246,7 +256,7 @@ const CreateBroadcast = ({ navigation, route }) => {
                             <View style={styles.memberInfo}>
                                 <Text style={[styles.memberName, { color: theme.text }]}>{item.name}</Text>
                                 <Text style={[styles.memberPhone, { color: isDark ? '#aaaaaa' : '#888888' }]}>
-                                    {item.isRegistered ? '● App par hai' : `+${item.phone}`}
+                                    {item.isRegistered ? '● On Telebook' : `+${item.phone}`}
                                 </Text>
                             </View>
                             {item.isRegistered && (
@@ -272,8 +282,8 @@ const CreateBroadcast = ({ navigation, route }) => {
                         onPress={(e) => e.stopPropagation()}
                     >
                         <View style={[styles.modalHandle, { backgroundColor: isDark ? '#444444' : '#dddddd' }]} />
-                        <Text style={[styles.modalTitle, { color: theme.text }]}>Group Photo</Text>
-                        <Text style={[styles.modalSubtitle, { color: isDark ? '#999999' : '#999999' }]}>Image kahan se leni hai?</Text>
+                        <Text style={[styles.modalTitle, { color: theme.text }]}>Broadcast photo</Text>
+                        <Text style={[styles.modalSubtitle, { color: isDark ? '#999999' : '#999999' }]}>Where should we get the image from?</Text>
 
                         <View style={styles.modalOptions}>
                             <TouchableOpacity style={styles.modalOption} onPress={takePhoto}>
@@ -281,7 +291,7 @@ const CreateBroadcast = ({ navigation, route }) => {
                                     <Ionicons name="camera" size={26} color="#fff" />
                                 </View>
                                 <Text style={[styles.modalOptionLabel, { color: theme.text }]}>Camera</Text>
-                                <Text style={styles.modalOptionSub}>Abhi photo lo</Text>
+                                <Text style={styles.modalOptionSub}>Take a photo now</Text>
                             </TouchableOpacity>
 
                             <View style={[styles.modalDivider, { backgroundColor: isDark ? '#333333' : '#f0f0f0' }]} />
@@ -291,7 +301,7 @@ const CreateBroadcast = ({ navigation, route }) => {
                                     <Ionicons name="images" size={26} color="#fff" />
                                 </View>
                                 <Text style={[styles.modalOptionLabel, { color: theme.text }]}>Gallery</Text>
-                                <Text style={styles.modalOptionSub}>Phone se choose karo</Text>
+                                <Text style={styles.modalOptionSub}>Choose from your phone</Text>
                             </TouchableOpacity>
                         </View>
 
@@ -301,7 +311,7 @@ const CreateBroadcast = ({ navigation, route }) => {
                                 onPress={removeImage}
                             >
                                 <Ionicons name="trash-outline" size={18} color="#e53935" />
-                                <Text style={styles.removeBtnText}>Photo Hatao</Text>
+                                <Text style={styles.removeBtnText}>Remove photo</Text>
                             </TouchableOpacity>
                         )}
 

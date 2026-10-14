@@ -1,12 +1,11 @@
 import { useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+    ActivityIndicator,
     Image,
     KeyboardAvoidingView,
     Platform,
-    SafeAreaView,
     ScrollView,
-    StatusBar,
     StyleSheet,
     Text,
     TextInput,
@@ -15,7 +14,10 @@ import {
 } from 'react-native';
 import Toast from "react-native-toast-message";
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../../components/ThemeContext';
+import { getUiColors } from '../../../utils/uiColors';
+import AuthHeader from '../AuthHeader';
 import apiService from '../../../services/apiService';
 import Images from '../../../utils/images';
 import { saveData } from '../../../services/staticStorage';
@@ -27,6 +29,10 @@ const LoginScreen = ({ setPageSection, renderSection, setlogindataPage }) => {
     const lang = 'en';
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const c = getUiColors(theme);
+    const insets = useSafeAreaInsets();
+    const [focused, setFocused] = useState(false);
+    const isValid = /^[0-9]{10}$/.test(phone);
 
     useEffect(() => {
         saveData('userData', null);
@@ -35,14 +41,10 @@ const LoginScreen = ({ setPageSection, renderSection, setlogindataPage }) => {
         saveData('IsLogin', null);
     }, []);
 
-    const validatePhone = () => {
-        const phoneRegex = /^[0-9]{10}$/;
-        return phoneRegex.test(phone);
-    };
-
     const handleLogin = async () => {
+        if (loading) return;
         setError('');
-        if (!validatePhone()) {
+        if (!isValid) {
             Toast.show({
                 type: "error",
                 text1: t('otpError'),
@@ -90,24 +92,15 @@ const LoginScreen = ({ setPageSection, renderSection, setlogindataPage }) => {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor="#1199ff" barStyle="light-content" />
-
-            {/* Header */}
-            <View style={[styles.header, { borderBottomColor: theme.borderColor || '#eee' }]}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => renderSection(2)}>
-                    <Ionicons name="arrow-back" size={24} color={theme.text} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: theme.text }]}>Phone Login</Text>
-                <View style={{ width: 40 }} />
-            </View>
+        <View style={[styles.container, { backgroundColor: c.bg, paddingTop: insets.top }]}>
+            <AuthHeader title="Phone Login" onBack={() => renderSection(2)} c={c} />
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
                 style={{ flex: 1 }}
             >
                 <ScrollView
-                    contentContainerStyle={styles.content}
+                    contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                 >
@@ -117,54 +110,65 @@ const LoginScreen = ({ setPageSection, renderSection, setlogindataPage }) => {
                         resizeMode="contain"
                     />
 
-                    <Text style={[styles.heading, { color: theme.text }]}>Enter your number</Text>
-                    <Text style={[styles.subheading, { color: theme.subText || '#888' }]}>
+                    <Text style={[styles.heading, { color: c.text }]}>Enter your number</Text>
+                    <Text style={[styles.subheading, { color: c.subText }]}>
                         We'll send you a one-time verification code
                     </Text>
 
                     {/* Phone Input */}
                     <View style={[
                         styles.inputWrapper,
-                        { backgroundColor: theme.inputBackground || '#F4F4F4', borderColor: theme.borderColor || '#E8E8E8' }
+                        {
+                            backgroundColor: c.card,
+                            borderColor: error ? c.error : focused ? c.primary : c.border,
+                        }
                     ]}>
-                        <View style={[styles.countryCode, { backgroundColor: theme.background }]}>
+                        <View style={styles.countryCode}>
                             <Text style={styles.flag}>🇮🇳</Text>
-                            <Text style={[styles.codeText, { color: theme.text }]}>+91</Text>
+                            <Text style={[styles.codeText, { color: c.text }]}>+91</Text>
                         </View>
-                        <View style={styles.divider} />
+                        <View style={[styles.divider, { backgroundColor: c.border }]} />
                         <TextInput
                             placeholder="98765 43210"
                             keyboardType="phone-pad"
+                            textContentType="telephoneNumber"
+                            autoComplete="tel"
                             maxLength={10}
                             value={phone}
                             onChangeText={(text) => {
-                                setPhone(text);
+                                setPhone(text.replace(/\D/g, ''));
                                 if (error) setError('');
                             }}
-                            placeholderTextColor="#bbb"
-                            style={[styles.input, { color: theme.text }]}
+                            onFocus={() => setFocused(true)}
+                            onBlur={() => setFocused(false)}
+                            onSubmitEditing={handleLogin}
+                            placeholderTextColor={c.mutedText}
+                            style={[styles.input, { color: c.text }]}
                         />
+                        {isValid && (
+                            <Ionicons name="checkmark-circle" size={20} color={c.primary} style={{ marginRight: 14 }} />
+                        )}
                     </View>
 
                     {error ? (
                         <View style={styles.errorRow}>
-                            <Ionicons name="alert-circle" size={14} color="#e24b4a" />
-                            <Text style={styles.errorText}>{error}</Text>
+                            <Ionicons name="alert-circle" size={14} color={c.error} />
+                            <Text style={[styles.errorText, { color: c.error }]}>{error}</Text>
                         </View>
                     ) : null}
 
-                    <Text style={[styles.hint, { color: theme.subText || '#aaa' }]}>
+                    <Text style={[styles.hint, { color: c.mutedText }]}>
                         Standard SMS rates may apply
                     </Text>
 
                     <TouchableOpacity
-                        style={[styles.button, loading && styles.buttonDisabled]}
+                        style={[styles.button, { backgroundColor: isValid && !loading ? c.primary : c.primaryDisabled }]}
                         onPress={handleLogin}
                         disabled={loading}
-                        activeOpacity={0.8}
+                        activeOpacity={0.85}
                     >
                         {loading ? (
-                            <Text style={styles.buttonText}>Please wait...</Text>
+                            <ActivityIndicator color="#fff" />
                         ) : (
                             <>
                                 <Text style={styles.buttonText}>Send OTP</Text>
@@ -174,48 +178,26 @@ const LoginScreen = ({ setPageSection, renderSection, setlogindataPage }) => {
                     </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: 0.5,
-    },
-    backBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    headerTitle: {
-        fontSize: 17,
-        fontWeight: '600',
     },
     content: {
         paddingHorizontal: 24,
-        paddingBottom: 60,
-        paddingTop: 24,
+        paddingTop: 16,
     },
     image: {
         width: '100%',
         height: 220,
-        marginBottom: 28,
+        marginBottom: 24,
     },
     heading: {
-        fontSize: 22,
-        fontWeight: '700',
+        fontSize: 24,
+        fontWeight: '800',
         marginBottom: 6,
     },
     subheading: {
@@ -242,19 +224,19 @@ const styles = StyleSheet.create({
         fontSize: 18,
     },
     codeText: {
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: '600',
     },
     divider: {
         width: 1,
-        height: 30,
-        backgroundColor: '#ddd',
+        height: 28,
     },
     input: {
         flex: 1,
         paddingHorizontal: 14,
         paddingVertical: 16,
-        fontSize: 16,
+        fontSize: 17,
+        fontWeight: '600',
         letterSpacing: 1,
     },
     errorRow: {
@@ -264,28 +246,23 @@ const styles = StyleSheet.create({
         marginBottom: 6,
     },
     errorText: {
-        color: '#e24b4a',
         fontSize: 13,
     },
     hint: {
         fontSize: 12,
-        marginBottom: 32,
+        marginBottom: 28,
     },
     button: {
         height: 54,
-        backgroundColor: '#1294F2',
         borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
         flexDirection: 'row',
     },
-    buttonDisabled: {
-        backgroundColor: '#85B7EB',
-    },
     buttonText: {
         color: '#fff',
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
     },
 });
 

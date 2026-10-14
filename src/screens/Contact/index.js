@@ -20,7 +20,7 @@ export default function Contact({ navigation }) {
     const isDark = theme.mode === 'dark';
 
     const contacts = useSelector((state) => state.contacts?.contacts ?? [], shallowEqual);
-    const loading = useSelector((state) => state.contacts?.loading ?? false);
+    const loading = useSelector((state) => state.contacts?.syncing ?? false);
     const maniAllData = useSelector((state) => state.totalappData);
     const MY_USER_ID = maniAllData?.userId ?? '';
 
@@ -49,7 +49,7 @@ export default function Contact({ navigation }) {
             await Share.share({
                 title: 'App Install',
                 message:
-                    'Hey! Install the Telebook app and start using it. Download it from this link: http://194.163.163.84:5000/uploads/apk/telebook.apk',
+                    'Hey! Install the Telebook app and start using it. Download it from this link: https://telebookservices.com/download',
             });
         } catch (err) {
             console.log('Share error:', err);

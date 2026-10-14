@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useContext, useState } from 'react';
+import * as ImagePicker from 'expo-image-picker';
+import { useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    ActivityIndicator, Alert,
+    ActivityIndicator,
+    Alert,
     Image,
     KeyboardAvoidingView,
     Modal,
     Platform,
+    Pressable,
     SafeAreaView,
     ScrollView,
     StatusBar,
@@ -14,64 +17,66 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useDispatch, useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
-import { settotalappData } from '../../redex/slices/totalappDataSlice';
-import apiService from '../../services/apiService';
 import Config from '../../services/config';
-const BASE_URL = Config.MEDIA_URL;
+import { updateMyProfile, uploadProfilePhoto } from '../../services/profileSync';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
-// ── Format phone number for display ──────────────────────────────────────────
-const formatPhone = (raw) => {
-    if (!raw) return '';
-    const digits = raw.replace(/\D/g, '');
-    if (digits.length === 10) {
-        return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
-    }
-    if (digits.length === 12 && digits.startsWith('91')) {
-        return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`;
-    }
-    if (digits.length > 10) {
-        return `+${digits.slice(0, digits.length - 10)} ${digits.slice(-10, -5)} ${digits.slice(-5)}`;
-    }
-    return raw;
+// Stored key (uploads/...) → /media/<key> (API doc rule 4)
+const avatarUrl = (key) => {
+    if (!key) return DEFAULT_AVATAR;
+    return /^(https?:|file:|data:|blob:)/.test(key) ? key : Config.MEDIA_URL + key;
 };
 
-// ── Edit Field Modal ──────────────────────────────────────────────────────────
-const EditModal = ({ visible, onClose, title, value, onSave, multiline = false, isDark }) => {
+const formatPhone = (raw, isd = '91') => {
+    const d = String(raw ?? '').replace(/\D/g, '');
+    if (!d) return '';
+    const last10 = d.slice(-10);
+    return `+${isd} ${last10.slice(0, 5)} ${last10.slice(5)}`;
+};
+
+// Har field ka label, limit aur help text ek jagah
+const FIELDS = {
+    name: { label: 'Name', max: 25, help: 'This is your display name. Your contacts will see it.', required: true },
+    about: { label: 'About', max: 139, help: 'Tell people something about yourself.', multiline: true },
+    city: { label: 'City', max: 40, help: 'Your city.' },
+    state: { label: 'State', max: 40, help: 'Your state.' },
+};
+
+// ── Edit bottom sheet ────────────────────────────────────────────────────────
+const EditSheet = ({ field, value, onClose, onSave, isDark }) => {
     const { t } = useTranslation();
-    const [text, setText] = useState(value);
-    const [loading, setLoading] = useState(false);
+    const cfg = FIELDS[field] ?? {};
+    const [text, setText] = useState(value ?? '');
+    const [saving, setSaving] = useState(false);
+
+    // Har baar khulne par taaza value — pehle Cancel ke baad bhi purana type kiya text reh jata tha
+    useEffect(() => { setText(value ?? ''); }, [field, value]);
+
+    const trimmed = text.trim();
+    const canSave = !saving && (!cfg.required || trimmed.length > 0) && trimmed !== (value ?? '').trim();
+
     const handleSave = async () => {
-        if (!text.trim()) return Alert.alert('Empty', `${title} cannot be empty.`);
-        setLoading(true);
-        await onSave(text.trim());
-        setLoading(false);
-        onClose();
+        if (!canSave) return;
+        setSaving(true);
+        const done = await onSave(trimmed);
+        setSaving(false);
+        if (done) onClose();
     };
 
     return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-            <KeyboardAvoidingView
-                style={styles.modalOverlay}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            >
-                <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} />
-                <View style={[styles.editSheet, { backgroundColor: isDark ? '#1e1e1e' : '#fff' }]}>
+        <Modal visible={!!field} transparent animationType="slide" onRequestClose={onClose}>
+            <KeyboardAvoidingView style={styles.sheetOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+                <View style={[styles.sheet, { backgroundColor: isDark ? '#1e1e1e' : '#fff' }]}>
                     <View style={[styles.sheetHandle, { backgroundColor: isDark ? '#444' : '#ddd' }]} />
-                    <Text style={[styles.sheetTitle, { color: isDark ? '#f0f0f0' : '#1a1a1a' }]}>
-                        Edit {title}
-                    </Text>
-                    <Text style={[styles.sheetSub, { color: isDark ? '#999' : '#888' }]}>
-                        {title === 'Name'
-                            ? 'This is your display name. Contacts will see this.'
-                            : 'Tell something about yourself.'}
-                    </Text>
-
+                    <Text style={[styles.sheetTitle, { color: isDark ? '#f0f0f0' : '#1a1a1a' }]}>Edit {cfg.label}</Text>
+                    <Text style={[styles.sheetSub, { color: isDark ? '#999' : '#888' }]}>{cfg.help}</Text>
                     <TextInput
                         style={[
                             styles.sheetInput,
@@ -79,40 +84,27 @@ const EditModal = ({ visible, onClose, title, value, onSave, multiline = false, 
                                 color: isDark ? '#f0f0f0' : '#111',
                                 borderColor: isDark ? '#333' : '#e0e0e0',
                                 backgroundColor: isDark ? '#2a2a2a' : '#f9f9f9',
-                                height: multiline ? 100 : 50,
-                                textAlignVertical: multiline ? 'top' : 'center',
-                            }
+                                minHeight: cfg.multiline ? 96 : 50,
+                                textAlignVertical: cfg.multiline ? 'top' : 'center',
+                            },
                         ]}
                         value={text}
                         onChangeText={setText}
-                        multiline={multiline}
-                        maxLength={multiline ? 139 : 25}
+                        multiline={!!cfg.multiline}
+                        maxLength={cfg.max}
                         autoFocus
-                        returnKeyType={multiline ? 'default' : 'done'}
-                        onSubmitEditing={multiline ? undefined : handleSave}
+                        returnKeyType={cfg.multiline ? 'default' : 'done'}
+                        onSubmitEditing={cfg.multiline ? undefined : handleSave}
+                        placeholder={cfg.label}
+                        placeholderTextColor={isDark ? '#666' : '#bbb'}
                     />
-                    {multiline && (
-                        <Text style={[styles.charCount, { color: isDark ? '#666' : '#bbb' }]}>
-                            {text.length}/139
-                        </Text>
-                    )}
-
+                    <Text style={[styles.charCount, { color: isDark ? '#666' : '#aaa' }]}>{text.length}/{cfg.max}</Text>
                     <View style={styles.sheetBtns}>
-                        <TouchableOpacity
-                            style={[styles.sheetCancelBtn, { borderColor: isDark ? '#444' : '#ddd' }]}
-                            onPress={onClose}
-                        >
+                        <TouchableOpacity style={[styles.sheetCancelBtn, { borderColor: isDark ? '#444' : '#ddd' }]} onPress={onClose}>
                             <Text style={[styles.sheetCancelText, { color: isDark ? '#aaa' : '#666' }]}>{t('Cancel')}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.sheetSaveBtn, loading && { opacity: 0.7 }]}
-                            onPress={handleSave}
-                            disabled={loading}
-                        >
-                            {loading
-                                ? <ActivityIndicator color="#fff" size="small" />
-                                : <Text style={styles.sheetSaveText}>{t('Save')}</Text>
-                            }
+                        <TouchableOpacity style={[styles.sheetSaveBtn, !canSave && { opacity: 0.5 }]} onPress={handleSave} disabled={!canSave}>
+                            {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.sheetSaveText}>{t('Save')}</Text>}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -121,189 +113,158 @@ const EditModal = ({ visible, onClose, title, value, onSave, multiline = false, 
     );
 };
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
+// ── Main screen ──────────────────────────────────────────────────────────────
 const ProfileScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
     const dispatch = useDispatch();
-
-    const maniAllData = useSelector((state) => state.totalappData);
-
-    const MY_USER_ID = maniAllData?.userId ?? '';
-    const userData = maniAllData?.user ?? null;
+    // Redux hi source of truth — local copy nahi, isliye kahin aur se update ho to yahan bhi dikhe
+    const user = useSelector((state) => state.totalappData?.user) || {};
 
     const isDark = theme?.mode === 'dark';
     const bg = isDark ? '#121212' : '#f5f7fa';
     const card = isDark ? '#1e1e1e' : '#ffffff';
     const txt = isDark ? '#f0f0f0' : '#1a1a1a';
     const sub = isDark ? '#999' : '#888';
-    const border = isDark ? '#2a2a2a' : '#f0f0f0';
+    const divider = isDark ? '#2a2a2a' : '#f0f0f0';
 
-    // Local state for optimistic UI
-    const [name, setName] = useState(userData?.name ?? 'Your Name');
-    const [description, setDescription] = useState(userData?.about ?? 'Hey there! I am using TeleBook');
-    const [editName, setEditName] = useState(false);
-    const [editDesc, setEditDesc] = useState(false);
+    const [editing, setEditing] = useState(null); // 'name' | 'about' | 'city' | 'state'
+    const [previewUri, setPreviewUri] = useState(null); // upload ke dauran nayi photo turant dikhao
+    const [photoBusy, setPhotoBusy] = useState(false);
 
-    const avatarUri = userData?.profilePicture
-        ? BASE_URL + userData.profilePicture
-        : DEFAULT_AVATAR;
+    const saveField = async (value) => {
+        const res = await updateMyProfile(dispatch, { [editing]: value });
+        if (!res.ok) {
+            Toast.show({ type: 'error', text1: 'Update failed', text2: res.message });
+            return false;
+        }
+        Toast.show({ type: 'success', text1: `${FIELDS[editing].label} updated` });
+        return true;
+    };
 
-
-    console.log("avatarUri_______", userData?.profilePicture)
-
-    const phone = formatPhone(userData?.mobile ?? userData?.mobile ?? '');
-
-    // ── Save Name ──────────────────────────────────────────────────────────────
-    const saveName = async (newName) => {
-        const prev = name;
-        setName(newName); // optimistic
+    const pickAndUpload = async (source) => {
         try {
-            const res = await apiService({
-                method: 'PUT',
-                endpoint: 'users/profile',
-                data: { name: newName },
-            });
-            if (res?.success) {
-                updateUserInStore(res?.data?.user)
+            const perm = source === 'camera'
+                ? await ImagePicker.requestCameraPermissionsAsync()
+                : await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (perm.status !== 'granted') {
+                Toast.show({ type: 'error', text1: 'Permission needed', text2: `Allow ${source === 'camera' ? 'camera' : 'photos'} access in settings` });
+                return;
             }
+            const options = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 };
+            const result = source === 'camera'
+                ? await ImagePicker.launchCameraAsync(options)
+                : await ImagePicker.launchImageLibraryAsync(options);
+            if (result.canceled || !result.assets?.[0]) return;
+
+            const asset = result.assets[0];
+            setPreviewUri(asset.uri);
+            setPhotoBusy(true);
+            const res = await uploadProfilePhoto(dispatch, asset);
+            setPhotoBusy(false);
+            setPreviewUri(null);
+            if (res.ok) Toast.show({ type: 'success', text1: 'Profile photo updated' });
+            else Toast.show({ type: 'error', text1: 'Upload failed', text2: res.message });
         } catch (e) {
-            setName(prev);
-            Alert.alert('Error', 'Failed to update name. Please try again.');
+            console.log('Profile photo error:', e);
+            setPhotoBusy(false);
+            setPreviewUri(null);
+            Toast.show({ type: 'error', text1: 'Upload failed', text2: 'Please try again' });
         }
     };
-    const updateUserInStore = (newUserData) => {
-        dispatch(
-            settotalappData({
-                ...maniAllData,
-                user: newUserData,
-            })
-        );
+
+    // Web par Alert ke buttons kaam nahi karte — wahan seedha gallery
+    const choosePhoto = () => {
+        if (photoBusy) return;
+        if (Platform.OS === 'web') { pickAndUpload('gallery'); return; }
+        Alert.alert('Profile photo', 'Choose a source', [
+            { text: 'Camera', onPress: () => pickAndUpload('camera') },
+            { text: 'Gallery', onPress: () => pickAndUpload('gallery') },
+            { text: 'Cancel', style: 'cancel' },
+        ]);
     };
 
-    const saveDescription = async (newDesc) => {
-        const prev = description;
-        setDescription(newDesc); // optimistic
-        try {
-            const res = await apiService({
-                method: 'PUT',
-                endpoint: 'users/profile',
-                data: { about: newDesc },
-            });
+    const phone = formatPhone(user.mobile, user.isdCode || '91');
 
-            if (res?.success) {
-                updateUserInStore(res?.data?.user)
-            }
-        } catch (e) {
-
-            setDescription(prev);
-            Alert.alert('Error', 'Failed to update description. Please try again.');
-        }
-    };
+    const Row = ({ icon, iconBg, iconColor, label, value, field, placeholder, last }) => (
+        <TouchableOpacity
+            style={styles.row}
+            onPress={field ? () => setEditing(field) : undefined}
+            activeOpacity={field ? 0.6 : 1}
+            disabled={!field}
+        >
+            {/* Dark mode me halka pastel chubhta hai — icon ke rang ka faint tint */}
+            <View style={[styles.rowIcon, { backgroundColor: isDark ? `${iconColor}2e` : iconBg }]}>
+                <Ionicons name={icon} size={18} color={iconColor} />
+            </View>
+            <View style={[styles.rowBody, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: divider }]}>
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.rowLabel, { color: sub }]}>{label}</Text>
+                    <Text style={[styles.rowValue, { color: value ? txt : sub }]} numberOfLines={field === 'about' ? 3 : 1}>
+                        {value || placeholder}
+                    </Text>
+                </View>
+                <Ionicons name={field ? 'pencil' : 'lock-closed-outline'} size={16} color={field ? '#0084ff' : sub} />
+            </View>
+        </TouchableOpacity>
+    );
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
-            <StatusBar
-                backgroundColor="#0084ff"
-                barStyle="light-content"
-            />
+            <StatusBar backgroundColor="#0084ff" barStyle="light-content" />
 
-            {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn} hitSlop={10}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{t('Profile')}</Text>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-
-                {/* ── Avatar Card ── */}
-                <View style={[styles.avatarCard, { backgroundColor: card }]}>
-                    <View style={styles.avatarWrap}>
-                        <Image source={{ uri: avatarUri }} style={styles.avatar} />
-                        {/* Online indicator */}
-                        <View style={styles.onlineDot} />
-                    </View>
-
-                    {/* Phone — read-only, formatted */}
-                    <View style={styles.phoneRow}>
-                        <Ionicons name="call-outline" size={15} color="#0084ff" />
-                        <Text style={[styles.phoneText, { color: sub }]}>{phone || 'No number'}</Text>
-                    </View>
-                </View>
-
-
-                <View style={[styles.infoCard, { backgroundColor: card, borderColor: border }]}>
-                    <View style={styles.infoLeft}>
-                        <View style={[styles.infoIconWrap, { backgroundColor: '#e8f4ff' }]}>
-                            <Ionicons name="person-outline" size={18} color="#0084ff" />
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+                {/* Photo */}
+                <View style={styles.photoSection}>
+                    <TouchableOpacity onPress={choosePhoto} activeOpacity={0.85} style={styles.avatarWrap}>
+                        <Image source={{ uri: previewUri || avatarUrl(user.profilePicture) }} style={styles.avatar} />
+                        {photoBusy && (
+                            <View style={styles.avatarOverlay}>
+                                <ActivityIndicator color="#fff" size="large" />
+                            </View>
+                        )}
+                        <View style={styles.cameraBadge}>
+                            <Ionicons name="camera" size={18} color="#fff" />
                         </View>
-                        <View>
-                            <Text style={[styles.infoLabel, { color: sub }]}>{t('full_name')}</Text>
-                            <Text style={[styles.infoValue, { color: txt }]} numberOfLines={1}>{name}</Text>
-                        </View>
-                    </View>
-                    <TouchableOpacity
-                        style={styles.editBtn}
-                        onPress={() => setEditName(true)}
-                        activeOpacity={0.7} >
-                        <Ionicons name="pencil" size={16} color="#0084ff" />
+                    </TouchableOpacity>
+                    <Text style={[styles.bigName, { color: txt }]} numberOfLines={1}>{user.name || 'Your name'}</Text>
+                    {!!phone && <Text style={[styles.bigPhone, { color: sub }]}>{phone}</Text>}
+                    <TouchableOpacity onPress={choosePhoto} disabled={photoBusy}>
+                        <Text style={styles.changePhoto}>{photoBusy ? 'Uploading…' : 'Change photo'}</Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* ── Description Row ── */}
-                <View style={[styles.infoCard, { backgroundColor: card, borderColor: border }]}>
-                    <View style={styles.infoLeft}>
-                        <View style={[styles.infoIconWrap, { backgroundColor: '#fff0e8' }]}>
-                            <Ionicons name="chatbubble-ellipses-outline" size={18} color="#e67e22" />
-                        </View>
-                        <View style={{ flex: 1, marginRight: 8 }}>
-                            <Text style={[styles.infoLabel, { color: sub }]}>{t('About')}</Text>
-                            <Text style={[styles.infoValue, { color: txt }]} numberOfLines={2}>{description}</Text>
-                        </View>
-                    </View>
-                    <TouchableOpacity
-                        style={styles.editBtn}
-                        onPress={() => setEditDesc(true)}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons name="pencil" size={16} color="#0084ff" />
-                    </TouchableOpacity>
+                <Text style={[styles.sectionLabel, { color: sub }]}>PERSONAL INFO</Text>
+                <View style={[styles.card, { backgroundColor: card }]}>
+                    <Row icon="person-outline" iconBg="#e8f4ff" iconColor="#0084ff" label={t('full_name')} value={user.name} field="name" placeholder="Add your name" />
+                    <Row icon="chatbubble-ellipses-outline" iconBg="#fff0e8" iconColor="#e67e22" label={t('About')} value={user.about} field="about" placeholder="Add a few words about you" last />
                 </View>
 
-                {/* ── Phone Row (read-only) ── */}
-                <View style={[styles.infoCard, { backgroundColor: card, borderColor: border }]}>
-                    <View style={styles.infoLeft}>
-                        <View style={[styles.infoIconWrap, { backgroundColor: '#e8fff0' }]}>
-                            <Ionicons name="call-outline" size={18} color="#27ae60" />
-                        </View>
-                        <View>
-                            <Text style={[styles.infoLabel, { color: sub }]}>{t('Phone Number')}</Text>
-                            <Text style={[styles.infoValue, { color: txt }]}>{phone || 'Not available'}</Text>
-                        </View>
-                    </View>
-                    <View style={[styles.editBtn, { backgroundColor: '#f0f0f0' }]}>
-                        <Ionicons name="lock-closed-outline" size={14} color="#bbb" />
-                    </View>
+                <Text style={[styles.sectionLabel, { color: sub }]}>LOCATION</Text>
+                <View style={[styles.card, { backgroundColor: card }]}>
+                    <Row icon="business-outline" iconBg="#f3e8ff" iconColor="#8e44ad" label="City" value={user.city} field="city" placeholder="Add city" />
+                    <Row icon="map-outline" iconBg="#e8fff6" iconColor="#16a085" label="State" value={user.state} field="state" placeholder="Add state" last />
                 </View>
+
+                <Text style={[styles.sectionLabel, { color: sub }]}>ACCOUNT</Text>
+                <View style={[styles.card, { backgroundColor: card }]}>
+                    <Row icon="call-outline" iconBg="#e8fff0" iconColor="#27ae60" label={t('Phone Number')} value={phone} placeholder="Not available" last />
+                </View>
+                <Text style={[styles.footNote, { color: sub }]}>Your phone number can't be changed.</Text>
             </ScrollView>
-            <EditModal
-                visible={editName}
-                onClose={() => setEditName(false)}
-                title="Name"
-                value={name}
-                onSave={saveName}
-                multiline={false}
-                isDark={isDark}
-            />
-            <EditModal
-                visible={editDesc}
-                onClose={() => setEditDesc(false)}
-                title="About"
-                value={description}
-                onSave={saveDescription}
-                multiline={true}
+
+            <EditSheet
+                field={editing}
+                value={editing ? user[editing] : ''}
+                onClose={() => setEditing(null)}
+                onSave={saveField}
                 isDark={isDark}
             />
         </SafeAreaView>
@@ -312,115 +273,52 @@ const ProfileScreen = ({ navigation }) => {
 
 export default ProfileScreen;
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
     container: { flex: 1 },
-
-    // Header
     header: {
-        height: 90, backgroundColor: '#0084ff',
-        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16,
+        backgroundColor: '#0084ff', flexDirection: 'row', alignItems: 'center',
+        paddingHorizontal: 16, paddingBottom: 14,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
     },
-    backBtn: { marginRight: 14, padding: 2 },
+    backBtn: { marginRight: 14 },
     headerTitle: { color: '#fff', fontSize: 20, fontWeight: '700' },
+    scroll: { paddingBottom: 40 },
 
-    // Avatar Card
-    avatarCard: {
-        alignItems: 'center',
-        paddingVertical: 32,
-        marginHorizontal: 16,
-        marginTop: 16,
-        borderRadius: 20,
-        shadowColor: '#000', shadowOpacity: 0.06,
-        shadowOffset: { width: 0, height: 3 }, shadowRadius: 10, elevation: 3,
+    photoSection: { alignItems: 'center', paddingTop: 28, paddingBottom: 8 },
+    avatarWrap: { position: 'relative' },
+    avatar: { width: 128, height: 128, borderRadius: 64, backgroundColor: '#dfe6ee' },
+    avatarOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 64, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
+    cameraBadge: {
+        position: 'absolute', right: 2, bottom: 2, width: 40, height: 40, borderRadius: 20,
+        backgroundColor: '#0084ff', alignItems: 'center', justifyContent: 'center',
+        borderWidth: 3, borderColor: '#fff',
     },
-    avatarWrap: { position: 'relative', marginBottom: 14 },
-    avatar: {
-        width: 110, height: 110, borderRadius: 55,
-        borderWidth: 3, borderColor: '#0084ff',
-    },
-    onlineDot: {
-        position: 'absolute', bottom: 6, right: 6,
-        width: 16, height: 16, borderRadius: 8,
-        backgroundColor: '#25D366',
-        borderWidth: 2.5, borderColor: '#fff',
-    },
-    phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    phoneText: { fontSize: 14, fontWeight: '500', letterSpacing: 0.5 },
+    bigName: { fontSize: 22, fontWeight: '700', marginTop: 14, maxWidth: '85%' },
+    bigPhone: { fontSize: 14, marginTop: 4, letterSpacing: 0.3 },
+    changePhoto: { color: '#0084ff', fontSize: 14, fontWeight: '600', marginTop: 10, padding: 4 },
 
-    // Info Cards
-    infoCard: {
-        flexDirection: 'row', alignItems: 'center',
-        justifyContent: 'space-between',
-        marginHorizontal: 16, marginTop: 10,
-        borderRadius: 16, padding: 16,
-        borderWidth: 1,
-        shadowColor: '#000', shadowOpacity: 0.04,
-        shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 2,
-    },
-    infoLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 14 },
-    infoIconWrap: {
-        width: 40, height: 40, borderRadius: 12,
-        alignItems: 'center', justifyContent: 'center',
-    },
-    infoLabel: { fontSize: 11, fontWeight: '500', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 0.5 },
-    infoValue: { fontSize: 15, fontWeight: '600' },
-    editBtn: {
-        width: 34, height: 34, borderRadius: 10,
-        backgroundColor: '#f0f6ff',
-        alignItems: 'center', justifyContent: 'center',
-    },
+    sectionLabel: { fontSize: 12, fontWeight: '600', letterSpacing: 0.6, marginTop: 22, marginBottom: 8, marginHorizontal: 20 },
+    card: { marginHorizontal: 16, borderRadius: 16, overflow: 'hidden', elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+    row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16 },
+    rowIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+    rowBody: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingRight: 16, gap: 10 },
+    rowLabel: { fontSize: 12, marginBottom: 3 },
+    rowValue: { fontSize: 15, fontWeight: '500' },
+    footNote: { fontSize: 12, marginTop: 8, marginHorizontal: 20 },
 
-    // Quick Actions
-    actionsRow: {
-        flexDirection: 'row',
-        marginHorizontal: 16, marginTop: 16, gap: 10,
-    },
-    actionBtn: {
-        flex: 1, alignItems: 'center', paddingVertical: 16,
-        borderRadius: 16,
-        shadowColor: '#000', shadowOpacity: 0.04,
-        shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 2,
-    },
-    actionIcon: {
-        width: 44, height: 44, borderRadius: 14,
-        alignItems: 'center', justifyContent: 'center', marginBottom: 8,
-    },
-    actionLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
-
-    // Edit Bottom Sheet Modal
-    modalOverlay: {
-        flex: 1, justifyContent: 'flex-end',
-        backgroundColor: 'rgba(0,0,0,0.4)',
-    },
-    editSheet: {
-        position: "absolute", top: '20%', left: 0, width: "100%",
-        borderRadius: 24,
+    sheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
+    sheet: {
+        borderTopLeftRadius: 24, borderTopRightRadius: 24,
         padding: 24, paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-        shadowColor: '#000', shadowOpacity: 0.15,
-        shadowOffset: { width: 0, height: -4 }, shadowRadius: 20, elevation: 12,
     },
-    sheetHandle: {
-        width: 40, height: 4, borderRadius: 2,
-        alignSelf: 'center', marginBottom: 20,
-    },
+    sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 18 },
     sheetTitle: { fontSize: 18, fontWeight: '700', marginBottom: 6 },
-    sheetSub: { fontSize: 13, lineHeight: 18, marginBottom: 18 },
-    sheetInput: {
-        borderWidth: 1.5, borderRadius: 12,
-        paddingHorizontal: 14, paddingVertical: 12,
-        fontSize: 15, marginBottom: 6,
-    },
-    charCount: { fontSize: 11, textAlign: 'right', marginBottom: 20 },
-    sheetBtns: { flexDirection: 'row', gap: 12, marginTop: 8 },
-    sheetCancelBtn: {
-        flex: 1, paddingVertical: 13, borderRadius: 12,
-        borderWidth: 1.5, alignItems: 'center',
-    },
+    sheetSub: { fontSize: 13, lineHeight: 18, marginBottom: 16 },
+    sheetInput: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
+    charCount: { fontSize: 11, textAlign: 'right', marginTop: 6, marginBottom: 16 },
+    sheetBtns: { flexDirection: 'row', gap: 12 },
+    sheetCancelBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, borderWidth: 1.5, alignItems: 'center' },
     sheetCancelText: { fontSize: 15, fontWeight: '600' },
-    sheetSaveBtn: {
-        flex: 1, paddingVertical: 13, borderRadius: 12,
-        backgroundColor: '#0084ff', alignItems: 'center',
-    },
+    sheetSaveBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: '#0084ff', alignItems: 'center' },
     sheetSaveText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

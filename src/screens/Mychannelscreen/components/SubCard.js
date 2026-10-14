@@ -5,10 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { ThemeContext } from '../../../components/ThemeContext';
 import Config from '../../../services/config';
-const BASE_URL = Config.Main_url;
 
 const getImg = (path) => {
-    return `${BASE_URL?.MEDIA_URL}${path}`;
+    if (!path) return null;
+    if (typeof path === 'string' && path.startsWith('http')) return path;
+    return `${Config.MEDIA_URL}${path}`;
 };
 
 export default function SubCard({ item }) {

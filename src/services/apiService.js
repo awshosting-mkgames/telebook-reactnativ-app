@@ -25,7 +25,8 @@ const apiService = async ({
         // Content-Type sirf NON-GET aur NON-DELETE methods ke liye.
         // Multipart par web ko khud boundary set karne dena hota hai, isliye
         // multipartHeaders platform ke hisaab se aata hai (web par khaali).
-        if (method !== 'GET' && method !== 'DELETE') {
+        // DELETE with body (jaise messageIds) ko bhi JSON header chahiye.
+        if (method !== 'GET' && (method !== 'DELETE' || data)) {
             if (isMultipart) {
                 Object.assign(headers, multipartHeaders);
             } else {
