@@ -348,22 +348,28 @@ export default function ChatScreen({ route, navigation }) {
         if (otherUserId && !isGroup) socketService.emit("get-user-status", { userId: otherUserId });
     }, [otherUserId, isGroup]);
 
-    // Offline-first: SQL cache se turant dikhao, blank screen na ho jab tak
-    // network wait chale. fetchMessages() hi source-of-truth rehta hai —
-    // yeh sirf "pehle kuch dikha do" hai. Race ho sakti hai (dono effects
-    // saath chalte hain), isliye fetchMessages pehle hi kuch set kar chuka ho
-    // to use clobber mat karo.
+    // Offline-first, race-free: pehle SQL cache ka wait karo (await — do alag
+    // effects nahi, jisme fetchMessages() apna setLoading(true) cache resolve
+    // hone se PEHLE hi chala deta tha, isliye spinner cache maujood hone ke
+    // bawajood bhi har baar flash hota tha). Cache mila to turant dikhao aur
+    // fetchMessages ko silent (bina spinner) background-sync ki tarah chalao;
+    // cache khaali ho (sach me pehli baar ye chat khuli hai) tabhi spinner
+    // genuinely zaroori hai.
     useEffect(() => {
+        let cancelled = false;
         (async () => {
             const cached = await loadCachedMessages(chatId);
+            if (cancelled) return;
             if (cached.length) {
                 setMessages((prev) => (prev.length ? prev : cached.map((m) => ({ ...m, status: determineStatus(m) }))));
                 setLoading(false);
+                fetchMessages({ silent: true });
+            } else {
+                fetchMessages({ silent: false });
             }
         })();
+        return () => { cancelled = true; };
     }, [chatId]);
-
-    useEffect(() => { fetchMessages(); }, []);
     // isGroup baad me pata chale (GET /messages ke chatDetails se) to sahi endpoint se dobara
     useEffect(() => { fetchChatDetails(); }, [isGroup]);
     const isEmpty = (value) => {
@@ -399,9 +405,12 @@ export default function ChatScreen({ route, navigation }) {
         } catch (e) { console.error("Chat details error:", e); }
     };
 
-    const fetchMessages = async () => {
+    // silent=true: cache se pehle hi kuch dikh chuka hai, isliye yahan background
+    // sync hai — spinner ki zaroorat nahi (yehi asli fix hai cache-hone-ke-bawajood
+    // har baar spinner flash hone ka).
+    const fetchMessages = async ({ silent = false } = {}) => {
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
             // GET khud saare messages read mark kar deta hai — alag se emit nahi karna (API doc 6.4)
             const res = await apiService({ method: "GET", endpoint: `messages/${chatId}?page=1&limit=${LIMIT}` });
             if (!res?.success) {
