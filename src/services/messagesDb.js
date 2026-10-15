@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { serializeDbWrite } from './sqliteWriteQueue';
 
 // Ek chat ke messages ka persistent store (offline cache).
 // chatsDb.js sirf chat-list summaries rakhta hai, poora message thread nahi —
@@ -57,7 +58,7 @@ const safeParse = (json) => {
  * replaceTabChats jaisa full-replace-and-delete-stale NAHI hai — page 1 aur
  * page 2 ke messages ek doosre ko delete nahi karte.
  */
-export const upsertMessages = async (chatId, messages = []) => {
+export const upsertMessages = (chatId, messages = []) => serializeDbWrite(async () => {
     if (!chatId) return 0;
     const db = await getDb();
     const now = Date.now();
@@ -93,7 +94,7 @@ export const upsertMessages = async (chatId, messages = []) => {
     }
 
     return count;
-};
+});
 
 /** Ek chat ke messages, ek page, newest-first (API ke page-1 order jaisa). */
 export const getMessagesPage = async (chatId, { limit = 50, beforeCreatedAt = null } = {}) => {
@@ -139,7 +140,7 @@ export const getMessagesSyncedAt = async (chatId) => {
     return row?.last_synced_at ?? null;
 };
 
-export const setMessagesSyncedAt = async (chatId, timestamp) => {
+export const setMessagesSyncedAt = (chatId, timestamp) => serializeDbWrite(async () => {
     if (!chatId) return;
     const db = await getDb();
     await db.runAsync(
@@ -147,10 +148,10 @@ export const setMessagesSyncedAt = async (chatId, timestamp) => {
          ON CONFLICT(chat_id) DO UPDATE SET last_synced_at = excluded.last_synced_at`,
         [String(chatId), timestamp]
     );
-};
+});
 
 /** Local delete-mark — row maujood ho to usme patch merge karke wapas likho, warna no-op. */
-export const markMessageDeletedLocally = async (chatId, messageId, patch) => {
+export const markMessageDeletedLocally = (chatId, messageId, patch) => serializeDbWrite(async () => {
     if (!chatId || !messageId) return;
     const db = await getDb();
     const row = await db.getFirstAsync(
@@ -165,21 +166,21 @@ export const markMessageDeletedLocally = async (chatId, messageId, patch) => {
         'UPDATE messages SET data = ?, updated_at = ? WHERE chat_id = ? AND message_id = ?',
         [JSON.stringify(merged), Date.now(), String(chatId), String(messageId)]
     );
-};
+});
 
 /** Ek chat ke saare cached messages hata do (abhi kahin use nahi, symmetry/future ke liye). */
-export const deleteMessagesForChat = async (chatId) => {
+export const deleteMessagesForChat = (chatId) => serializeDbWrite(async () => {
     if (!chatId) return 0;
     const db = await getDb();
     const res = await db.runAsync('DELETE FROM messages WHERE chat_id = ?', [String(chatId)]);
     return res.changes ?? 0;
-};
+});
 
 /** Logout par sab saaf. */
-export const clearMessagesDb = async () => {
+export const clearMessagesDb = () => serializeDbWrite(async () => {
     const db = await getDb();
     await db.withTransactionAsync(async () => {
         await db.execAsync('DELETE FROM messages');
         await db.execAsync('DELETE FROM messages_meta');
     });
-};
+});

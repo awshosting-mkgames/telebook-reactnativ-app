@@ -79,6 +79,7 @@ const MessageList = ({
     openPopup,
     openDocInBrowser,
     retryMessage,
+    onCancelUpload,
     setReplyMsg,
     setShowEmoji,
     fmtTime,
@@ -265,6 +266,7 @@ const MessageList = ({
                         openPopup={openPopup}
                         openDocInBrowser={openDocInBrowser}
                         retryMessage={retryMessage}
+                        onCancelUpload={onCancelUpload}
                         setReplyMsg={setReplyMsg}
                         setShowEmoji={setShowEmoji}
                         fmtTime={fmtTime}
@@ -278,7 +280,7 @@ const MessageList = ({
                 </View>
             );
         },
-        [highlightedMsgId, isSelectMode, selectedMsgIds, theme, messages, matchIdSet, openPopup, retryMessage, MY_USER_ID, isGroup],
+        [highlightedMsgId, isSelectMode, selectedMsgIds, theme, messages, matchIdSet, openPopup, retryMessage, onCancelUpload, MY_USER_ID, isGroup],
     );
 
     const ListFooterComponent = () => {
@@ -299,7 +301,11 @@ const MessageList = ({
         return null;
     };
 
-    if (loading) {
+    // Full-screen blocking spinner sirf tab jab dikhane ke liye kuch bhi nahi
+    // hai (asli pehli load). Agar cache/pehle se fetched messages maujood
+    // hain, background refresh ke liye upar ek chhota inline indicator kaafi
+    // hai — poori chat screen ko baar-baar block karna WhatsApp jaisa nahi tha.
+    if (loading && messages.length === 0) {
         return (
             <View style={styles.loaderContainer}>
                 <ActivityIndicator size="large" color="#1296f3" />
@@ -309,6 +315,11 @@ const MessageList = ({
 
     return (
         <View style={{ flex: 1 }}>
+            {loading && messages.length > 0 && (
+                <View style={styles.syncBar}>
+                    <ActivityIndicator size="small" color="#1296f3" />
+                </View>
+            )}
             <FlatList
                 ref={flatRef}
                 data={messages}
@@ -357,6 +368,7 @@ export default MessageList;
 
 const styles = StyleSheet.create({
     loaderContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+    syncBar: { position: "absolute", top: 6, left: 0, right: 0, alignItems: "center", zIndex: 5 },
     listContent: { padding: 10 },
     emptyWrap: { alignItems: "center", marginTop: 60 },
     empty: { color: "#999" },

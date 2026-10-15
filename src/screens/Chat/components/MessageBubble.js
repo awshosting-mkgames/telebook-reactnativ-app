@@ -4,7 +4,7 @@ import { memo, useEffect, useState } from 'react';
 
 import { useTranslation } from 'react-i18next';
 import {
-    Dimensions, Image, Linking, Pressable,
+    ActivityIndicator, Dimensions, Image, Linking, Pressable,
     StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import Hyperlink from 'react-native-hyperlink';
@@ -45,12 +45,22 @@ const docIcon = (att) => {
     return 'file-document';
 };
 
+// Attachment abhi upload ho raha hai (local file, server par nahi pahuncha) —
+// WhatsApp jaisa chhota progress overlay, tap karne par cancel.
+const UploadOverlay = ({ progress = 0, onCancel }) => (
+    <Pressable style={styles.uploadOverlay} onPress={onCancel}>
+        <ActivityIndicator size="small" color="#fff" />
+        <Text style={styles.uploadOverlayText}>{progress}%</Text>
+        <Text style={styles.uploadOverlayHint}>tap to cancel</Text>
+    </Pressable>
+);
+
 const MessageBubble = ({
     item, MY_USER_ID, isGroup, theme, getFullUrl,
     setImageModalUri, setVideoModalUri, openDocInBrowser,
     setReplyMsg, setShowEmoji, fmtTime,
     isSelectMode, isHighlighted, isSelected, onSelect, onReplyPress, isMatch,
-    openPopup, retryMessage,
+    openPopup, retryMessage, onCancelUpload,
 }) => {
     const { t } = useTranslation();
     const isMine = item.sender?._id === MY_USER_ID || item.sender === MY_USER_ID;
@@ -76,6 +86,9 @@ const MessageBubble = ({
     const replyBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
 
     const isFailed = isMine && item.status === 'failed';
+    // Attachment abhi local file hai, server upload chal raha hai — har
+    // media type (image/video/document/audio) isi se progress overlay dikhata hai.
+    const isPendingUpload = isMine && item.status === 'sending' && !!item.attachments?.[0]?._pendingUpload;
     // Tap: select mode me select/unselect, failed message par retry
     const handlePress = () => {
         if (isSelectMode) return onSelect(item);
@@ -174,18 +187,22 @@ const MessageBubble = ({
                                     <Pressable
                                         key={i}
                                         style={styles.mediaWrap}
-                                        onPress={openMedia(() => setImageModalUri(getFullUrl(att.url)))}
+                                        onPress={isPendingUpload ? () => onCancelUpload?.(item._id) : openMedia(() => setImageModalUri(getFullUrl(att.url)))}
                                         onLongPress={handleLongPress}
                                         delayLongPress={200}
                                     >
                                         <Image source={{ uri: getFullUrl(att.url) }} style={styles.msgMedia} resizeMode="cover" />
-                                        <TouchableOpacity
-                                            style={styles.zoomBtn}
-                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                            onPress={() => setImageModalUri(getFullUrl(att.url))}
-                                        >
-                                            <Ionicons name="expand" size={16} color="#fff" />
-                                        </TouchableOpacity>
+                                        {isPendingUpload ? (
+                                            <UploadOverlay progress={item.uploadProgress ?? 0} onCancel={() => onCancelUpload?.(item._id)} />
+                                        ) : (
+                                            <TouchableOpacity
+                                                style={styles.zoomBtn}
+                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                onPress={() => setImageModalUri(getFullUrl(att.url))}
+                                            >
+                                                <Ionicons name="expand" size={16} color="#fff" />
+                                            </TouchableOpacity>
+                                        )}
                                     </Pressable>
                                 ))}
 
@@ -193,7 +210,7 @@ const MessageBubble = ({
                                     <Pressable
                                         key={i}
                                         style={styles.videoThumbWrap}
-                                        onPress={openMedia(() => setVideoModalUri(getFullUrl(att.url)))}
+                                        onPress={isPendingUpload ? () => onCancelUpload?.(item._id) : openMedia(() => setVideoModalUri(getFullUrl(att.url)))}
                                         onLongPress={handleLongPress}
                                         delayLongPress={200}
                                     >
@@ -201,30 +218,52 @@ const MessageBubble = ({
                                         <View pointerEvents="none" style={styles.msgMedia}>
                                             <VideoThumb uri={getFullUrl(att.url)} style={styles.msgMedia} />
                                         </View>
-                                        <View pointerEvents="none" style={styles.videoOverlay}>
-                                            <Ionicons name="play" size={30} color="#fff" />
-                                        </View>
-                                        <TouchableOpacity
-                                            style={styles.zoomBtn}
-                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                            onPress={() => setVideoModalUri(getFullUrl(att.url))}
-                                        >
-                                            <Ionicons name="expand" size={16} color="#fff" />
-                                        </TouchableOpacity>
+                                        {isPendingUpload ? (
+                                            <UploadOverlay progress={item.uploadProgress ?? 0} onCancel={() => onCancelUpload?.(item._id)} />
+                                        ) : (
+                                            <>
+                                                <View pointerEvents="none" style={styles.videoOverlay}>
+                                                    <Ionicons name="play" size={30} color="#fff" />
+                                                </View>
+                                                <TouchableOpacity
+                                                    style={styles.zoomBtn}
+                                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                    onPress={() => setVideoModalUri(getFullUrl(att.url))}
+                                                >
+                                                    <Ionicons name="expand" size={16} color="#fff" />
+                                                </TouchableOpacity>
+                                            </>
+                                        )}
                                     </Pressable>
                                 ))}
 
                                 {item.messageType === 'audio' && item.attachments?.map((att, i) => (
                                     <View key={i} style={styles.audioWrapper}>
-                                        <AudioPlayer url={getFullUrl(att.url)} isMine={isMine} isDark={isDark} />
+                                        {isPendingUpload ? (
+                                            <Pressable style={styles.audioUploadRow} onPress={() => onCancelUpload?.(item._id)}>
+                                                <ActivityIndicator size="small" color="#fff" />
+                                                <Text style={styles.docName}>Uploading voice message… {item.uploadProgress ?? 0}%</Text>
+                                            </Pressable>
+                                        ) : (
+                                            <AudioPlayer url={getFullUrl(att.url)} isMine={isMine} isDark={isDark} />
+                                        )}
                                     </View>
                                 ))}
 
                                 {item.messageType === 'document' && item.attachments?.map((att, i) => (
-                                    <TouchableOpacity key={i} style={styles.docRow} onPress={openMedia(() => openDocInBrowser(att.url))} onLongPress={handleLongPress}>
-                                        <MaterialCommunityIcons name={docIcon(att)} size={24} color="#fff" />
-                                        <Text style={styles.docName} numberOfLines={1}>{att.filename || 'Document'}</Text>
-                                    </TouchableOpacity>
+                                    isPendingUpload ? (
+                                        <Pressable key={i} style={styles.docRow} onPress={() => onCancelUpload?.(item._id)}>
+                                            <ActivityIndicator size="small" color="#fff" />
+                                            <Text style={styles.docName} numberOfLines={1}>
+                                                {att.filename || 'Document'} · {item.uploadProgress ?? 0}%
+                                            </Text>
+                                        </Pressable>
+                                    ) : (
+                                        <TouchableOpacity key={i} style={styles.docRow} onPress={openMedia(() => openDocInBrowser(att.url))} onLongPress={handleLongPress}>
+                                            <MaterialCommunityIcons name={docIcon(att)} size={24} color="#fff" />
+                                            <Text style={styles.docName} numberOfLines={1}>{att.filename || 'Document'}</Text>
+                                        </TouchableOpacity>
+                                    )
                                 ))}
 
                                 {!!item.content && item.messageType !== 'document' && (
@@ -259,7 +298,9 @@ const MessageBubble = ({
                             />
                         </View>
                         {isFailed && (
-                            <Text style={styles.failedText}>Not sent · tap to retry</Text>
+                            <Text style={styles.failedText}>
+                                {item.offlineQueued ? 'Waiting for network — will send automatically' : 'Not sent · tap to retry'}
+                            </Text>
                         )}
                     </View>
                     {reactionGroups.length > 0 && !item.isDeleted && (
@@ -299,6 +340,13 @@ const styles = StyleSheet.create({
     videoOverlay: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 30, padding: 10 },
     docRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, backgroundColor: '#1296f3', borderRadius: 8, width: SCREEN_W * 0.65 },
     docName: { color: '#fff', fontSize: 13, flex: 1 },
+    audioUploadRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, backgroundColor: '#1296f3', borderRadius: 8 },
+    uploadOverlay: {
+        ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center', justifyContent: 'center', gap: 4,
+    },
+    uploadOverlayText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+    uploadOverlayHint: { color: 'rgba(255,255,255,0.75)', fontSize: 10 },
     timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 2, gap: 4 },
     timeText: { fontSize: 10 },
     senderName: { fontSize: 12, color: '#1296f3', fontWeight: 'bold', marginBottom: 2, marginLeft: 0, marginVertical: 5, marginBottom: 15 },

@@ -105,7 +105,6 @@ export default function ChatScreen({ route, navigation }) {
     const [isRecording, setIsRecording] = useState(false);
     const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
     const [recordSecs, setRecordSecs] = useState(0);
-    const [uploading, setUploading] = useState(false);
     const [videoModalUri, setVideoModalUri] = useState(null);
     const [imageModalUri, setImageModalUri] = useState(null);
     const [keyboardH, setKeyboardH] = useState(0);
@@ -135,7 +134,6 @@ export default function ChatScreen({ route, navigation }) {
     const [searchScrollNonce, setSearchScrollNonce] = useState(0);  // same id dobara tap ho to bhi re-trigger
     const searchTimer = useRef(null);
 
-    const isFirstLoad = useRef(true);
     const isPaginating = useRef(false);
     const flatRef = useRef();
     const typingTimer = useRef();
@@ -188,6 +186,9 @@ export default function ChatScreen({ route, navigation }) {
                 if (otherUserIdRef.current) socketService.emit("get-user-status", { userId: otherUserIdRef.current });
                 if (isFocusedRef.current) refreshLatestRef.current?.();
                 else missedReadRef.current = true;
+                // App foreground me wapas aana connectivity wapas aane ka bhi ek signal
+                // hai — offline-queued messages yahin se retry ho jaate hain.
+                retryQueuedRef.current?.();
             }
             appState.current = next;
         });
@@ -313,9 +314,14 @@ export default function ChatScreen({ route, navigation }) {
         const onUserOffline = (uid) => { if (isOtherUser(uid)) { setIsOnline(false); markLastSeenNow(uid); } };
         socketService.on("user-online", onUserOnline);
         socketService.on("user-offline", onUserOffline);
-        // Reconnect (network wapas aaya) → agar chat abhi screen par hai to taaza kar lo.
+        // Reconnect (network wapas aaya) → agar chat abhi screen par hai to taaza kar lo,
+        // aur offline-queued messages bhi retry karo (socket reconnect sabse reliable
+        // "internet wapas aa gaya" signal hai — isko chat focused na hone par bhi suno).
         // refreshLatestRef se stale-closure bug nahi hota (AppState effect jaisa).
-        const onConnect = () => { if (isFocusedRef.current) refreshLatestRef.current?.(); };
+        const onConnect = () => {
+            if (isFocusedRef.current) refreshLatestRef.current?.();
+            retryQueuedRef.current?.();
+        };
         socketService.on("connect", onConnect);
         // Sirf apne listeners hatao. Bina callback ke off() karne se chat list
         // (Freechat) ke listeners bhi hat jate the aur list update hona band ho jata tha.
@@ -399,7 +405,11 @@ export default function ChatScreen({ route, navigation }) {
             // GET khud saare messages read mark kar deta hai — alag se emit nahi karna (API doc 6.4)
             const res = await apiService({ method: "GET", endpoint: `messages/${chatId}?page=1&limit=${LIMIT}` });
             if (!res?.success) {
-                Alert.alert("Error", apiErrorMessage(res, "Messages load nahi hue"));
+                // Offline ho aur cache se pehle hi kuch dikh raha ho to chup chaap rehne do
+                // (WhatsApp jaisa) — alert sirf tab jab dikhane ko kuch bhi nahi hai.
+                if (messagesRef.current.length === 0) {
+                    Alert.alert("Error", apiErrorMessage(res, "Messages load nahi hue"));
+                }
                 return;
             }
             const details = res?.data?.chatDetails;
@@ -410,11 +420,18 @@ export default function ChatScreen({ route, navigation }) {
                 if (other?._id) setOtherUserId(other._id);
             }
             const msgs = (res?.data?.messages ?? []).map((m) => ({ ...m, status: determineStatus(m) }));
-            setMessages(msgs);
             cacheMessages(chatId, msgs);
+            // Server ko abhi tak pata hi nahi un messages ka jo offline/send-fail hue —
+            // blind overwrite unhe gayab kar deta tha. Pending optimistic ones ko bachao.
+            setMessages((prev) => {
+                const freshIds = new Set(msgs.map((m) => m._id));
+                const pending = prev.filter((m) => m.isOptimistic && !freshIds.has(m._id));
+                return [...pending, ...msgs];
+            });
             setCurrentPage(1);
             setHasMore(res?.data?.pagination?.hasMore ?? false);
-            isFirstLoad.current = false;
+            // Successful fetch khud proof hai ki connectivity hai — queued messages try karo.
+            retryQueuedRef.current?.();
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
     };
@@ -435,6 +452,8 @@ export default function ChatScreen({ route, navigation }) {
             return [...pending, ...fresh, ...older];
         });
         dispatch(clearUnread(chatId));
+        // Successful fetch khud proof hai ki connectivity hai — queued messages try karo.
+        retryQueuedRef.current?.();
     };
     const refreshLatestRef = useRef(null);
     refreshLatestRef.current = refreshLatest;
@@ -577,43 +596,77 @@ export default function ChatScreen({ route, navigation }) {
     };
 
     // Step 1 of 2 (API doc 4): POST /users/media, field "media" → { url, filename, fileType, fileSize }
-    const uploadMedia = async (localUri, mimeType, messageType, fileName) => {
+    // onProgress(0-100) non-blocking multi-upload queue ke liye hai.
+    // Note: pehle AbortController `signal` axios call ko diya jaata tha (true
+    // cancel ke liye) — React Native par axios+FormData+signal ka combo upload
+    // ko silently fail kar raha tha (images bhejna band ho gaya tha), isliye
+    // hata diya. Cancel ab ek simple flag se hota hai (dekhen sendMediaAsset).
+    const uploadMedia = async (localUri, mimeType, messageType, fileName, { onProgress } = {}) => {
         const fromUri = localUri.split("?")[0].split("/").pop() ?? "";
         const ext = fromUri.includes(".") ? fromUri.split(".").pop() : (mimeType.split("/")[1] ?? "bin");
         const fd = new FormData();
         await appendFile(fd, "media", { uri: localUri, name: fileName || `${messageType}_${Date.now()}.${ext}`, type: mimeType });
 
-        const res = await apiService({ method: "POST", endpoint: "users/media", data: fd, isMultipart: true });
+        const res = await apiService({
+            method: "POST", endpoint: "users/media", data: fd, isMultipart: true,
+            onUploadProgress: onProgress
+                ? (evt) => { if (evt.total) onProgress(Math.round((evt.loaded / evt.total) * 100)); }
+                : undefined,
+        });
         const json = res?.data;
-        if (!res?.success || !json?.success) throw new Error(json?.message ?? res?.error?.message ?? "Media upload failed");
+        if (!res?.success || !json?.success) {
+            const err = new Error(json?.message ?? res?.error?.message ?? res?.error ?? "Media upload failed");
+            // apiService: server tak request pahunchi aur mana kiya → error ek object
+            // (error.response.data). Internet/server tak pahunchi hi nahi → error ek plain
+            // string (error.message). Offline-queue yahi se decide karta hai (sendMediaAsset).
+            err.isNetworkFailure = !res?.success && typeof res?.error === "string";
+            throw err;
+        }
         return { url: json.data.url, filename: json.data.filename, fileType: json.data.fileType, fileSize: json.data.fileSize };
     };
 
+    // Client-side unique id — backend `clientMessageId` (partial unique index per
+    // sender) retry ko idempotent/duplicate-safe banata hai: same id dobara
+    // bhejo to naya message nahi banta, jo pehle bana tha wahi wapas aata hai.
+    const genClientMessageId = () => `cmid_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
     // Step 2: POST /messages. Server socket + push se deliver karta hai.
-    const sendMessage = async ({ content = "", messageType = "text", uploadedData = null, replyTo = replyMsg }) => {
+    // existingTempId milne par (retry/offline-queue-sweep) wahi bubble+SQL row
+    // reuse hota hai, naya nahi banta — warna purana queued row SQL me orphan reh jaata.
+    const sendMessage = async ({ content = "", messageType = "text", uploadedData = null, replyTo = replyMsg, clientMessageId = null, existingTempId = null }) => {
         if (messageType === "text" && !content.trim()) return;
         if (messageType !== "text" && !uploadedData) return;
         if (isBlocked) { askUnblock(); return; }
         if (isLockedForMe || isOtherDeleted) return;
         closeSearch();
-        const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        setMessages((prev) => [{
-            _id: tempId, content, messageType, chat: chatId,
+        const tempId = existingTempId || `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const cmid = clientMessageId || genClientMessageId();
+        const baseMsg = existingTempId ? messagesRef.current.find((m) => m._id === tempId) : null;
+        const optimisticMsg = {
+            _id: tempId, clientMessageId: cmid, content, messageType, chat: chatId,
             sender: { _id: MY_USER_ID, name: maniAllData?.user?.name ?? "You" },
             status: "sending", isOptimistic: true, readBy: [], deliveredTo: [],
-            createdAt: new Date().toISOString(),
+            createdAt: baseMsg?.createdAt || new Date().toISOString(),
             attachments: uploadedData ? [uploadedData] : [],
             ...(replyTo ? { replyTo } : {}),
-        }, ...prev]);
+        };
+        if (existingTempId) {
+            setMessages((prev) => prev.map((m) => (m._id === tempId ? optimisticMsg : m)));
+        } else {
+            setMessages((prev) => [optimisticMsg, ...prev]);
+        }
         setInputText(""); setReplyMsg(null); setShowEmoji(false); setSending(true);
         try {
             const payload = {
-                chatId, content, messageType,
+                chatId, content, messageType, clientMessageId: cmid,
                 ...(replyTo?._id ? { replyTo: replyTo._id } : {}),
                 ...(uploadedData ? { attachments: [{ url: uploadedData.url, filename: uploadedData.filename, fileType: uploadedData.fileType, fileSize: uploadedData.fileSize }] } : {}),
             };
             if (isBroadcast && broadcastIds.length) {
-                await Promise.all(broadcastIds.map((id) => apiService({ method: "POST", endpoint: "messages", data: { ...payload, chatId: id } })));
+                // clientMessageId sirf sender+id par unique hai (chat-independent) — same id
+                // N chats ko bhejte to 2nd se pichli chats "duplicate" samajh li jaati aur
+                // unmein message banta hi nahi. Har target chat ko apna derived id do.
+                await Promise.all(broadcastIds.map((id) => apiService({ method: "POST", endpoint: "messages", data: { ...payload, chatId: id, clientMessageId: `${cmid}_${id}` } })));
                 setMessages((prev) => prev.filter((m) => m._id !== tempId));
             } else {
                 const res = await apiService({ method: "POST", endpoint: "messages", data: payload });
@@ -645,15 +698,35 @@ export default function ChatScreen({ route, navigation }) {
                         },
                     }));
                     dispatch(persistChatTabs());
-                } else throw new Error(apiErrorMessage(res, "Send failed"));
+                } else {
+                    // Request server tak pahunchi aur usne mana kiya (block/locked/validation) —
+                    // res.error TAB bhi ek object hota hai (error.response.data). Internet/server
+                    // tak pahunchi hi nahi (timeout, DNS, offline) — apiService error.message ek
+                    // plain string deta hai. Isi se "offline queue" vs "real rejection" decide hota hai.
+                    const isNetworkFailure = typeof res?.error === "string";
+                    handleSendFailure(tempId, optimisticMsg, isNetworkFailure, apiErrorMessage(res, "Send failed"));
+                }
             }
         } catch (e) {
-            setMessages((prev) => prev.map((m) => m._id === tempId ? { ...m, status: "failed" } : m));
-            // 403: blocked / deleted account / locked group — user ko batao
-            if (e?.message && e.message !== "Send failed") Alert.alert("Message not sent", e.message);
+            handleSendFailure(tempId, optimisticMsg, false, e?.message);
         } finally {
             setSending(false);
             stopTyping();
+        }
+    };
+
+    // Ek jagah se failure handle karo — text aur media dono send paths isi ko bulate hain.
+    // Network failure (internet nahi / server tak request pahuchi hi nahi) ho to message
+    // SQL me "queued" maarke rakh do — connectivity wapas aate hi khud retry ho jaayega
+    // (retryQueuedMessages, neeche). Server ne khud mana kiya ho (blocked/locked/validation)
+    // to sirf "failed" dikhao, auto-retry mat karo — wahi behavior jo pehle tha.
+    const handleSendFailure = (tempId, optimisticMsg, isNetworkFailure, errorMessage) => {
+        const patch = { status: "failed", ...(isNetworkFailure ? { offlineQueued: true } : {}) };
+        setMessages((prev) => prev.map((m) => (m._id === tempId ? { ...m, ...patch } : m)));
+        if (isNetworkFailure) {
+            cacheMessages(chatId, [{ ...optimisticMsg, ...patch }]);
+        } else if (errorMessage && errorMessage !== "Send failed") {
+            Alert.alert("Message not sent", errorMessage);
         }
     };
 
@@ -686,11 +759,189 @@ export default function ChatScreen({ route, navigation }) {
     // Input ka send: edit chal raha ho to save, warna naya message (stickers hamesha naya)
     const submitFromInput = (args) => (editMsg && args?.messageType === "text" ? saveEdit(args.content) : sendMessage(args));
 
-    // Failed message dobara bhejo — media ka upload pehle ho chuka hai, attachment wahi rehta hai
-    const retryMessage = (m) => {
-        setMessages((prev) => prev.filter((p) => p._id !== m._id));
-        sendMessage({ content: m.content, messageType: m.messageType, uploadedData: m.attachments?.[0] ?? null, replyTo: m.replyTo ?? null });
+    // ── Non-blocking media upload queue ────────────────────────────────────────
+    //
+    //  Pehle: har file ka upload `uploading=true` ke peeche pura screen block
+    //  karta tha (Modal), ek-ek file sequentially. Ab: har asset ke liye turant
+    //  ek optimistic bubble (local preview) list me aa jaata hai, upload
+    //  background me, max MAX_CONCURRENT_UPLOADS files parallel (memory/network
+    //  overload na ho), composer/list hamesha interactive rehte hain.
+    const MAX_CONCURRENT_UPLOADS = 3;
+    const uploadQueueRef = useRef([]);
+    const activeUploadsRef = useRef(0);
+    const cancelledUploadsRef = useRef({}); // tempId -> true (soft-cancel flag, checked after upload resolves)
+
+    const runNextUpload = useCallback(() => {
+        if (activeUploadsRef.current >= MAX_CONCURRENT_UPLOADS) return;
+        const job = uploadQueueRef.current.shift();
+        if (!job) return;
+        activeUploadsRef.current += 1;
+        job().finally(() => {
+            activeUploadsRef.current -= 1;
+            runNextUpload();
+        });
+        runNextUpload(); // dusra free slot bhi try karo
+    }, []);
+
+    const enqueueUpload = useCallback((job) => {
+        uploadQueueRef.current.push(job);
+        runNextUpload();
+    }, [runNextUpload]);
+
+    const updateMsgById = useCallback((id, patch) => {
+        setMessages((prev) => prev.map((m) => (m._id === id ? { ...m, ...patch } : m)));
+    }, []);
+
+    // asset: {uri, mimeType|type, fileName|name}. existingTempId/clientMessageId
+    // milne par (retry) wahi bubble reuse hota hai, naya nahi banta.
+    const sendMediaAsset = (asset, messageType, replyTo = null, existingTempId = null, existingClientMessageId = null) => {
+        const tempId = existingTempId || `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const clientMessageId = existingClientMessageId || genClientMessageId();
+        const localUri = asset.uri;
+        const mimeType = asset.mimeType || {
+            video: "video/mp4", image: "image/jpeg", audio: "audio/mp4",
+        }[messageType] || "application/octet-stream";
+        const fileName = asset.fileName || asset.name;
+        const content = messageType === "document" ? (fileName || "") : "";
+
+        // Retry par purana createdAt (list me position) preserve karo — naya nahi.
+        const baseMsg = existingTempId ? messagesRef.current.find((m) => m._id === tempId) : null;
+        const optimisticMsg = {
+            _id: tempId, clientMessageId, content, messageType, chat: chatId,
+            sender: { _id: MY_USER_ID, name: maniAllData?.user?.name ?? "You" },
+            status: "sending", uploadProgress: 0,
+            isOptimistic: true, readBy: [], deliveredTo: [],
+            createdAt: baseMsg?.createdAt || new Date().toISOString(),
+            attachments: [{ url: localUri, filename: fileName, fileType: mimeType, _pendingUpload: true }],
+            ...(replyTo ? { replyTo } : {}),
+        };
+
+        if (existingTempId) {
+            // offlineQueued hata do — jab tak dobara fail na ho, "queued" sweep isse skip kare
+            updateMsgById(tempId, { status: "sending", uploadProgress: 0, offlineQueued: false });
+        } else {
+            setMessages((prev) => [optimisticMsg, ...prev]);
+        }
+
+        enqueueUpload(async () => {
+            try {
+                const up = await uploadMedia(localUri, mimeType, messageType, fileName, {
+                    onProgress: (pct) => updateMsgById(tempId, { uploadProgress: pct }),
+                });
+                // Upload complete hone ke BAAD check karo — cancel mid-flight nahi roka
+                // (RN par axios abort signal upload hi tod deta tha), par agar user ne
+                // tap kiya tha, uploaded file ko bhi message nahi banana.
+                if (cancelledUploadsRef.current[tempId]) {
+                    setMessages((prev) => prev.filter((m) => m._id !== tempId));
+                    return;
+                }
+                const realAttachment = { url: up.url, filename: up.filename, fileType: up.fileType, fileSize: up.fileSize };
+                updateMsgById(tempId, { attachments: [realAttachment], uploadProgress: 100 });
+
+                const payload = {
+                    chatId, content, messageType, clientMessageId,
+                    ...(replyTo?._id ? { replyTo: replyTo._id } : {}),
+                    attachments: [realAttachment],
+                };
+
+                if (isBroadcast && broadcastIds.length) {
+                    // clientMessageId sender+id par unique hai (chat-independent) — har target
+                    // chat ko apna derived id do, warna 2nd+ chats "duplicate" maani jaati hain.
+                    await Promise.all(broadcastIds.map((id) =>
+                        apiService({ method: "POST", endpoint: "messages", data: { ...payload, chatId: id, clientMessageId: `${clientMessageId}_${id}` } })));
+                    setMessages((prev) => prev.filter((m) => m._id !== tempId));
+                    return;
+                }
+
+                const res = await apiService({ method: "POST", endpoint: "messages", data: payload });
+                if (res?.success && res?.data?.message) {
+                    const sent = res.data.message;
+                    const early = pendingReceipts.current[sent?._id];
+                    delete pendingReceipts.current[sent?._id];
+                    const status = early ?? determineStatus(sent);
+                    setMessages((prev) => prev.some((m) => m._id === sent?._id)
+                        ? prev.filter((m) => m._id !== tempId)
+                        : prev.map((m) => m._id === tempId ? { ...sent, status, isOptimistic: false } : m));
+                    cacheMessages(chatId, [sent]);
+                    dispatch(updateChatLastMessage({
+                        msg: { ...sent, chat: sent?.chat ?? chatId },
+                        myUserId: MY_USER_ID,
+                        chat: {
+                            _id: chatId, isGroupChat: isGroup,
+                            displayName: chatName || "TeleBook User",
+                            displayAvatar: chatImage || DEFAULT_AVATAR,
+                            displayUser: isGroup ? null : { _id: otherUserId, name: chatName },
+                            users: [],
+                        },
+                    }));
+                    dispatch(persistChatTabs());
+                } else {
+                    // Upload ho chuka tha, sirf POST /messages fail hua — cache me real
+                    // (uploaded) attachment hi jaaye, warna retry use dobara upload kar dega.
+                    const isNetworkFailure = typeof res?.error === "string";
+                    handleSendFailure(tempId, { ...optimisticMsg, attachments: [realAttachment] }, isNetworkFailure, apiErrorMessage(res, "Send failed"));
+                }
+            } catch (e) {
+                // uploadMedia khud fail hua (ya koi aur anjaan error) — attachment abhi
+                // bhi local file hai, isliye optimisticMsg (_pendingUpload:true) hi cache ho.
+                handleSendFailure(tempId, optimisticMsg, !!e?.isNetworkFailure, e?.message);
+            } finally {
+                delete cancelledUploadsRef.current[tempId];
+            }
+        });
+
+        return tempId;
     };
+
+    // True network-abort nahi karta (RN par wahi upload tod deta tha) — bas flag
+    // on karta hai aur bubble turant hata deta hai; background upload chalta
+    // reh sakta hai par result discard ho jaata hai (dekhen sendMediaAsset).
+    const cancelUpload = (tempId) => {
+        cancelledUploadsRef.current[tempId] = true;
+        setMessages((prev) => prev.filter((m) => m._id !== tempId));
+    };
+
+    // Failed message dobara bhejo. Agar upload khud fail hua tha (attachment
+    // abhi bhi local file hai — _pendingUpload), same tempId/clientMessageId
+    // reuse karke dobara upload+send karo. Warna (upload ho gaya tha, sirf
+    // POST /messages fail hua) purana flow — attachment wahi rehta hai.
+    const retryMessage = (m) => {
+        const pendingAttachment = m.attachments?.[0];
+        if (pendingAttachment?._pendingUpload) {
+            sendMediaAsset(
+                { uri: pendingAttachment.url, mimeType: pendingAttachment.fileType, fileName: pendingAttachment.filename },
+                m.messageType, m.replyTo ?? null, m._id, m.clientMessageId
+            );
+            return;
+        }
+        sendMessage({
+            content: m.content, messageType: m.messageType, uploadedData: m.attachments?.[0] ?? null,
+            replyTo: m.replyTo ?? null, clientMessageId: m.clientMessageId, existingTempId: m._id,
+        });
+    };
+
+    // Offline-queue sweep: jo messages network na hone ki wajah se fail ho kar
+    // SQL me "queued" ho gaye the (offlineQueued:true), unhe yahan se dobara try
+    // karte hain — koi manual tap nahi chahiye. Trigger points: AppState
+    // foreground, socket reconnect, aur har successful fetchMessages/refreshLatest
+    // (jo khud proof hai ki connectivity wapas aa gayi hai) — yeh sab ek hi
+    // "reconnect moment" par ek saath bhi fire ho sakte hain. messagesRef sirf
+    // last render tak update hota hai, isliye ek chhota in-memory guard taaki
+    // ek hi burst me same message do/teen baar retry na ho (clientMessageId
+    // dedup se duplicate MESSAGE to nahi banta, par upload bewajah dobara hota).
+    const retryingIdsRef = useRef(new Set());
+    const retryQueuedMessages = useCallback(() => {
+        const queued = messagesRef.current.filter(
+            (m) => m.offlineQueued && m.status === "failed" && !retryingIdsRef.current.has(m._id)
+        );
+        queued.forEach((m) => {
+            retryingIdsRef.current.add(m._id);
+            retryMessage(m);
+            setTimeout(() => retryingIdsRef.current.delete(m._id), 15000);
+        });
+    }, []);
+    const retryQueuedRef = useRef(null);
+    retryQueuedRef.current = retryQueuedMessages;
 
     const openCamera = async () => {
         setShowAttach(false);
@@ -699,9 +950,8 @@ export default function ChatScreen({ route, navigation }) {
         const res = await ImagePicker.launchCameraAsync({ mediaTypes: ["images", "videos"], quality: 0.8 });
         if (!res.canceled) {
             const a = res.assets[0], isVid = a.type === "video";
-            try { setUploading(true); const up = await uploadMedia(a.uri, a.mimeType || (isVid ? "video/mp4" : "image/jpeg"), isVid ? "video" : "image", a.fileName); sendMessage({ content: "", messageType: isVid ? "video" : "image", uploadedData: up }); }
-            catch (e) { Alert.alert("Upload failed", e.message); }
-            finally { setUploading(false); }
+            sendMediaAsset(a, isVid ? "video" : "image", replyMsg);
+            setReplyMsg(null);
         }
     };
 
@@ -711,14 +961,16 @@ export default function ChatScreen({ route, navigation }) {
         if (status !== "granted") return Alert.alert("Permission chahiye", "Gallery allow karo");
         const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], allowsMultipleSelection: true, selectionLimit: 10, quality: 0.8 });
         if (!res.canceled) {
-            // Reply sirf pehli photo par lage (baaki par purana replyMsg closure me reh jata tha)
+            // Har asset turant apna optimistic bubble le leta hai aur background
+            // queue me chala jaata hai — list/composer kisi ke liye wait nahi karte.
+            // Reply sirf pehli item par (jaisa pehle tha).
             let replyTo = replyMsg;
-            for (const a of res.assets) {
+            res.assets.forEach((a) => {
                 const isVid = a.type === "video";
-                try { setUploading(true); const up = await uploadMedia(a.uri, a.mimeType || (isVid ? "video/mp4" : "image/jpeg"), isVid ? "video" : "image", a.fileName); await sendMessage({ content: "", messageType: isVid ? "video" : "image", uploadedData: up, replyTo }); replyTo = null; }
-                catch (e) { Alert.alert("Upload failed", e.message); }
-                finally { setUploading(false); }
-            }
+                sendMediaAsset(a, isVid ? "video" : "image", replyTo);
+                replyTo = null;
+            });
+            setReplyMsg(null);
         }
     };
 
@@ -726,10 +978,8 @@ export default function ChatScreen({ route, navigation }) {
         setShowAttach(false);
         const res = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
         if (!res.canceled && res.assets?.length) {
-            const file = res.assets[0];
-            try { setUploading(true); const up = await uploadMedia(file.uri, file.mimeType ?? "application/octet-stream", "document", file.name); sendMessage({ content: file.name, messageType: "document", uploadedData: up }); }
-            catch (e) { Alert.alert("Document upload failed", e.message); }
-            finally { setUploading(false); }
+            sendMediaAsset(res.assets[0], "document", replyMsg);
+            setReplyMsg(null);
         }
     };
 
@@ -739,10 +989,8 @@ export default function ChatScreen({ route, navigation }) {
         if (status !== "granted") return Alert.alert("Permission chahiye", "Gallery allow karo");
         const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["videos"], allowsMultipleSelection: false, quality: 1 });
         if (!res.canceled) {
-            const a = res.assets[0];
-            try { setUploading(true); const up = await uploadMedia(a.uri, a.mimeType || "video/mp4", "video", a.fileName); sendMessage({ content: "", messageType: "video", uploadedData: up }); }
-            catch (e) { Alert.alert("Video upload failed", e.message); }
-            finally { setUploading(false); }
+            sendMediaAsset(res.assets[0], "video", replyMsg);
+            setReplyMsg(null);
         }
     };
 
@@ -788,9 +1036,8 @@ export default function ChatScreen({ route, navigation }) {
         await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
         // 1 second se chhoti recording galti se tap hoti hai — mat bhejo
         if (!uri || Date.now() - recordStartedAt.current < 1000) return;
-        try { setUploading(true); const up = await uploadMedia(uri, "audio/mp4", "audio", `audio_${Date.now()}.m4a`); sendMessage({ content: "", messageType: "audio", uploadedData: up }); }
-        catch (e) { Alert.alert("Audio upload failed", e.message); }
-        finally { setUploading(false); }
+        sendMediaAsset({ uri, mimeType: "audio/mp4", fileName: `audio_${Date.now()}.m4a` }, "audio", replyMsg);
+        setReplyMsg(null);
     };
 
     const cancelRecording = async () => {
@@ -1066,7 +1313,6 @@ export default function ChatScreen({ route, navigation }) {
                 chatDaetils={chatDaetils}
                 isTyping={isTyping}
                 isOnline={isOnline}
-                uploading={uploading}
                 gotouserDetails={gotouserDetails}
                 isSelectMode={isSelectMode}
                 selectedCount={selectedMsgIds.size}
@@ -1126,6 +1372,7 @@ export default function ChatScreen({ route, navigation }) {
                         openPopup={openPopup}
                         openDocInBrowser={openDocInBrowser}
                         retryMessage={retryMessage}
+                        onCancelUpload={cancelUpload}
                         setReplyMsg={setReplyMsg}
                         setShowEmoji={setShowEmoji}
                         fmtTime={fmtTime}
@@ -1238,24 +1485,6 @@ export default function ChatScreen({ route, navigation }) {
                     uri={videoModalUri}
                     onClose={() => setVideoModalUri(null)}
                 />
-
-                {/* Media upload hone tak blocking loader — isse double-send bhi ruk jata hai */}
-                <Modal
-                    visible={uploading}
-                    transparent
-                    animationType="fade"
-                    statusBarTranslucent
-                    onRequestClose={() => { }}
-                >
-                    <View style={styles.uploadOverlay}>
-                        <View style={[styles.uploadCard, { backgroundColor: theme?.background ?? '#fff' }]}>
-                            <ActivityIndicator size="large" color="#1296f3" />
-                            <Text style={[styles.uploadCardText, { color: theme?.text ?? '#000' }]}>
-                                {t('Uploading...')}
-                            </Text>
-                        </View>
-                    </View>
-                </Modal>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -1266,9 +1495,6 @@ const styles = StyleSheet.create({
     chatBg: { flex: 1, width: '100%' },
     searchInfo: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24 },
     searchInfoText: { color: "#999", fontSize: 14, textAlign: "center" },
-    uploadOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
-    uploadCard: { minWidth: 160, paddingHorizontal: 28, paddingVertical: 24, borderRadius: 14, alignItems: 'center', gap: 14, elevation: 6 },
-    uploadCardText: { fontSize: 15, fontWeight: '500' },
     blockedBar: { paddingTop: 14, paddingHorizontal: 16, alignItems: 'center' },
     blockedText: { fontSize: 14, textAlign: 'center' },
     blockedLink: { color: '#1296f3', fontWeight: '600' },

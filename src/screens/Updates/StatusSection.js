@@ -3,7 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -67,7 +67,7 @@ const getMediaType = (status) => {
 };
 
 // ─── StatusViewer — fullscreen, no theme needed (always dark) ────────────────
-const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, onDelete }) => {
+const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, onDelete, onViewed }) => {
     const insets = useSafeAreaInsets();
     const [groupIdx, setGroupIdx] = useState(startGroupIdx);
     const [statusIdx, setStatusIdx] = useState(0);
@@ -108,7 +108,10 @@ const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, o
     useEffect(() => {
         if (!visible || !currentStatus?._id) return;
         apiService({ method: 'PUT', endpoint: `status/${currentStatus._id}/view` }).catch(() => { });
-    }, [visible, currentStatus?._id]);
+        // Parent ko turant batao taaki "Status" list se card "Viewed Status" me
+        // move ho jaye bina pura refetch kiye — backend call fire-and-forget hi rehta hai.
+        onViewed && onViewed(currentStatus._id);
+    }, [visible, currentStatus?._id, onViewed]);
 
     useEffect(() => {
         if (visible) { setGroupIdx(startGroupIdx); setStatusIdx(0); }
@@ -593,6 +596,10 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
     const [showTextComposer, setShowTextComposer] = useState(false);
     const [viewerVisible, setViewerVisible] = useState(false);
     const [viewerStartIdx, setViewerStartIdx] = useState(0);
+    // Viewer khulte waqt groups ka snapshot le lete hain — warna view karte karte
+    // koi group "unviewed" se "viewed" section me chala jaye to live-filtered
+    // array se index shift ho jata aur viewer galat status dikhane lagta.
+    const [viewerSnapshot, setViewerSnapshot] = useState([]);
 
     const myProfile = useSelector((state) => state.totalappData?.user ?? null);
 
@@ -715,22 +722,53 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
     };
 
     const handleDelete = (deletedId) => {
+        const stripDeleted = (groups) =>
+            groups.map(g => ({ ...g, statuses: g.statuses.filter(s => s._id !== deletedId) }))
+                .filter(g => g.statuses.length > 0);
+
         if (myGroup) {
             const updated = myGroup.statuses.filter(s => s._id !== deletedId);
             setMyGroup(updated.length > 0 ? { ...myGroup, statuses: updated } : null);
         }
-        setAllGroups(prev =>
-            prev.map(g => ({ ...g, statuses: g.statuses.filter(s => s._id !== deletedId) }))
-                .filter(g => g.statuses.length > 0)
-        );
+        setAllGroups(prev => stripDeleted(prev));
+        setViewerSnapshot(prev => stripDeleted(prev));
     };
 
-    const openViewer = (idx) => { setViewerStartIdx(idx); setViewerVisible(true); };
-    const viewerGroups = [...(myGroup ? [myGroup] : []), ...allGroups];
+    // Status PUT .../view fire hote hi yahan bhi mark kar dete hain — isi se
+    // StatusCard ki "allSeen" check turant badal jaati hai aur card "Status" se
+    // "Viewed Status" section me chala jaata hai, bina fetchStatuses() call kiye.
+    const markStatusViewed = useCallback((statusId) => {
+        setAllGroups(prev => prev.map(g => ({
+            ...g,
+            statuses: g.statuses.map(s => {
+                if (s._id !== statusId || isSeenByMe(s, myUserId)) return s;
+                return { ...s, viewedBy: [...toArr(s.viewedBy), { user: myUserId, viewedAt: new Date().toISOString() }] };
+            }),
+        })));
+    }, [myUserId]);
+
+    // "Status" = kam se kam ek status abhi tak unseen; "Viewed Status" = group ke
+    // saare statuses already seen — StatusCard ki ring-color logic (allSeen) ke
+    // saath consistent rakha hai.
+    const unviewedGroups = useMemo(
+        () => allGroups.filter((g) => !toArr(g?.statuses).every((s) => isSeenByMe(s, myUserId))),
+        [allGroups, myUserId]
+    );
+    const viewedGroups = useMemo(
+        () => allGroups.filter((g) => toArr(g?.statuses).length > 0 && toArr(g?.statuses).every((s) => isSeenByMe(s, myUserId))),
+        [allGroups, myUserId]
+    );
 
     const myCardGroup = myGroup || {
         user: { _id: myUserId, name: 'My Status', profilePicture: myProfile?.profilePicture },
         statuses: [],
+    };
+    const unviewedWithMe = [...(myGroup ? [myGroup] : []), ...unviewedGroups];
+
+    const openViewer = (idx, groups) => {
+        setViewerSnapshot(groups);
+        setViewerStartIdx(idx);
+        setViewerVisible(true);
     };
 
     return (
@@ -752,7 +790,7 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
             ) : (
                 <>
                     <FlatList
-                        data={allGroups}
+                        data={unviewedGroups}
                         horizontal
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
@@ -763,7 +801,7 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
                                 isMe
                                 myUserId={myUserId}
                                 isDark={isDark}
-                                onPress={() => (myGroup?.statuses?.length ? openViewer(0) : setShowPicker(true))}
+                                onPress={() => (myGroup?.statuses?.length ? openViewer(0, unviewedWithMe) : setShowPicker(true))}
                                 onAddPress={() => setShowPicker(true)}
                             />
                         }
@@ -773,17 +811,42 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
                                 isMe={false}
                                 myUserId={myUserId}
                                 isDark={isDark}
-                                onPress={() => openViewer(myGroup ? index + 1 : index)}
+                                onPress={() => openViewer(myGroup ? index + 1 : index, unviewedWithMe)}
                             />
                         )}
                     />
                     {/* Pehle ye line horizontal list ke andar aati thi aur card ke
                         bagal me adhoori dikhti thi — ab row ke neeche hai */}
-                    {allGroups.length === 0 && (
+                    {unviewedGroups.length === 0 && viewedGroups.length === 0 && (
                         <Text style={[ss.emptyText, { color: isDark ? '#555' : '#9aa5ad' }]}>
                             No recent updates from your contacts
                         </Text>
                     )}
+                </>
+            )}
+
+            {/* Viewed Status — status jo maine already dekh li hain, Status ke neeche. */}
+            {!loading && viewedGroups.length > 0 && (
+                <>
+                    <View style={ss.titleRow}>
+                        <Text style={[ss.title, { color: isDark ? '#d0d0d0' : '#222' }]}>Viewed Status</Text>
+                    </View>
+                    <FlatList
+                        data={viewedGroups}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
+                        keyExtractor={(item, i) => item?.user?._id || i.toString()}
+                        renderItem={({ item, index }) => (
+                            <StatusCard
+                                group={item}
+                                isMe={false}
+                                myUserId={myUserId}
+                                isDark={isDark}
+                                onPress={() => openViewer(index, viewedGroups)}
+                            />
+                        )}
+                    />
                 </>
             )}
 
@@ -805,11 +868,12 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
             />
             <StatusViewer
                 visible={viewerVisible}
-                groups={viewerGroups}
+                groups={viewerSnapshot}
                 startGroupIdx={viewerStartIdx}
                 myUserId={myUserId}
-                onClose={() => { setViewerVisible(false); fetchStatuses(); }}
+                onClose={() => setViewerVisible(false)}
                 onDelete={handleDelete}
+                onViewed={markStatusViewed}
             />
         </View>
     );

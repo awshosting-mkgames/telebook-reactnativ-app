@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useContext } from 'react';
 import {
-    ActivityIndicator, Image, Modal, Platform,
+    Image, Modal, Platform,
     Pressable, StatusBar, StyleSheet, Text,
     TextInput, TouchableOpacity, View,
 } from 'react-native';
@@ -9,7 +9,7 @@ import { ThemeContext } from '../../../components/ThemeContext';
 
 const ChatHeader = ({
     navigation, chatName, chatImage, isGroup, isBroadcast,
-    isTyping, isOnline, uploading, gotouserDetails, chatDaetils,
+    isTyping, isOnline, gotouserDetails, chatDaetils,
     isSelectMode, selectedCount, onCancelSelect, onForwardSelected,
     onDeleteSelected, onCopySelected, MY_USER_ID, fmtTime,
     isSearchMode, searchText, onSearchChange, onOpenSearch, onCloseSearch,
@@ -162,13 +162,6 @@ const ChatHeader = ({
                     </View>
                 </Pressable>
             </Modal>
-
-            {uploading && (
-                <View style={styles.uploadBanner}>
-                    <ActivityIndicator size="small" color="#fff" />
-                    <Text style={styles.uploadText}>Uploading...</Text>
-                </View>
-            )}
         </>
     );
 };
@@ -184,8 +177,6 @@ const styles = StyleSheet.create({
     sub: { color: '#d0eeff', fontSize: 12 },
     subTyping: { color: '#b3e5fc', fontSize: 12, fontStyle: 'italic' },
     subOnline: { color: '#a5f3c0', fontSize: 12, fontWeight: '500' },
-    uploadBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1296f3cc', paddingHorizontal: 16, paddingVertical: 6, gap: 10 },
-    uploadText: { color: '#fff', fontSize: 13 },
     searchInputWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 20, paddingHorizontal: 14, height: 40, gap: 8 },
     searchInput: { flex: 1, color: '#fff', fontSize: 16, padding: 0 },
     menuOverlay: { flex: 1, paddingTop: (Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 44) + 50, paddingRight: 8, alignItems: 'flex-end' },

@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { serializeDbWrite } from './sqliteWriteQueue';
 
 // 4 tabs (All / Groups / Unread / Calls) ka persistent store.
 // Redux sirf current copy rakhta hai, asli data yahin rehta hai aur app open
@@ -58,7 +59,7 @@ const safeParse = (json) => {
  * (tab, chat_id) primary key hai, isliye duplicate nahi bante aur dobara
  * sync par wahi row UPDATE ho jati hai.
  */
-export const replaceTabChats = async (tab, chats = []) => {
+export const replaceTabChats = (tab, chats = []) => serializeDbWrite(async () => {
     const db = await getDb();
     const now = Date.now();
 
@@ -105,7 +106,7 @@ export const replaceTabChats = async (tab, chats = []) => {
     }
 
     return chats.length;
-};
+});
 
 /** Ek tab ke chats, server wale order me. */
 export const getTabChats = async (tab) => {
@@ -138,12 +139,12 @@ export const getAllTabChats = async () => {
 };
 
 /** Ek chat ko chaaron tabs se hata do (delete/block ke baad). */
-export const deleteChatFromDb = async (chatId) => {
+export const deleteChatFromDb = (chatId) => serializeDbWrite(async () => {
     if (!chatId) return 0;
     const db = await getDb();
     const res = await db.runAsync('DELETE FROM chat_tabs WHERE chat_id = ?', [String(chatId)]);
     return res.changes ?? 0;
-};
+});
 
 /** SQL check — kya local data pehle se maujood hai? */
 export const hasChatData = async () => {
@@ -160,20 +161,20 @@ export const getChatsSyncedAt = async () => {
     return row?.value ? Number(row.value) : null;
 };
 
-export const setChatsSyncedAt = async (timestamp) => {
+export const setChatsSyncedAt = (timestamp) => serializeDbWrite(async () => {
     const db = await getDb();
     await db.runAsync(
         `INSERT INTO chat_tabs_meta (key, value) VALUES ('lastSyncedAt', ?)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
         [String(timestamp)]
     );
-};
+});
 
 /** Logout par sab saaf. */
-export const clearChatsDb = async () => {
+export const clearChatsDb = () => serializeDbWrite(async () => {
     const db = await getDb();
     await db.withTransactionAsync(async () => {
         await db.execAsync('DELETE FROM chat_tabs');
         await db.execAsync('DELETE FROM chat_tabs_meta');
     });
-};
+});
