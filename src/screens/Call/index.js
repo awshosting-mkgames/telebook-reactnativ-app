@@ -115,8 +115,8 @@ export default function Call({ navigation }) {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor="#1296f3" barStyle="light-content" />
-            <View style={styles.header}>
+            <StatusBar backgroundColor={theme?.header || '#1199ff'} barStyle="light-content" />
+            <View style={[styles.header, { backgroundColor: theme?.header || '#1199ff' }]}>
                 <Text style={styles.headerTitle}>{t('Calls')}</Text>
             </View>
 
@@ -154,7 +154,6 @@ export default function Call({ navigation }) {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        backgroundColor: '#1296f3',
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,

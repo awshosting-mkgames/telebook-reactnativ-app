@@ -7,6 +7,7 @@ import {
     syncFinished,
 } from '../redex/slices/contactsSlice';
 import apiService from './apiService';
+import { refreshChatNames } from './chatSync';
 import { checkRegisteredContacts } from './checkRegisteredContacts';
 import {
     deleteContactsNotIn,
@@ -103,7 +104,7 @@ export const loadContactsFromDb = async (dispatch) => {
  * Poora contact sync: device → server (PUT) → server (GET) → SQL → Redux.
  * @returns {Promise<{ok: boolean, count: number, reason?: string}>}
  */
-export const contactSync = async (dispatch) => {
+export const contactSync = async (dispatch, { silent = false } = {}) => {
     dispatch(syncStarted());
 
     try {
@@ -111,7 +112,10 @@ export const contactSync = async (dispatch) => {
             return { ok: false, count: 0, reason: 'unsupported-platform' };
         }
 
-        const { status } = await Contacts.requestPermissionsAsync();
+        // silent (auto sync): permission popup kabhi nahi — sirf jo already mili hai use karo
+        const { status } = silent
+            ? await Contacts.getPermissionsAsync()
+            : await Contacts.requestPermissionsAsync();
         if (status !== 'granted') {
             console.log('📇 contactSync: permission denied');
             return { ok: false, count: 0, reason: 'permission-denied' };
@@ -187,6 +191,10 @@ export const contactSync = async (dispatch) => {
         const contacts = await getAllContacts();
         dispatch(setContacts(contacts));
         dispatch(syncFinished(syncedAt));
+
+        // Contacts badle to chat list ke titles (saved naam / number) bhi refresh karo.
+        // Fail ho to sync ko fail nahi karna.
+        try { await dispatch(refreshChatNames()); } catch (e) { console.log('refreshChatNames error:', e); }
 
         // Ek summary line — sync ke baad list khali dikhe to yahin se pata chalta
         // hai ki device par kitne contacts mile aur unme kitne app par hain.

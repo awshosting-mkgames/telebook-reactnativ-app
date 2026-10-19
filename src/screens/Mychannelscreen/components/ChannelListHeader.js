@@ -23,13 +23,14 @@ const fmtCount = (n) => {
 
 export default function ChannelListHeader({
     channel, posts, activeTab, setActiveTab,
-    onBack, onEdit, onNewPost, onDeleteChannel,
+    onBack, onEdit, onNewPost, onDeleteChannel, onCopyLink, onShareLink,
 }) {
     const { t } = useTranslation();
 
     const { theme } = useContext(ThemeContext);
     const isLight = theme?.mode === 'light';
-    const styles = getStyles(isLight);
+    const hdr = theme?.header || '#1199ff';
+    const styles = getStyles(isLight, hdr);
 
     const channelName = channel?.channelName || channel?.name || 'My Channel';
     const iconUrl = getImg(channel?.channelIcon || channel?.avatar);
@@ -41,13 +42,24 @@ export default function ChannelListHeader({
         <View style={styles.headerBlock}>
 
             {/* Blue Banner */}
-            <View style={styles.banner}>
+            <View style={[styles.banner, { backgroundColor: hdr }]}>
                 <TouchableOpacity style={styles.backBtn} onPress={onBack}>
                     <Ionicons name="arrow-back" size={20} color="#fff" />
                 </TouchableOpacity>
 
                 {/* ✅ Right side: Edit + Delete buttons */}
                 <View style={styles.topRightRow}>
+                    {/* Admin ke liye Copy / Share link — URL channel.shareUrl se (parent fetch karta hai) */}
+                    {!!onCopyLink && (
+                        <TouchableOpacity style={styles.topBtn} onPress={onCopyLink}>
+                            <Ionicons name="link-outline" size={20} color="#fff" />
+                        </TouchableOpacity>
+                    )}
+                    {!!onShareLink && (
+                        <TouchableOpacity style={styles.topBtn} onPress={onShareLink}>
+                            <Ionicons name="share-social-outline" size={20} color="#fff" />
+                        </TouchableOpacity>
+                    )}
                     <TouchableOpacity style={styles.topBtn} onPress={onEdit}>
                         <Ionicons name="create-outline" size={20} color="#fff" />
                     </TouchableOpacity>
@@ -94,7 +106,7 @@ export default function ChannelListHeader({
                 >
                     <Ionicons name="albums-outline" size={16} color={activeTab === 'posts' ? '#1296f3' : (isLight ? '#aaa' : '#6b6f76')} />
                     <Text style={[styles.tabTxt, activeTab === 'posts' && styles.tabTxtActive]}>
-                        Posts ({posts.length})
+                        Posts ({postCount})
                     </Text>
                 </TouchableOpacity>
 
@@ -117,10 +129,10 @@ export default function ChannelListHeader({
     );
 }
 
-const getStyles = (isLight) => StyleSheet.create({
+const getStyles = (isLight, hdr = '#1199ff') => StyleSheet.create({
     headerBlock: { backgroundColor: isLight ? '#fff' : '#1a1d23', marginBottom: 10 },
 
-    banner: { height: 170, backgroundColor: '#1296f3', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 44 },
+    banner: { height: 170, backgroundColor: hdr, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 44 },
     backBtn: { position: 'absolute', top: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 8 : 52, left: 16, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 20, padding: 8 },
 
     // ✅ edit + delete ek row mein, right side
@@ -155,7 +167,7 @@ const getStyles = (isLight) => StyleSheet.create({
     statLbl: { fontSize: 12, color: isLight ? '#aaa' : '#8a8f96', fontWeight: '500' },
     statSep: { width: 1, height: 36, backgroundColor: isLight ? '#e0e0e0' : '#2a2d33' },
 
-    newPostBtn: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#1296f3', paddingVertical: 13, borderRadius: 14, elevation: 3, shadowColor: '#1296f3', shadowOpacity: 0.3, shadowRadius: 6, marginTop: 20 },
+    newPostBtn: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: hdr, paddingVertical: 13, borderRadius: 14, elevation: 3, shadowColor: '#1296f3', shadowOpacity: 0.3, shadowRadius: 6, marginTop: 20 },
     newPostTxt: { color: '#fff', fontWeight: '800', fontSize: 15 },
 
     tabsRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: isLight ? '#f0f0f0' : '#2a2d33', marginTop: 10 },

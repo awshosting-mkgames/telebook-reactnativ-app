@@ -23,11 +23,42 @@ const ANDROID_CHANNEL_ID = 'default_channel';
 // ke baad badal nahi sakti isliye shuru se hi apna id.
 const CALL_CHANNEL_ID = 'incoming_calls';
 
+// Part1 #16 — sound/vibration user setting ke hisaab se alag channels. Android
+// mein channel ki sound/vibration banne ke baad badal nahi sakti, isliye har
+// combination ka apna NAYA id hai aur setting dekh kar channel chunte hain.
+const MSG_CHANNELS = {
+    both: 'msgs_default', // sound + vibration
+    soundOnly: 'msgs_sound',
+    vibrateOnly: 'msgs_vibrate',
+    silent: 'msgs_silent',
+};
+
+// Redux store se user ki notificationSettings (lazy require: import cycle se bachne ke liye).
+// Background/headless context mein store khali ho sakta hai — tab default (sound+vibration on).
+function getNotifSettings() {
+    try {
+        // eslint-disable-next-line global-require
+        const { store } = require('../redex/store');
+        return store.getState()?.totalappData?.user?.notificationSettings || {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function pickMessageChannel(ns = {}) {
+    const sound = ns.sound !== false;
+    const vibration = ns.vibration !== false;
+    if (sound && vibration) return MSG_CHANNELS.both;
+    if (sound) return MSG_CHANNELS.soundOnly;
+    if (vibration) return MSG_CHANNELS.vibrateOnly;
+    return MSG_CHANNELS.silent;
+}
+
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
         shouldShowBanner: true,
         shouldShowList: true,
-        shouldPlaySound: true,
+        shouldPlaySound: getNotifSettings().sound !== false,
         shouldSetBadge: true,
     }),
 });
@@ -56,6 +87,27 @@ export async function setupAndroidChannel() {
                     Notifications.AndroidNotificationVisibility.PUBLIC,
             }
         );
+
+        // Setting-based message channels (default_channel legacy ke liye jaisa tha waisa hi).
+        // `sound` key sirf silent variants mein null; baaki mein key hatane par system default sound.
+        const base = {
+            importance: Notifications.AndroidImportance.HIGH,
+            lightColor: '#6C63FF',
+            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        };
+        const defs = [
+            { id: MSG_CHANNELS.both, name: 'Messages', opts: { vibrationPattern: [0, 250, 250, 250], enableVibrate: true } },
+            { id: MSG_CHANNELS.soundOnly, name: 'Messages (no vibration)', opts: { enableVibrate: false } },
+            { id: MSG_CHANNELS.vibrateOnly, name: 'Messages (vibrate only)', opts: { sound: null, vibrationPattern: [0, 250, 250, 250], enableVibrate: true } },
+            { id: MSG_CHANNELS.silent, name: 'Messages (silent)', opts: { sound: null, enableVibrate: false } },
+        ];
+        for (const d of defs) {
+            try {
+                await Notifications.setNotificationChannelAsync(d.id, { name: d.name, ...base, ...d.opts });
+            } catch (e) {
+                console.log('❌ message channel error:', d.id, e?.message);
+            }
+        }
     }
 }
 
@@ -352,6 +404,7 @@ async function showLocalNotification(remoteMessage) {
             remoteMessage;
 
         const config = getRouteConfig(data);
+        const ns = getNotifSettings();
 
         await Notifications.scheduleNotificationAsync({
             content: {
@@ -365,7 +418,9 @@ async function showLocalNotification(remoteMessage) {
                     data?.body ??
                     '',
 
-                sound: 'default',
+                // Part1 #16 — user ne sound band ki to null; vibration band ho to khaali pattern.
+                sound: ns.sound === false ? null : 'default',
+                ...(ns.vibration === false ? { vibrate: [] } : {}),
 
                 data: {
                     ...data,
@@ -380,7 +435,7 @@ async function showLocalNotification(remoteMessage) {
                 Platform.OS === 'android'
                     ? {
                           type: 'channel',
-                          channelId: ANDROID_CHANNEL_ID,
+                          channelId: pickMessageChannel(ns),
                       }
                     : null,
         });

@@ -34,11 +34,21 @@ const AudioPlayer = ({ url }) => {
         Animated.timing(progressAnim, { toValue: prog, duration: 100, useNativeDriver: false }).start();
     }, [position, duration, progressAnim]);
 
-    // Jab audio khud khatam ho jaye to cursor ko shuruat mein le jayein
+    // Loop kabhi nahi — explicitly false (kuch platform par purana loop flag reh jata tha)
+    useEffect(() => {
+        try { player.loop = false; } catch (e) { /* player release ho chuka */ }
+    }, [player]);
+
+    // Jab audio khud khatam ho jaye to pehle pause, phir cursor shuruat par. Dubara
+    // sirf user ke play tap par chalega (auto-replay loop bug fix).
     useEffect(() => {
         if (status?.didJustFinish) {
+            try {
+                player.pause();
+                player.loop = false;
+                Promise.resolve(player.seekTo(0)).catch(() => { });
+            } catch (e) { /* player release ho chuka */ }
             progressAnim.setValue(0);
-            player.seekTo(0);
         }
     }, [status?.didJustFinish, player, progressAnim]);
 

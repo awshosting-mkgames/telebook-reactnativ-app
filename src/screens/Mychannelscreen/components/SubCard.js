@@ -28,7 +28,7 @@ export default function SubCard({ item }) {
                 </View>
             }
             <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{item?.name || 'Unknown'}</Text>
+                <Text style={styles.name}>{item?.name || item?.mobile || 'User'}</Text>
                 {item?.mobile && <Text style={styles.mobile}>{item.mobile}</Text>}
             </View>
 

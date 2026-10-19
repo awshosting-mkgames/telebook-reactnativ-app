@@ -7,7 +7,11 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
+import SearchBar from '../../components/SearchBar';
 import { searchUserByPhone } from '../../components/searchUserByPhone';
+import Toast from 'react-native-toast-message';
+import Config from '../../services/config';
+import { contactSync } from '../../services/contactSync';
 import CreateChannelPopup from '../../components/CreateChannelPopup';
 import apiService from '../../services/apiService';
 import { useSelector, useDispatch, shallowEqual } from 'react-redux';
@@ -23,6 +27,7 @@ export default function Contact({ navigation }) {
     const loading = useSelector((state) => state.contacts?.syncing ?? false);
     const maniAllData = useSelector((state) => state.totalappData);
     const MY_USER_ID = maniAllData?.userId ?? '';
+    const dispatch = useDispatch();
 
     const debounceRef = useRef(null);
     const [createChannelPopup, setCreateChannelPopup] = useState(false);
@@ -30,6 +35,46 @@ export default function Contact({ navigation }) {
     const [searchResult, setSearchResult] = useState([]);
     const [searchLoading, setSearchLoading] = useState(false);
     const [contactSearch, setContactSearch] = useState('');
+    // Number search ka server lookup (local contact me nahi mila to)
+    const [remote, setRemote] = useState({ loading: false, users: [], done: false });
+    const remoteReq = useRef(0);
+    const headerBg = theme.header || '#1199ff';
+
+    // Mobile number (>=10 digits) type kiya aur local contact match nahi mila => 400ms debounce, phir lookup.
+    // Naya type karne par purani request ka response ignore (remoteReq id).
+    useEffect(() => {
+        const id = ++remoteReq.current;
+        const raw = search.trim();
+        const rawDigits = raw.replace(/\D/g, '');
+        const isMobileQuery = /^[\d\s+()-]+$/.test(raw) && rawDigits.length >= 10;
+        if (!isMobileQuery || searchResult.length > 0) {
+            setRemote({ loading: false, users: [], done: false });
+            return undefined;
+        }
+        setRemote({ loading: true, users: [], done: false });
+        const timer = setTimeout(async () => {
+            const users = await searchUserByPhone(rawDigits);
+            if (id !== remoteReq.current) return;
+            setRemote({ loading: false, users: (users || []).filter((u) => u?._id && u._id !== MY_USER_ID), done: true });
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [search, searchResult.length, MY_USER_ID]);
+
+    // Header ka 'Contact Refresh' — fail hone par chats/contacts kabhi delete nahi hote (contactSync purana data rakhta hai)
+    const handleRefreshContacts = async () => {
+        if (loading) return;
+        const result = await contactSync(dispatch);
+        if (result.ok) {
+            Toast.show({ type: 'success', text1: 'Contacts refreshed', text2: `${result.count} contacts updated` });
+            return;
+        }
+        const message = result.reason === 'permission-denied'
+            ? 'Contacts permission is needed to refresh'
+            : result.reason === 'no-contacts'
+                ? 'No contacts found on this device'
+                : 'Could not refresh contacts. Please try again.';
+        Toast.show({ type: 'error', text1: 'Refresh failed', text2: message });
+    };
 
     useEffect(() => {
         return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
@@ -101,7 +146,7 @@ export default function Contact({ navigation }) {
                 const otherUser = (response?.data?.chat?.users || []).find(u => u?._id !== MY_USER_ID);
                 navigation.navigate('Chat', {
                     chatId: response?.data?.chat?._id,
-                    chatName: otherUser?.name || 'User',
+                    chatName: otherUser?.name || otherUser?.mobile || item?.name || item?.phone || 'User',
                     chatImage: otherUser?.profilePicture,
                     isGroup: false,
                 });
@@ -141,7 +186,7 @@ export default function Contact({ navigation }) {
                 />
                 <View style={styles.contactInfo}>
                     <Text style={[styles.contactName, { color: theme.text }]}>
-                        {item?.name || item?.displayName || 'Unknown'}
+                        {item?.name || item?.displayName || phone || 'User'}
                     </Text>
                     <Text style={[styles.contactStatus, { color: isDark ? '#aaaaaa' : '#777777' }]}>
                         {phone || 'No number'}
@@ -155,7 +200,7 @@ export default function Contact({ navigation }) {
                     <View
                         style={{
                             ...styles.inviteContainer,
-                            borderColor: '#4491f2',
+                            borderColor: headerBg,
                             borderWidth: 2,
                             borderRadius: 15,
                             paddingVertical: 5,
@@ -184,14 +229,38 @@ export default function Contact({ navigation }) {
             return <ActivityIndicator size="small" color={theme.primary || '#4491f2'} style={{ marginVertical: 20 }} />;
         const digits = cleanPhoneNumber(search);
         if (!searchResult.length) {
-            if (digits.length === 10) {
+            if (remote.loading) {
+                return <ActivityIndicator size="small" color={headerBg} style={{ marginVertical: 20 }} />;
+            }
+            if (remote.users.length) {
+                return (
+                    <View style={[styles.searchResultBox, { backgroundColor: theme.background }]}>
+                        {remote.users.map((u) => (
+                            <ContactItem
+                                key={u._id}
+                                type={2}
+                                item={{
+                                    _id: u._id,
+                                    name: u.name || u.mobile || 'User',
+                                    phone: u.mobile || '',
+                                    avatar: u.profilePicture ? Config.MEDIA_URL + u.profilePicture : null,
+                                    isRegistered: true,
+                                }}
+                            />
+                        ))}
+                    </View>
+                );
+            }
+            if (digits.length >= 10) {
                 return (
                     <View style={[styles.searchResultBox, { backgroundColor: theme.background, borderBottomColor: isDark ? '#333' : '#eee' }]}>
                         <View style={[styles.contactItem, { borderBottomColor: isDark ? '#333' : '#eee' }]}>
                             <Image source={{ uri: DEFAULT_AVATAR }} style={[styles.avatar, { backgroundColor: isDark ? '#3a3a3a' : '#e0e0e0' }]} />
                             <View style={styles.contactInfo}>
                                 <Text style={[styles.contactName, { color: theme.text }]}>{digits}</Text>
-                                <Text style={[styles.contactStatus, { color: isDark ? '#aaaaaa' : '#777777' }]}>{t('Not on Telebook')}</Text>
+                                <Text style={[styles.contactStatus, { color: isDark ? '#aaaaaa' : '#777777' }]}>
+                                    {remote.done ? `${t('No user found')} - ${t('Not on Telebook')}` : t('Not on Telebook')}
+                                </Text>
                             </View>
                             <TouchableOpacity onPress={() => handleInvite(digits)} style={styles.inviteContainer}>
                                 <Text style={styles.inviteText}>{t('Invite Now')}</Text>
@@ -218,35 +287,35 @@ export default function Contact({ navigation }) {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar barStyle="light-content" backgroundColor="#4491f2" />
-            <View style={styles.header}>
+            <StatusBar barStyle="light-content" backgroundColor={headerBg} />
+            <View style={[styles.header, { backgroundColor: headerBg }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Ionicons name="arrow-back" size={26} color="white" />
+                    <Ionicons name="arrow-back" size={26} color={theme.headerText || 'white'} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{t('Contact')}</Text>
+                <Text style={[styles.headerTitle, { flex: 1, color: theme.headerText || 'white' }]}>{t('Contact')}</Text>
+                <TouchableOpacity
+                    onPress={handleRefreshContacts}
+                    disabled={loading}
+                    style={styles.refreshBtn}
+                    accessibilityLabel="Contact Refresh"
+                    activeOpacity={0.7}
+                >
+                    {loading ? (
+                        <ActivityIndicator size="small" color={theme.headerText || 'white'} />
+                    ) : (
+                        <Ionicons name="refresh" size={20} color={theme.headerText || 'white'} />
+                    )}
+                    <Text style={[styles.refreshLabel, { color: theme.headerText || 'white' }]} numberOfLines={1}>Contact Refresh</Text>
+                </TouchableOpacity>
             </View>
             <View>
-                <View style={styles.searchSection}>
-                    <View style={[styles.searchBar, { backgroundColor: isDark ? '#2a2a2a' : '#f2f2f2' }]}>
-                        <Ionicons name="search" size={20} color={isDark ? '#aaaaaa' : '#666666'} style={styles.searchIcon} />
-                        <TextInput
-                            placeholder={t('Search')}
-                            style={[styles.searchInput, { color: isDark ? '#e6e3e3' : '#000000' }]}
-                            placeholderTextColor={isDark ? '#888888' : '#999999'}
-                            value={search}
-                            onChangeText={handleSearch}
-                            autoCorrect={false}
-                            autoComplete="off"
-                            autoCapitalize="none"
-                            blurOnSubmit={false}
-                            returnKeyType="search"
-                            importantForAutofill="no"
-                        />
-                        <TouchableOpacity onPress={() => Keyboard.dismiss()}>
-                            <Ionicons name="apps" size={20} color={isDark ? '#dddddd' : '#333333'} style={styles.dialpadIcon} />
-                        </TouchableOpacity>
-                    </View>
-                </View>
+                <SearchBar
+                    value={search}
+                    onChangeText={handleSearch}
+                    placeholder={t('Search')}
+                    theme={theme}
+                    inputProps={{ autoComplete: 'off', blurOnSubmit: false, importantForAutofill: 'no' }}
+                />
                 <SearchResultList />
                 <View style={styles.actionsContainer}>
                     <ActionItem type="group" icon="people" label={t('New group')} />
@@ -286,12 +355,14 @@ export default function Contact({ navigation }) {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        backgroundColor: '#4491f2', height: 90,
+        height: 90,
         flexDirection: 'row', alignItems: 'center',
         paddingHorizontal: 15,
         paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 20,
     },
     headerTitle: { color: 'white', fontSize: 20, fontWeight: '500', marginLeft: 25 },
+    refreshBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6, paddingHorizontal: 6, maxWidth: 150 },
+    refreshLabel: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
     searchSection: { padding: 15 },
     searchBar: {
         flexDirection: 'row', alignItems: 'center', borderRadius: 25,

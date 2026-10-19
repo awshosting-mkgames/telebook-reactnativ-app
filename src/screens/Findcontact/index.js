@@ -5,8 +5,9 @@ import {
 } from 'react-native';
 
 // Avatar with fallback initials
-const AvatarImg = ({ uri, name = '', size = 50, style }) => {
+const AvatarImg = ({ uri, name: rawName = '', size = 50, style }) => {
     const [error, setError] = useState(false);
+    const name = rawName || '';
     const initials = name.trim().split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
     const colors = ['#4491f2', '#25D366', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA'];
     const bg = colors[(name.charCodeAt(0) || 0) % colors.length];
@@ -57,7 +58,7 @@ const FindContact = ({ navigation, route }) => {
         const q = searchText.trim().toLowerCase();
         if (!q) return allContacts ?? [];
         return (allContacts ?? []).filter(
-            (c) => c.name?.toLowerCase().includes(q) || c.phone?.includes(q)
+            (c) => (c.name || '').toLowerCase().includes(q) || c.phone?.includes(q)
         );
     }, [searchText, allContacts]);
 
@@ -132,14 +133,14 @@ const FindContact = ({ navigation, route }) => {
                 activeOpacity={0.7}
             >
                 <View style={styles.avatarWrapper}>
-                    <AvatarImg uri={getAvatar(item)} name={item.name} size={50} />
+                    <AvatarImg uri={getAvatar(item)} name={item.name || item.phone || 'User'} size={50} />
                     {registered && (
                         <View style={[styles.onlineDot, { borderColor: selected ? selectedBg : cardBg }]} />
                     )}
                 </View>
                 <View style={styles.contactInfo}>
                     <Text style={[styles.contactName, { color: textPrimary }]} numberOfLines={1}>
-                        {item.name}
+                        {item.name || item.phone || 'User'}
                     </Text>
                     <Text style={[styles.contactPhone, { color: textSecondary }]} numberOfLines={1}>
                         {item.phone}
@@ -175,7 +176,7 @@ const FindContact = ({ navigation, route }) => {
                         <View style={styles.chipWrap}>
                             {/* Avatar row with close button absolutely on top-right */}
                             <View style={styles.chipAvatarWrap}>
-                                <AvatarImg uri={getAvatar(item)} name={item.name} size={CHIP_AVATAR} />
+                                <AvatarImg uri={getAvatar(item)} name={item.name || item.phone || 'User'} size={CHIP_AVATAR} />
                                 <TouchableOpacity
                                     onPress={() => removeSelected(item.id)}
                                     style={[styles.chipRemove, { backgroundColor: isDark ? '#0a0a0a' : '#ffffff' }]}
@@ -189,7 +190,7 @@ const FindContact = ({ navigation, route }) => {
                                 style={[styles.chipName, { color: isDark ? '#7ab4f5' : '#4491f2' }]}
                                 numberOfLines={1}
                             >
-                                {item.name.split(' ')[0]}
+                                {(item.name || item.phone || 'User').split(' ')[0]}
                             </Text>
                         </View>
                     )}

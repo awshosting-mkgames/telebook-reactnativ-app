@@ -40,6 +40,7 @@ export default function Wallet({ navigation }) {
     const [paymentConfig, setPaymentConfig] = useState(getCachedPaymentConfig());
 
     const isDark = theme?.mode === 'dark';
+    const headerBg = theme?.header || '#1199ff';
     const colors = {
         bg: isDark ? '#121212' : '#f2f4f7',
         card: isDark ? '#1e1e1e' : '#ffffff',
@@ -81,6 +82,10 @@ export default function Wallet({ navigation }) {
                 <View style={{ flex: 1 }}>
                     <Text style={[styles.txDesc, { color: colors.txt }]} numberOfLines={1}>{item.description || item.reason}</Text>
                     <Text style={[styles.txDate, { color: colors.sub }]}>{fmtDate(item.createdAt)} · Balance: {item.balanceAfter}</Text>
+                    {/* Part 2 §2.18: feature + order/payment reference */}
+                    <Text style={[styles.txDate, { color: colors.sub }]} numberOfLines={1}>
+                        {item.feature || item.reason}{item.reference ? ` · Ref: ${item.reference}` : ''}
+                    </Text>
                 </View>
                 <Text style={[styles.txAmount, { color: isCredit ? '#27ae60' : '#e53935' }]}>
                     {isCredit ? '+' : '-'}{item.amount}
@@ -91,12 +96,16 @@ export default function Wallet({ navigation }) {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar backgroundColor="#0084ff" barStyle="light-content" />
-            <View style={styles.header}>
+            <StatusBar backgroundColor={headerBg} barStyle="light-content" />
+            <View style={[styles.header, { backgroundColor: headerBg }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Coin Wallet</Text>
+                <Text style={[styles.headerTitle, { flex: 1 }]}>Coin Wallet</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('PlanHistory')} hitSlop={10} style={styles.planHistoryLink}>
+                    <Ionicons name="receipt-outline" size={15} color="#fff" />
+                    <Text style={styles.planHistoryText}>Plan History</Text>
+                </TouchableOpacity>
             </View>
 
             {walletLoading && !wallet ? (
@@ -182,10 +191,12 @@ export default function Wallet({ navigation }) {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        backgroundColor: '#0084ff', flexDirection: 'row', alignItems: 'center', gap: 18,
+        flexDirection: 'row', alignItems: 'center', gap: 18,
         paddingHorizontal: 16, paddingBottom: 14,
         paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
     },
+    planHistoryLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    planHistoryText: { color: '#fff', fontSize: 13, fontWeight: '600' },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
 
     balanceCard: { borderRadius: 16, padding: 18, marginBottom: 16 },

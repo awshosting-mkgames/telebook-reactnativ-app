@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useContext, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -12,13 +12,15 @@ import {
     StatusBar,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import Toast from 'react-native-toast-message';
 import { ThemeContext } from '../../components/ThemeContext';
+import SearchBar from '../../components/SearchBar';
+import { searchUsersPaged } from '../../components/searchUserByPhone';
+import { useBadgePlacements } from '../../services/badgeConfig';
 import {
     clearUnread,
     removeChat,
@@ -48,10 +50,14 @@ const Freechat = ({ navigation }) => {
 
     const [activeFilter, setActiveFilter] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchFocused, setSearchFocused] = useState(false);
     const [menuVisible, setMenuVisible] = useState(false);
     const [menuItem, setMenuItem] = useState(null);
     const [headerMenuVisible, setHeaderMenu] = useState(false);
+    const placements = useBadgePlacements();
+    // Global 'More people on Telebook' search state
+    const [remote, setRemote] = useState({ users: [], loading: false, loadingMore: false, page: 1, hasMore: false, done: false });
+    const remoteReq = useRef(0);
+    const openingChat = useRef(false);
 
     // Tab change par koi API/loading nahi — chaaron tabs ka data pehle se
     // Redux me hai, isliye filter switch instant hona chahiye (no spinner).
@@ -131,8 +137,73 @@ const Freechat = ({ navigation }) => {
         ...filteredChats.filter(c => !isChatPinned(c)),
     ];
 
+    // ── Global search ('More people on Telebook') ────────────────────────────
+    // Local filter hamesha chalta hai. Local results kam (<3) hon aur query name (>=3 chars)
+    // ya mobile (>=10 digits) ho tabhi 400ms debounce ke baad users/search. Har keystroke par nahi.
+    const q = searchQuery.trim();
+    const qDigits = q.replace(/\D/g, '');
+    const looksLikeNumber = /^[\d\s+()-]+$/.test(q);
+    const isNumberQuery = looksLikeNumber && qDigits.length >= 10;
+    const remoteEligible = isNumberQuery || (!looksLikeNumber && q.length >= 3);
+    const fewLocal = filteredChats.length < 3;
+    const remoteActive = remoteEligible && fewLocal;
+    const remoteTerm = isNumberQuery ? qDigits : q;
+
+    useEffect(() => {
+        const id = ++remoteReq.current; // purane response ko stale mark karo
+        if (!remoteActive) {
+            setRemote({ users: [], loading: false, loadingMore: false, page: 1, hasMore: false, done: false });
+            return undefined;
+        }
+        setRemote({ users: [], loading: true, loadingMore: false, page: 1, hasMore: false, done: false });
+        const timer = setTimeout(async () => {
+            const { users, hasMore } = await searchUsersPaged(remoteTerm, { page: 1 });
+            if (id !== remoteReq.current) return;
+            setRemote({ users, loading: false, loadingMore: false, page: 1, hasMore, done: true });
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [remoteActive, remoteTerm]);
+
+    const loadMoreRemote = async () => {
+        if (remote.loadingMore || !remote.hasMore) return;
+        const id = remoteReq.current;
+        const nextPage = remote.page + 1;
+        setRemote((r) => ({ ...r, loadingMore: true }));
+        const { users, hasMore } = await searchUsersPaged(remoteTerm, { page: nextPage });
+        if (id !== remoteReq.current) return;
+        setRemote((r) => ({
+            ...r,
+            users: [...r.users, ...users.filter((u) => !r.users.some((x) => x._id === u._id))],
+            page: nextPage, hasMore, loadingMore: false,
+        }));
+    };
+
+    // Jinse pehle se chat list me chat hai unhe 'more people' me dobara nahi dikhana
+    const localUserIds = new Set(chats.map((c) => c.displayUser?._id).filter(Boolean));
+    const remoteUsers = remote.users.filter((u) => u?._id && u._id !== MY_USER_ID && !localUserIds.has(u._id));
+
+    const openRemoteUser = async (user) => {
+        if (openingChat.current) return;
+        openingChat.current = true;
+        setTimeout(() => { openingChat.current = false; }, 800);
+        Keyboard.dismiss();
+        const res = await apiService({ method: 'POST', endpoint: 'chats', data: { userId: user._id } });
+        const chat = res?.data?.chat;
+        if (!res?.success || !chat?._id) {
+            Toast.show({ type: 'error', text1: 'Could not open chat' });
+            return;
+        }
+        const other = (chat.users || []).find((u) => u?._id !== MY_USER_ID) || user;
+        navigation.navigate('Chat', {
+            chatId: chat._id,
+            chatName: user.name || user.mobile || other?.mobile || 'User',
+            chatImage: other?.profilePicture,
+            isGroup: false,
+            otherUserId: user._id,
+        });
+    };
+
     // Jaldi-jaldi do tap par Chat screen do baar na khule
-    const openingChat = useRef(false);
     const gotoChatPage = (item) => {
         if (openingChat.current) return;
         openingChat.current = true;
@@ -157,7 +228,12 @@ const Freechat = ({ navigation }) => {
     // Redux (aur SQL) me isPinned turant badalta hai; fail hua to wapas
     const handlePin = async (item) => {
         const res = await setChatPinned(dispatch, item, !isChatPinned(item), MY_USER_ID);
-        if (!res.ok && res.message) Alert.alert('Error', res.message);
+        if (!res.ok && res.planLimit) {
+            Alert.alert('Plan Limit Reached', ['Plan Limit Reached – Upgrade your plan to continue.', res.message].filter(Boolean).join('\n'), [
+                { text: 'Upgrade Plan', onPress: () => navigation.navigate('Plans') },
+                { text: 'Cancel', style: 'cancel' },
+            ]);
+        } else if (!res.ok && res.message) Alert.alert('Error', res.message);
     };
 
     const handleDelete = async (item) => {
@@ -198,21 +274,59 @@ const Freechat = ({ navigation }) => {
             onLongPress={handleLongPress}
             isPinned={isChatPinned(item)}
             isBlocked={isChatBlocked(item)}
+            showBadge={activeFilter === 'All' ? placements.home : placements.chatList}
+            showRing={!!placements.ring}
         />
     );
+
+    const renderRemoteFooter = () => {
+        if (!remoteActive) return null;
+        const mutedColor = isDark ? '#8696a0' : '#667781';
+        return (
+            <View style={styles.remoteSection}>
+                <Text style={[styles.remoteTitle, { color: mutedColor }]}>More people on Telebook</Text>
+                {remote.loading ? (
+                    <ActivityIndicator size="small" color={theme.header || '#1199ff'} style={{ marginVertical: 16 }} />
+                ) : remoteUsers.length === 0 ? (
+                    <Text style={[styles.remoteEmpty, { color: mutedColor }]}>No user found</Text>
+                ) : (
+                    <>
+                        {remoteUsers.map((u) => (
+                            <TouchableOpacity key={u._id} style={styles.remoteRow} onPress={() => openRemoteUser(u)} activeOpacity={0.7}>
+                                <Image
+                                    source={{ uri: resolveAvatar(u.profilePicture, DEFAULT_AVATAR) }}
+                                    style={styles.remoteAvatar}
+                                />
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                    <Text style={[styles.remoteName, { color: theme.text || '#111' }]} numberOfLines={1}>
+                                        {u.name || u.mobile || 'User'}
+                                    </Text>
+                                    {!!u.mobile && (
+                                        <Text style={[styles.remoteSub, { color: mutedColor }]} numberOfLines={1}>{u.mobile}</Text>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                        {remote.hasMore && (
+                            <TouchableOpacity onPress={loadMoreRemote} style={styles.loadMoreBtn} disabled={remote.loadingMore}>
+                                {remote.loadingMore ? (
+                                    <ActivityIndicator size="small" color={theme.header || '#1199ff'} />
+                                ) : (
+                                    <Text style={[styles.loadMoreText, { color: theme.header || '#1199ff' }]}>Load more</Text>
+                                )}
+                            </TouchableOpacity>
+                        )}
+                    </>
+                )}
+            </View>
+        );
+    };
 
     const avatarUri = userData?.profilePicture
         ? resolveAvatar(userData.profilePicture, DEFAULT_AVATAR)
         : DEFAULT_AVATAR;
     const totalUnread = chats.reduce((sum, c) => sum + (c.unreadCount || c.unseenCount || 0), 0);
 
-    const searchBg = isDark ? '#2a2a2a' : '#f2f2f2';
-    const searchFocusedBg = isDark ? '#222222' : '#ffffff';
-    const searchBorderColor = searchFocused ? '#1199ff' : isDark ? '#3a3a3a' : 'transparent';
-    const searchIconColor = searchFocused ? '#1199ff' : isDark ? '#888' : '#bbb';
-    const searchTextColor = isDark ? '#e0e0e0' : '#000000';
-    const placeholderColor = isDark ? '#777' : '#bbb';
-    const clearIconColor = isDark ? '#777' : '#ccc';
     const filterBorderColor = isDark ? '#3a3a3a' : '#e0e0e0';
     const filterTextColor = isDark ? '#aaa' : '#777';
     const emptyIconBg = isDark ? '#1e1e1e' : '#f5f5f5';
@@ -220,7 +334,7 @@ const Freechat = ({ navigation }) => {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor="#1199ff" barStyle="light-content" />
+            <StatusBar backgroundColor={theme.header || '#1199ff'} barStyle="light-content" />
             <ContextMenuPopup
                 visible={menuVisible}
                 item={menuItem}
@@ -238,13 +352,13 @@ const Freechat = ({ navigation }) => {
                 syncing={syncing}
                 onProfile={() => navigation.navigate('Settings')}
             />
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
                 <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.profileBtn} activeOpacity={0.8}>
                     <Image source={{ uri: avatarUri }} style={styles.profileAvatar} />
                     {totalUnread > 0 && <View style={styles.headerBadge} />}
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>
-                    <Text style={styles.headerTitle}>{userData?.name || 'Chats'}</Text>
+                    <Text style={[styles.headerTitle, { color: theme.headerText || '#fff' }]}>{userData?.name || userData?.mobile || 'Chats'}</Text>
                     {syncing ? (
                         <Text style={styles.syncingLabel}>Syncing...</Text>
                     ) : syncLoading ? (
@@ -274,30 +388,12 @@ const Freechat = ({ navigation }) => {
                     <Ionicons name="ellipsis-vertical" size={22} color="#fff" />
                 </TouchableOpacity>
             </View>
-            <View style={[
-                styles.searchContainer,
-                {
-                    backgroundColor: searchFocused ? searchFocusedBg : searchBg,
-                    borderColor: searchBorderColor,
-                },
-            ]}>
-                <Ionicons name="search-outline" size={17} color={searchIconColor} />
-                <TextInput
-                    style={[styles.searchInput, { color: searchTextColor }]}
-                    placeholder="Search by name or number..."
-                    placeholderTextColor={placeholderColor}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    onFocus={() => setSearchFocused(true)}
-                    onBlur={() => setSearchFocused(false)}
-                    returnKeyType="search"
-                />
-                {searchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearBtn}>
-                        <Ionicons name="close-circle" size={16} color={clearIconColor} />
-                    </TouchableOpacity>
-                )}
-            </View>
+            <SearchBar
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search by name or number..."
+                theme={theme}
+            />
             <View style={styles.filterRow}>
                 {filters.map((f) => (
                     <TouchableOpacity
@@ -333,12 +429,11 @@ const Freechat = ({ navigation }) => {
                     // Search ka keyboard khula ho tab bhi ek hi tap me chat khule
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
-                    ItemSeparatorComponent={() => (
-                        <View style={{ height: 0.5, backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0', marginLeft: 82 }} />
-                    )}
-                    contentContainerStyle={sortedChats.length === 0 ? styles.emptyContainer : styles.listContent}
+                    // Separator lines hata di (Part1 #24) — row ke beech koi line nahi
+                    contentContainerStyle={sortedChats.length === 0 && !remoteActive ? styles.emptyContainer : styles.listContent}
+                    ListFooterComponent={renderRemoteFooter}
                     ListEmptyComponent={
-                        <View style={styles.emptyWrap}>
+                        remoteActive ? null : <View style={styles.emptyWrap}>
                             <View style={[styles.emptyIcon, { backgroundColor: emptyIconBg }]}>
                                 <Ionicons name="chatbubbles-outline" size={44} color={emptyIconColor} />
                             </View>
@@ -369,7 +464,7 @@ const styles = StyleSheet.create({
     emptyTitle: { fontSize: 17, fontWeight: '600' },
     emptySubtitle: { fontSize: 13 },
 
-    header: { backgroundColor: '#1199ff', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 14, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 10, gap: 8 },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 14, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 10, gap: 8 },
     profileBtn: { position: 'relative' },
     profileAvatar: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: 'rgba(255,255,255,0.6)', backgroundColor: '#cce5ff' },
     headerBadge: { position: 'absolute', top: 0, right: 0, width: 10, height: 10, borderRadius: 5, backgroundColor: '#25D366', borderWidth: 1.5, borderColor: '#1199ff' },
@@ -379,9 +474,15 @@ const styles = StyleSheet.create({
     headerIconBtn: { padding: 6, minWidth: 30, alignItems: 'center' },
     threeDotBtn: { padding: 6 },
 
-    searchContainer: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 14, marginTop: 12, marginBottom: 2, paddingHorizontal: 12, borderRadius: 14, height: 44, borderWidth: 1.5, gap: 8 },
-    searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
-    clearBtn: { padding: 4 },
+    remoteSection: { paddingTop: 10 },
+    remoteTitle: { fontSize: 13, fontWeight: '600', paddingHorizontal: 16, paddingVertical: 6 },
+    remoteEmpty: { fontSize: 13, paddingHorizontal: 16, paddingVertical: 12 },
+    remoteRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 13 },
+    remoteAvatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#eee' },
+    remoteName: { fontSize: 15, fontWeight: '600' },
+    remoteSub: { fontSize: 12, marginTop: 2 },
+    loadMoreBtn: { alignItems: 'center', paddingVertical: 12 },
+    loadMoreText: { fontSize: 14, fontWeight: '600' },
 
     filterRow: { flexDirection: 'row', paddingHorizontal: 14, marginTop: 10, marginBottom: 6, gap: 8 },
     filterBtn: { borderWidth: 1, paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 },

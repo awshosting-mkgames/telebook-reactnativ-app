@@ -14,6 +14,7 @@ const initialState = {
 
     history: [],
     historyPagination: null,
+    historyCurrent: null, // GET plans/history `current` (PlanHistory top card fallback)
     historyLoading: false,
     historyError: null,
 };
@@ -73,7 +74,8 @@ const plansSlice = createSlice({
             .addCase(fetchPlanHistory.pending, (state) => { state.historyLoading = true; state.historyError = null; })
             .addCase(fetchPlanHistory.fulfilled, (state, action) => {
                 state.historyLoading = false;
-                const { history = [], pagination = null, page } = action.payload || {};
+                const { history = [], pagination = null, page, current = null } = action.payload || {};
+                if (page === 1 || current) state.historyCurrent = current;
                 state.history = page > 1 ? [...state.history, ...history] : history;
                 state.historyPagination = pagination;
             })

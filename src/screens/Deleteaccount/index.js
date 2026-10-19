@@ -22,8 +22,8 @@ export default function Deleteaccount({ navigation }) {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0D1117' : '#fff' }]}>
-            <StatusBar backgroundColor="#1296f3" barStyle="light-content" />
-            <View style={styles.topBar}>
+            <StatusBar backgroundColor={theme?.header || '#1199ff'} barStyle="light-content" />
+            <View style={[styles.topBar, { backgroundColor: theme?.header || '#1199ff' }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>

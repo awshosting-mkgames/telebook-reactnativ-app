@@ -118,8 +118,8 @@ const CreateBroadcast = ({ navigation, route }) => {
             if (response.success === true) {
                 navigation.navigate('MyBroadcastList')
             } else if (response?.error?.code === 'PLAN_LIMIT') {
-                Alert.alert('Plan limit reached', response.error.message, [
-                    { text: 'Upgrade', onPress: () => navigation.navigate('Plans') },
+                Alert.alert('Plan Limit Reached', ['Plan Limit Reached – Upgrade your plan to continue.', response.error.message].filter(Boolean).join('\n'), [
+                    { text: 'Upgrade Plan', onPress: () => navigation.navigate('Plans') },
                     { text: 'Cancel', style: 'cancel' },
                 ]);
             } else {
@@ -144,7 +144,7 @@ const CreateBroadcast = ({ navigation, route }) => {
                 style={[styles.memberChipAvatar, { borderColor: theme.primary || '#4491f2' }]}
             />
             <Text style={[styles.memberChipName, { color: theme.text }]} numberOfLines={1}>
-                {item.name?.split(' ')[0]}
+                {(item.name || item.phone || 'User').split(' ')[0]}
             </Text>
         </View>
     );
@@ -156,10 +156,10 @@ const CreateBroadcast = ({ navigation, route }) => {
         >
             <StatusBar
                 barStyle="light-content"
-                backgroundColor={theme.primary || '#4491f2'}
+                backgroundColor={theme.header || theme.primary || '#1199ff'}
             />
             {/* ── Header ── */}
-            <View style={[styles.header, { backgroundColor: theme.primary || '#4491f2' }]}>
+            <View style={[styles.header, { backgroundColor: theme.header || theme.primary || '#1199ff' }]}>
                 <TouchableOpacity onPress={() => navigation?.goBack()}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
@@ -254,7 +254,7 @@ const CreateBroadcast = ({ navigation, route }) => {
                                 style={[styles.memberAvatar, { backgroundColor: isDark ? '#2a2a2a' : '#eeeeee' }]}
                             />
                             <View style={styles.memberInfo}>
-                                <Text style={[styles.memberName, { color: theme.text }]}>{item.name}</Text>
+                                <Text style={[styles.memberName, { color: theme.text }]}>{item.name || item.phone || 'User'}</Text>
                                 <Text style={[styles.memberPhone, { color: isDark ? '#aaaaaa' : '#888888' }]}>
                                     {item.isRegistered ? '● On Telebook' : `+${item.phone}`}
                                 </Text>

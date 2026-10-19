@@ -49,7 +49,8 @@ export const setChatPinned = async (dispatch, chat, pinned, myUserId) => {
     const res = await apiService({ method: 'PUT', endpoint: `chats/${chatId}/${pinned ? 'pin' : 'unpin'}`, data: {} });
     if (!isOk(res)) {
         dispatch(updateChatFlags({ chatId, patch: patch(!pinned) }));
-        return { ok: false, message: apiErrorMessage(res, 'Could not update pin') };
+        // Part 3 §3.4c: favourites limit — UI Upgrade button dikha sake
+        return { ok: false, planLimit: res?.error?.code === 'PLAN_LIMIT', message: apiErrorMessage(res, 'Could not update pin') };
     }
     dispatch(persistChatTabs());
     return { ok: true };

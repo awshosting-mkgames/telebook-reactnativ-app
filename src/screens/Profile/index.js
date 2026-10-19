@@ -23,6 +23,8 @@ import Toast from 'react-native-toast-message';
 import { useDispatch, useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
 import Config from '../../services/config';
+import { fetchMyPlan } from '../../redex/slices/plansSlice';
+import { badgeTextColor, useBadgePlacements } from '../../services/badgeConfig';
 import { updateMyProfile, uploadProfilePhoto } from '../../services/profileSync';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
@@ -129,6 +131,10 @@ const ProfileScreen = ({ navigation }) => {
     const divider = isDark ? '#2a2a2a' : '#f0f0f0';
 
     const [editing, setEditing] = useState(null); // 'name' | 'about' | 'city' | 'state'
+    // Apna plan badge (plans/me -> entitlements.badge); admin placement 'profile' on ho tabhi
+    const placements = useBadgePlacements();
+    const myBadge = useSelector((state) => state.plans?.me?.entitlements?.badge ?? null);
+    useEffect(() => { dispatch(fetchMyPlan()); }, [dispatch]);
     const [previewUri, setPreviewUri] = useState(null); // upload ke dauran nayi photo turant dikhao
     const [photoBusy, setPhotoBusy] = useState(false);
 
@@ -236,6 +242,17 @@ const ProfileScreen = ({ navigation }) => {
                     </TouchableOpacity>
                     <Text style={[styles.bigName, { color: txt }]} numberOfLines={1}>{user.name || 'Your name'}</Text>
                     {!!phone && <Text style={[styles.bigPhone, { color: sub }]}>{phone}</Text>}
+                    {!!myBadge?.profileLabel && placements.profile && (
+                        <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => navigation.navigate('Plans')}
+                            style={[styles.planPill, { backgroundColor: myBadge.color || '#0084ff' }]}
+                        >
+                            <Text style={[styles.planPillText, { color: badgeTextColor(myBadge.color || '#0084ff') }]} numberOfLines={1}>
+                                {myBadge.profileLabel}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                     <TouchableOpacity onPress={choosePhoto} disabled={photoBusy}>
                         <Text style={styles.changePhoto}>{photoBusy ? 'Uploading…' : 'Change photo'}</Text>
                     </TouchableOpacity>
@@ -274,6 +291,8 @@ const ProfileScreen = ({ navigation }) => {
 export default ProfileScreen;
 
 const styles = StyleSheet.create({
+    planPill: { alignSelf: 'center', maxWidth: '85%', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14, marginTop: 8 },
+    planPillText: { fontSize: 12, fontWeight: '700' },
     container: { flex: 1 },
     header: {
         backgroundColor: '#0084ff', flexDirection: 'row', alignItems: 'center',

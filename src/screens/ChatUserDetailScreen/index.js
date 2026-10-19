@@ -2,8 +2,10 @@ import React, { useState, useContext, useRef, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, Image, TouchableOpacity,
     ActivityIndicator, Alert, SafeAreaView, StatusBar,
-    Platform, Modal, FlatList, Dimensions, Animated,
+    Platform, Modal, FlatList, Dimensions, Animated, Share, TextInput,
 } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
+import * as Contacts from 'expo-contacts/legacy';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
@@ -12,6 +14,9 @@ import apiService from '../../services/apiService';
 import { apiErrorMessage, fetchBlockedUsers, setBlocked as setBlockedApi } from '../../services/chatActions';
 import { syncAllTabData } from '../../services/chatSync';
 import Config from '../../services/config';
+import { contactSync } from '../../services/contactSync';
+import { useBadgePlacements, badgeTextColor } from '../../services/badgeConfig';
+import { APP_LINK_HOST } from '../../navigation/deepLinks';
 const BASE_URL = Config.Main_url;
 
 
@@ -19,6 +24,20 @@ const { width } = Dimensions.get('window');
 const MEDIA_SIZE = (width - 32 - 6) / 3;
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+
+// reports/user ke reason enum (backend ke saath same)
+const REPORT_REASONS = [
+    { key: 'spam', label: 'Spam' },
+    { key: 'harassment', label: 'Harassment' },
+    { key: 'inappropriate_content', label: 'Inappropriate content' },
+    { key: 'violence', label: 'Violence' },
+    { key: 'hate_speech', label: 'Hate speech' },
+    { key: 'fake_news', label: 'Fake news' },
+    { key: 'scam', label: 'Scam' },
+    { key: 'other', label: 'Other' },
+];
+
+const last10 = (v) => String(v ?? '').replace(/\D/g, '').slice(-10);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const formatPhone = (raw) => {
@@ -176,6 +195,13 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
     const [mediaIndex, setMediaIndex] = useState(0);
     const [loadingBlock, setLoadingBlock] = useState(false);
     const [toast, setToast] = useState('');
+    const placements = useBadgePlacements();
+    const [fetchedBadge, setFetchedBadge] = useState(null);
+    const [reportReason, setReportReason] = useState('spam');
+    const [reportDesc, setReportDesc] = useState('');
+    const [reporting, setReporting] = useState(false);
+    const [savingContact, setSavingContact] = useState(false);
+    const accent = theme?.main || theme?.maincolor || '#0499FF';
 
     // ── Toast ─────────────────────────────────────────────────────────────────
     const toastAnim = useRef(new Animated.Value(0)).current;
@@ -214,6 +240,23 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
     const otherUser = chatInfo?.otherUser;
     const avatarUri = getImageUrl(otherUser?.profilePicture) || DEFAULT_AVATAR;
     const phone = formatPhone(otherUser?.mobile ?? '');
+    // Null-name safety: name || mobile || 'User'
+    const displayName = otherUser?.name || phone || otherUser?.mobile || 'User';
+    const planBadge = otherUser?.planBadge ?? fetchedBadge;
+    const inviteCode = otherUser?.inviteCode || '';
+    const inviteLink = inviteCode ? `https://${APP_LINK_HOST}/u/${inviteCode}` : '';
+
+    // chats/:id/info me planBadge na aaye to users/:id se ek baar le lo
+    useEffect(() => {
+        if (!otherUser?._id || otherUser.planBadge !== undefined) return;
+        let alive = true;
+        (async () => {
+            const res = await apiService({ method: 'GET', endpoint: `users/${otherUser._id}` });
+            const b = res?.data?.user?.planBadge;
+            if (alive && b) setFetchedBadge(b);
+        })();
+        return () => { alive = false; };
+    }, [otherUser?._id, otherUser?.planBadge]);
     // Block state server ki blocked list (Redux) se — pehle hamesha false se shuru hota tha
     const blocked = !!otherUser?._id && blockedIds.includes(otherUser._id);
     useEffect(() => { fetchBlockedUsers(dispatch); }, [dispatch]);
@@ -271,14 +314,83 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
         }
     };
 
+    // POST reports/user — reason picker sheet se. 409 ALREADY_REPORTED => friendly toast
     const handleReport = async () => {
+        if (!otherUser?._id || reporting) return;
+        setReporting(true);
         try {
-            // POST /users/report/:userId (API doc 6.2)
-            const res = await apiService({ method: 'POST', endpoint: `users/report/${otherUser?._id}`, data: { reason: 'spam' } });
-            if (!res?.success) throw new Error(apiErrorMessage(res));
-            showToast('Report submitted');
+            const res = await apiService({
+                method: 'POST',
+                endpoint: 'reports/user',
+                data: { userId: otherUser._id, reason: reportReason, description: reportDesc.trim() || undefined },
+            });
+            setShowReport(false);
+            if (res?.success) {
+                setReportDesc('');
+                showToast('Report submitted');
+            } else if (res?.error?.code === 'ALREADY_REPORTED') {
+                showToast('You have already reported this user');
+            } else {
+                Alert.alert('Error', apiErrorMessage(res, 'Could not submit report. Try again.'));
+            }
         } catch {
             Alert.alert('Error', 'Could not submit report. Try again.');
+        } finally {
+            setReporting(false);
+        }
+    };
+
+    const handleCopyNumber = () => {
+        if (!otherUser?.mobile) return;
+        Clipboard.setString(String(otherUser.mobile));
+        showToast('Number copied');
+    };
+
+    const handleCopyLink = () => {
+        if (!inviteLink) return;
+        Clipboard.setString(inviteLink);
+        showToast('Link copied');
+    };
+
+    const handleShareLink = async () => {
+        if (!inviteLink) return;
+        try {
+            await Share.share({ message: `Chat with ${displayName} on Telebook: ${inviteLink}` });
+        } catch (e) { /* user cancelled */ }
+    };
+
+    // Phonebook me save: permission -> duplicate check (number se) -> addContactAsync
+    const handleSaveContact = async () => {
+        const mobile = otherUser?.mobile;
+        if (!mobile || savingContact) return;
+        setSavingContact(true);
+        try {
+            const { status } = await Contacts.requestPermissionsAsync();
+            if (status !== 'granted') {
+                showToast('Contacts permission is needed');
+                return;
+            }
+            const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] });
+            const target = last10(mobile);
+            const exists = (data || []).some((c) => (c.phoneNumbers || []).some((p) => last10(p.number) === target));
+            if (exists) {
+                showToast('Contact already saved');
+                return;
+            }
+            const nm = otherUser?.name || String(mobile);
+            await Contacts.addContactAsync({
+                contactType: Contacts.ContactTypes.Person,
+                name: nm,
+                firstName: nm,
+                phoneNumbers: [{ label: 'mobile', number: String(mobile) }],
+            });
+            showToast('Contact saved');
+            // Chat list title naye saved naam se badle — background me, UI block nahi
+            contactSync(dispatch, { silent: true }).catch(() => {});
+        } catch (e) {
+            showToast('Could not save contact');
+        } finally {
+            setSavingContact(false);
         }
     };
 
@@ -326,12 +438,23 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                         {otherUser?.isOnline && <View style={styles.onlineDot} />}
                     </View>
                     <Text style={[styles.heroName, { color: txt }]}>
-                        {otherUser?.name || 'Unknown User'}
+                        {displayName}
                     </Text>
                     <View style={styles.phoneRow}>
                         <Ionicons name="call-outline" size={13} color="#0084ff" />
                         <Text style={[styles.phoneText, { color: sub }]}>{phone || 'No number'}</Text>
                     </View>
+                    {!!planBadge?.profileLabel && placements.profile && (
+                        <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => navigation.navigate('Plans')}
+                            style={[styles.planPill, { backgroundColor: planBadge.color || accent }]}
+                        >
+                            <Text style={[styles.planPillText, { color: badgeTextColor(planBadge.color || accent) }]} numberOfLines={1}>
+                                {planBadge.profileLabel}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                     {otherUser?.isOnline ? (
                         <View style={styles.onlineBadge}>
                             <View style={styles.onlinePulse} />
@@ -393,11 +516,35 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                     </View>
                     <TouchableOpacity
                         style={[styles.copyBtn, { backgroundColor: isDark ? '#1a2a1a' : '#e8fff0' }]}
-                        onPress={() => showToast('Number copied')}
+                        onPress={handleCopyNumber}
                     >
                         <Ionicons name="copy-outline" size={16} color="#27ae60" />
                     </TouchableOpacity>
                 </View>
+
+                {/* ── Quick actions: Save Contact / Copy Link / Share Link (blocked => hidden) ── */}
+                {!blocked && !!otherUser?.mobile && (
+                    <View style={[styles.actionsCard, { backgroundColor: card, borderColor: border }]}>
+                        <TouchableOpacity style={styles.actionBtn} onPress={handleSaveContact} disabled={savingContact} activeOpacity={0.7}>
+                            {savingContact
+                                ? <ActivityIndicator size="small" color={accent} />
+                                : <Ionicons name="person-add-outline" size={22} color={accent} />}
+                            <Text style={[styles.actionTxt, { color: txt }]} numberOfLines={2}>Save Contact</Text>
+                        </TouchableOpacity>
+                        {!!inviteLink && (
+                            <>
+                                <TouchableOpacity style={styles.actionBtn} onPress={handleCopyLink} activeOpacity={0.7}>
+                                    <Ionicons name="link-outline" size={22} color={accent} />
+                                    <Text style={[styles.actionTxt, { color: txt }]} numberOfLines={2}>Copy Contact Link</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionBtn} onPress={handleShareLink} activeOpacity={0.7}>
+                                    <Ionicons name="share-social-outline" size={22} color={accent} />
+                                    <Text style={[styles.actionTxt, { color: txt }]} numberOfLines={2}>Share Contact Link</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
+                    </View>
+                )}
 
                 {/* ── Chat Since ── */}
                 {!!chatInfo?.createdAt && (
@@ -628,7 +775,20 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                         <Ionicons name="chevron-forward" size={18} color="#e53935" />
                     </TouchableOpacity>
 
-
+                    <TouchableOpacity
+                        style={[styles.dangerRow, { borderBottomWidth: 0 }]}
+                        onPress={() => setShowReport(true)}
+                        activeOpacity={0.7}
+                    >
+                        <View style={styles.dangerIconWrap}>
+                            <Ionicons name="flag-outline" size={20} color="#e53935" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.dangerLabel}>Report User</Text>
+                            <Text style={styles.dangerSub}>Report spam, abuse or a scam</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color="#e53935" />
+                    </TouchableOpacity>
                 </View>
 
             </ScrollView>
@@ -645,8 +805,8 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
             {/* ── Modals ── */}
             <ConfirmModal
                 visible={showBlock} onClose={() => setShowBlock(false)} onConfirm={handleBlock}
-                title={blocked ? `Unblock ${otherUser?.name}?` : `Block ${otherUser?.name}?`}
-                message={blocked ? `${otherUser?.name} will be able to send you messages again.` : `${otherUser?.name} won't be able to send you messages or see your status.`}
+                title={blocked ? `Unblock ${displayName}?` : `Block ${displayName}?`}
+                message={blocked ? `${displayName} will be able to send you messages again.` : `${displayName} won't be able to send you messages or see your status.`}
                 confirmLabel={blocked ? 'Unblock' : 'Block'} isDanger isDark={isDark}
             />
             <ConfirmModal
@@ -654,11 +814,43 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                 title="Clear Chat?" message="All messages will be permanently deleted. This cannot be undone."
                 confirmLabel="Clear All" isDanger={false} isDark={isDark}
             />
-            <ConfirmModal
-                visible={showReport} onClose={() => setShowReport(false)} onConfirm={handleReport}
-                title={`Report ${otherUser?.name}?`} message={`Your report will be reviewed. ${otherUser?.name} won't be notified.`}
-                confirmLabel="Report" isDanger isDark={isDark}
-            />
+            {/* Report: reason picker (local bottom sheet) */}
+            <Modal visible={showReport} transparent animationType="slide" onRequestClose={() => setShowReport(false)}>
+                <View style={rs.overlay}>
+                    <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setShowReport(false)} />
+                    <View style={[rs.sheet, { backgroundColor: card }]}>
+                        <Text style={[rs.title, { color: txt }]} numberOfLines={2}>Report {displayName}</Text>
+                        <Text style={[rs.sub, { color: sub }]}>Your report will be reviewed. They won't be notified.</Text>
+                        {REPORT_REASONS.map((r) => (
+                            <TouchableOpacity key={r.key} style={rs.row} onPress={() => setReportReason(r.key)} activeOpacity={0.7}>
+                                <Ionicons
+                                    name={reportReason === r.key ? 'radio-button-on' : 'radio-button-off'}
+                                    size={20}
+                                    color={reportReason === r.key ? accent : sub}
+                                />
+                                <Text style={[rs.rowTxt, { color: txt }]}>{r.label}</Text>
+                            </TouchableOpacity>
+                        ))}
+                        <TextInput
+                            style={[rs.input, { color: txt, borderColor: border }]}
+                            placeholder="Add details (optional)"
+                            placeholderTextColor={sub}
+                            value={reportDesc}
+                            onChangeText={setReportDesc}
+                            maxLength={500}
+                            multiline
+                        />
+                        <View style={rs.btns}>
+                            <TouchableOpacity style={[rs.btn, { borderColor: border, borderWidth: 1.5 }]} onPress={() => setShowReport(false)}>
+                                <Text style={[rs.btnTxt, { color: sub }]}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[rs.btn, { backgroundColor: '#e53935' }]} onPress={handleReport} disabled={reporting}>
+                                {reporting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={[rs.btnTxt, { color: '#fff' }]}>Report</Text>}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
             <MediaModal
                 visible={mediaModal} onClose={() => setMediaModal(false)}
                 items={allViewableMedia} startIndex={mediaIndex} isDark={isDark}
@@ -668,6 +860,19 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
 };
 
 export default ChatUserDetailScreen;
+
+const rs = StyleSheet.create({
+    overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+    sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 28 },
+    title: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
+    sub: { fontSize: 13, marginBottom: 10 },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
+    rowTxt: { fontSize: 15 },
+    input: { borderWidth: 1, borderRadius: 12, padding: 10, minHeight: 44, maxHeight: 90, marginTop: 8, fontSize: 14 },
+    btns: { flexDirection: 'row', gap: 12, marginTop: 14 },
+    btn: { flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    btnTxt: { fontSize: 15, fontWeight: '700' },
+});
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -704,6 +909,11 @@ const styles = StyleSheet.create({
     infoIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
     infoLabel: { fontSize: 11, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
     infoValue: { fontSize: 15, fontWeight: '600' },
+    planPill: { alignSelf: 'center', maxWidth: '85%', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14, marginBottom: 10 },
+    planPillText: { fontSize: 12, fontWeight: '700' },
+    actionsCard: { flexDirection: 'row', marginHorizontal: 16, marginTop: 10, borderRadius: 16, padding: 8, borderWidth: 1, gap: 6 },
+    actionBtn: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', gap: 6, paddingVertical: 10, paddingHorizontal: 4 },
+    actionTxt: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
     copyBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 
     // ── Media Card ──

@@ -37,11 +37,11 @@ export default function Updates({ navigation }) {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor="#1296f3" barStyle="light-content" />
+            <StatusBar backgroundColor={theme.header || '#1199ff'} barStyle="light-content" />
 
             {/* Header */}
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>{t('Updates')}</Text>
+            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
+                <Text style={[styles.headerTitle, { color: theme.headerText || '#fff' }]}>{t('Updates')}</Text>
             </View>
 
             <ScrollView

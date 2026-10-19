@@ -11,6 +11,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { badgeTextColor } from '../../services/badgeConfig';
 
 const ACTION_WIDTH = 140;
 const SWIPE_THRESHOLD = 60;
@@ -43,7 +44,7 @@ const getInitials = (name = '') => name.split(' ').slice(0, 2).map(w => w[0]).jo
 const AVATAR_COLORS = ['#1199ff', '#25D366', '#FF9500', '#FF3B30', '#AF52DE', '#5AC8FA'];
 const avatarColor = (name = '') => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
 
-export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBlock, onLongPress, isPinned, isBlocked }) {
+export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBlock, onLongPress, isPinned, isBlocked, showBadge = false, showRing = false }) {
     const translateX = useRef(new Animated.Value(0)).current;
     const rowOpen = useRef(false);
 
@@ -55,6 +56,13 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
     const hasAvatar = !!item.displayAvatar;
     const isLight = theme.mode === 'light';
     const subColor = isLight ? '#667781' : '#8696a0';
+    // Plan badge: server se aata hai (planBadge), admin placement flag Freechat se aata hai (showBadge)
+    const planBadge = !isGroup ? item?.displayUser?.planBadge : null;
+    const badgeVisible = !!(showBadge && planBadge && (planBadge.listLabel || planBadge.label));
+    const badgeBg = planBadge?.color || '#1199ff';
+    const ringColor = showRing && planBadge?.color ? planBadge.color : null;
+    // Phonebook me save nahi hai (sirf 1-to-1) => 'Unknown' chip
+    const isUnknown = !isGroup && item?.isSaved === false;
 
     const panResponder = useRef(PanResponder.create({
         onStartShouldSetPanResponder: () => false,
@@ -87,7 +95,7 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
         closeRow();
         Alert.alert(
             'Delete Chat',
-            `"${item.displayName}" ka chat delete karna chahte ho?`,
+            `Delete chat with "${item.displayName || 'this user'}"?`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 { text: 'Delete', style: 'destructive', onPress: () => onDelete(item) },
@@ -148,24 +156,41 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                     delayLongPress={350}
                     style={styles.chatItem}
                     activeOpacity={0.75} >
-                    {/* Avatar */}
-                    <View style={styles.avatarWrap}>
-                        {hasAvatar ? (
-                            <Image
-                                source={{ uri: item.displayAvatar }}
-                                style={styles.avatar}
-                                defaultSource={{ uri: DEFAULT_AVATAR }}
-                            />
-                        ) : (
-                            <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: avatarColor(item.displayName) }]}>
-                                <Text style={styles.avatarInitials}>{getInitials(item.displayName)}</Text>
-                            </View>
-                        )}
-                        {!isGroup && item?.displayUser?.isOnline && <View style={styles.onlineDot} />}
-                        {isPinned && (
-                            <View style={styles.pinBadge}>
-                                <Ionicons name="pin" size={9} color="#fff" />
-                            </View>
+                    {/* Avatar + (optional) plan badge apni alag line me, naam se judi nahi */}
+                    <View style={styles.avatarCol}>
+                        <View style={styles.avatarWrap}>
+                            {hasAvatar ? (
+                                <Image
+                                    source={{ uri: item.displayAvatar }}
+                                    style={[styles.avatar, ringColor && { borderWidth: 2, borderColor: ringColor }]}
+                                    defaultSource={{ uri: DEFAULT_AVATAR }}
+                                />
+                            ) : (
+                                <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: avatarColor(item.displayName) }, ringColor && { borderWidth: 2, borderColor: ringColor }]}>
+                                    <Text style={styles.avatarInitials}>{getInitials(item.displayName)}</Text>
+                                </View>
+                            )}
+                            {!isGroup && item?.displayUser?.isOnline && <View style={styles.onlineDot} />}
+                            {isPinned && (
+                                <View style={styles.pinBadge}>
+                                    <Ionicons name="pin" size={9} color="#fff" />
+                                </View>
+                            )}
+                        </View>
+                        {badgeVisible && (
+                            <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={() => { rowOpen.current ? closeRow() : onPress(item); }}
+                                style={[styles.planPill, { backgroundColor: badgeBg }]}
+                            >
+                                <Text
+                                    style={[styles.planPillText, { color: badgeTextColor(badgeBg) }]}
+                                    numberOfLines={1}
+                                    ellipsizeMode="tail"
+                                >
+                                    {planBadge.listLabel || planBadge.label}
+                                </Text>
+                            </TouchableOpacity>
                         )}
                     </View>
 
@@ -181,6 +206,11 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                                 <Text style={[styles.name, { color: theme.text || '#111' }]} numberOfLines={1}>
                                     {item.displayName}
                                 </Text>
+                                {isUnknown && (
+                                    <View style={[styles.unknownChip, { backgroundColor: isLight ? '#eceff1' : '#2a2f32' }]}>
+                                        <Text style={[styles.unknownChipText, { color: subColor }]} numberOfLines={1}>Unknown</Text>
+                                    </View>
+                                )}
                                 {isBlocked && <Ionicons name="ban" size={13} color="#FF3B30" />}
                             </View>
                             <Text style={[styles.time, { color: subColor }, unread > 0 && styles.timeUnread]}>{timeStr}</Text>
@@ -218,7 +248,12 @@ const styles = StyleSheet.create({
     actionBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
     chatRowAnimated: { backgroundColor: '#fff' },
     chatItem: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 13, alignItems: 'center' },
-    avatarWrap: { position: 'relative', marginRight: 13 },
+    avatarCol: { width: 58, alignItems: 'center', marginRight: 12 },
+    avatarWrap: { position: 'relative' },
+    planPill: { marginTop: 4, maxWidth: 58, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 9 },
+    planPillText: { fontSize: 10, fontWeight: '700' },
+    unknownChip: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, flexShrink: 0 },
+    unknownChipText: { fontSize: 10, fontWeight: '600' },
     avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#eee' },
     avatarFallback: { alignItems: 'center', justifyContent: 'center' },
     avatarInitials: { color: '#fff', fontSize: 18, fontWeight: '700' },
@@ -229,7 +264,7 @@ const styles = StyleSheet.create({
     chatBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     nameRow: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 6, marginRight: 8 },
     groupTag: { backgroundColor: '#e8f4ff', borderRadius: 8, padding: 3 },
-    name: { fontSize: 15, fontWeight: '600', flex: 1 },
+    name: { fontSize: 15, fontWeight: '600', flexShrink: 1 },
     message: { fontSize: 13, flex: 1, marginRight: 8 },
     unreadMsg: { fontWeight: '600' },
     time: { color: '#bbb', fontSize: 12, flexShrink: 0 },

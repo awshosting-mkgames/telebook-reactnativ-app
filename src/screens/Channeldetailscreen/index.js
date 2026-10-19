@@ -12,18 +12,20 @@ import {
     Dimensions,
     FlatList,
     Image,
+    KeyboardAvoidingView,
     Modal,
     Platform,
+    Pressable,
     ScrollView,
-    Share,
     StatusBar,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     TouchableWithoutFeedback,
     View
 } from 'react-native';
-import Clipboard from '@react-native-clipboard/clipboard';
+import Hyperlink from 'react-native-hyperlink';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -31,6 +33,12 @@ import { ThemeContext } from '../../components/ThemeContext';
 import { claimPlayback, useExclusivePlayback } from '../../utils/playbackManager';
 import apiService from '../../services/apiService';
 import Config from '../../services/config';
+import socketService from '../../services/socketService';
+import {
+    POSTS_PAGE_SIZE, REPORT_REASONS, copyChannelLink, fetchPostsPage, mergePosts,
+    openSafeUrl, reportChannel, shareChannelLink, showToast,
+} from '../../services/channelActions';
+import PostActions from '../Mychannelscreen/components/PostActions';
 const STORAGE_KEY = 'DOWNLOAD_DIR_URI';
 const HIT = { top: 10, bottom: 10, left: 10, right: 10 };
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -486,7 +494,7 @@ function MediaSlider({ attachments, onOpenZoom, onOpenVideoZoom, pal }) {
     );
 }
 
-const MessageBubble = ({ item, pal }) => {
+const MessageBubble = ({ item, pal, onLongPress }) => {
     const attachments = item?.attachments ?? [];
     const viewCount = item?.views || item?.viewedBy?.length || 0;
     const [zoomOpen, setZoomOpen] = useState(false);
@@ -495,7 +503,11 @@ const MessageBubble = ({ item, pal }) => {
     const [currentVideoUri, setCurrentVideoUri] = useState('');
 
     return (
-        <View style={[mb.wrap, { backgroundColor: pal.card, borderColor: pal.cardBorder }]}>
+        <Pressable
+            style={[mb.wrap, { backgroundColor: pal.card, borderColor: pal.cardBorder }]}
+            onLongPress={() => onLongPress?.(item)}
+            delayLongPress={350}
+        >
             {attachments.length > 0 && (
                 <>
                     <MediaSlider attachments={attachments} onOpenZoom={(i) => { setZoomStart(i); setZoomOpen(true); }} onOpenVideoZoom={(i) => { setCurrentVideoUri(getImageUrl(attachments[i]?.url || attachments[i])); setVideoZoomOpen(true); }} pal={pal} />
@@ -503,7 +515,15 @@ const MessageBubble = ({ item, pal }) => {
                     <VideoZoomModal visible={videoZoomOpen} uri={currentVideoUri} onClose={() => setVideoZoomOpen(false)} />
                 </>
             )}
-            {!!item?.content && <Text style={[mb.text, { color: pal.textPrimary }]}>{item.content}</Text>}
+            {/* Sirf http/https links clickable; baaki schemes openSafeUrl reject karta hai */}
+            {!!item?.content && (
+                <Hyperlink
+                    linkStyle={{ color: '#2980b9', textDecorationLine: 'underline' }}
+                    onPress={(url) => openSafeUrl(url)}
+                >
+                    <Text style={[mb.text, { color: pal.textPrimary }]}>{item.content}</Text>
+                </Hyperlink>
+            )}
             <View style={mb.footer}>
                 {/* views server ke viewedBy se — pehle post par koi stat nahi dikhti thi */}
                 <Ionicons name="eye-outline" size={13} color={pal.textMuted} />
@@ -511,7 +531,7 @@ const MessageBubble = ({ item, pal }) => {
                 <View style={[mb.dotSep, { backgroundColor: pal.textMuted }]} />
                 <Text style={[mb.time, { color: pal.textMuted }]}>{timeAgo(item?.createdAt)}</Text>
             </View>
-        </View>
+        </Pressable>
     );
 };
 
@@ -529,6 +549,18 @@ export default function ChannelDetailScreen({ navigation, route }) {
     const [imageUri, setimageUri] = useState('');
     const [showInfo, setShowInfo] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
+    const [selectedPost, setSelectedPost] = useState(null);   // long-press action sheet
+    const [showReport, setShowReport] = useState(false);
+    const [reportReason, setReportReason] = useState(null);
+    const [reportDesc, setReportDesc] = useState('');
+    const [reporting, setReporting] = useState(false);
+    // Pagination: messages newest-first, list inverted => newest neeche
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const pageRef = useRef(1);
+    const loadingMoreRef = useRef(false);
+    const loadedOnceRef = useRef(false);
+    const headerBg = theme?.header || '#1199ff';
 
     const [following, setFollowing] = useState(false);
     const [loadingFollow, setLoadingFollow] = useState(false);
@@ -546,18 +578,47 @@ export default function ChannelDetailScreen({ navigation, route }) {
         }
     }, [channelId]);
 
-    const fetchMessages = useCallback(async () => {
+    // merge=true (focus refresh): sirf naye posts upar jodo, user ke load kiye purane pages na girein
+    const fetchMessages = useCallback(async ({ merge = false } = {}) => {
         try {
-            const mRes = await apiService({ method: 'GET', endpoint: `channels/${channelId}/messages` });
-            setMessages(mRes?.data?.messages ?? []);
+            const r = await fetchPostsPage(channelId, 1, POSTS_PAGE_SIZE);
+            if (!r) return;
+            if (merge && loadedOnceRef.current) {
+                setMessages(prev => mergePosts(r.posts, prev));
+            } else {
+                pageRef.current = 1;
+                setMessages(mergePosts([], r.posts));
+                setHasMore(r.hasMore);
+                loadedOnceRef.current = true;
+            }
         } catch (e) {
             console.log('Channel messages error:', e);
         }
     }, [channelId]);
 
+    const loadMore = useCallback(async () => {
+        if (loadingMoreRef.current || !hasMore) return;
+        loadingMoreRef.current = true;
+        setLoadingMore(true);
+        try {
+            const next = pageRef.current + 1;
+            const r = await fetchPostsPage(channelId, next, POSTS_PAGE_SIZE);
+            if (r) {
+                pageRef.current = next;
+                setMessages(prev => mergePosts(prev, r.posts));   // _id se de-dupe
+                setHasMore(r.hasMore);
+            }
+        } catch (e) {
+            console.log('Channel older posts error:', e);
+        } finally {
+            loadingMoreRef.current = false;
+            setLoadingMore(false);
+        }
+    }, [channelId, hasMore]);
+
     const loadAll = useCallback(async ({ silent = false } = {}) => {
         if (silent) setRefreshing(true); else setLoading(true);
-        await Promise.all([fetchData(), fetchMessages()]);
+        await Promise.all([fetchData(), fetchMessages({ merge: silent })]);
         setLoading(false);
         setRefreshing(false);
     }, [fetchData, fetchMessages]);
@@ -568,6 +629,28 @@ export default function ChannelDetailScreen({ navigation, route }) {
     useFocusEffect(
         useCallback(() => { loadAll({ silent: true }); }, [loadAll])
     );
+
+    // Live: naya post upar (inverted => neeche) aur delete ho to hata do
+    useEffect(() => {
+        if (!channelId) return undefined;
+        const sameChannel = (c) => String(c?._id ?? c) === String(channelId);
+        const onNew = (msg) => {
+            if (!msg?._id || !sameChannel(msg.channel)) return;
+            setMessages(prev => mergePosts([msg], prev));
+        };
+        const onDeleted = (d) => {
+            if (!d?.messageId || !sameChannel(d.channelId)) return;
+            setMessages(prev => prev.filter(m => m._id !== d.messageId));
+        };
+        socketService.emit('join-channel', channelId);
+        socketService.on('channel-message-received', onNew);
+        socketService.on('channel-message-deleted', onDeleted);
+        return () => {
+            socketService.off('channel-message-received', onNew);
+            socketService.off('channel-message-deleted', onDeleted);
+            socketService.emit('leave-channel', channelId);
+        };
+    }, [channelId]);
 
     const doFollow = async (nextFollowing) => {
         const prevFollowing = following;
@@ -616,25 +699,38 @@ export default function ChannelDetailScreen({ navigation, route }) {
         ]);
     };
 
+    // Sirf server ka shareUrl (private channel ke non-admin ko null milta hai => options hide)
+    const shareUrl = channel?.shareUrl || null;
+    const canReport = !!channel && !channel.isAdmin && !channel.isCreator;
+
     const shareChannel = async () => {
         setShowMenu(false);
-        try {
-            const link = channel?.inviteLink
-                ? `${Config.Main_url}c/${channel.inviteLink}`
-                : Config.Main_url;
-            await Share.share({
-                title: channel?.channelName,
-                message: `Check out "${channel?.channelName}" on Telebook: ${link}`,
-            });
-        } catch (e) {
-            console.log('Share error:', e);
-        }
+        await shareChannelLink(channel);
     };
 
     const copyInviteLink = () => {
-        if (!channel?.inviteLink) return;
-        Clipboard.setString(`${Config.Main_url}c/${channel.inviteLink}`);
-        Alert.alert('Copied', 'Invite link copied to clipboard');
+        copyChannelLink(shareUrl);
+    };
+
+    const openReport = () => {
+        setShowMenu(false);
+        setReportReason(null);
+        setReportDesc('');
+        setShowReport(true);
+    };
+
+    const submitReport = async () => {
+        if (reporting || !reportReason) return;
+        setReporting(true);
+        try {
+            const r = await reportChannel(channelId, reportReason, reportDesc);
+            setShowReport(false);
+            if (r.ok) showToast('Report submitted', 'success', 'Thanks, our team will review it');
+            else if (r.already) showToast('You have already reported this channel', 'info');
+            else showToast('Could not submit report', 'error', r.message || 'Please try again');
+        } finally {
+            setReporting(false);
+        }
     };
 
     const subscriberCount = channel?.subscriberCount ?? channel?.subscribers?.length ?? 0;
@@ -655,10 +751,10 @@ export default function ChannelDetailScreen({ navigation, route }) {
 
     return (
         <View style={[sc.container, { backgroundColor: pal.bg }]}>
-            <StatusBar backgroundColor={pal.statusBg} barStyle={pal.statusBar} />
+            <StatusBar backgroundColor={headerBg} barStyle={pal.statusBar} />
 
             {/* HEADER — baaki app ke header jaisa (avatar + naam + subscribers + menu) */}
-            <View style={sc.topBar}>
+            <View style={[sc.topBar, { backgroundColor: headerBg }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={sc.iconBtn} hitSlop={HIT}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
@@ -684,10 +780,13 @@ export default function ChannelDetailScreen({ navigation, route }) {
                 <FlatList
                     data={messages}
                     keyExtractor={(it, i) => it?._id || String(i)}
-                    renderItem={({ item }) => <MessageBubble item={item} pal={pal} />}
-                    contentContainerStyle={{ paddingTop: 8, paddingBottom: 110 + insets.bottom, flexGrow: 1 }}
-                    refreshing={refreshing}
-                    onRefresh={() => loadAll({ silent: true })}
+                    inverted
+                    renderItem={({ item }) => <MessageBubble item={item} pal={pal} onLongPress={setSelectedPost} />}
+                    // inverted: paddingTop = visual bottom (subscribe bar ke neeche), paddingBottom = visual top
+                    contentContainerStyle={{ paddingTop: 110 + insets.bottom, paddingBottom: 8, flexGrow: 1 }}
+                    onEndReached={loadMore}
+                    onEndReachedThreshold={0.4}
+                    ListFooterComponent={loadingMore ? <ActivityIndicator color={pal.accent} style={{ marginVertical: 14 }} /> : null}
                     ListEmptyComponent={
                         <View style={sc.emptyWrap}>
                             <View style={[sc.emptyIconWrap, { backgroundColor: pal.card, borderColor: pal.cardBorder }]}>
@@ -744,11 +843,24 @@ export default function ChannelDetailScreen({ navigation, route }) {
                             <Ionicons name="information-circle-outline" size={18} color={pal.accent} />
                             <Text style={[sc.menuText, { color: pal.textPrimary }]}>Channel info</Text>
                         </TouchableOpacity>
-                        <View style={[sc.menuDivider, { backgroundColor: pal.cardBorder }]} />
-                        <TouchableOpacity style={sc.menuItem} onPress={shareChannel} activeOpacity={0.7}>
-                            <Ionicons name="share-social-outline" size={18} color={pal.accent} />
-                            <Text style={[sc.menuText, { color: pal.textPrimary }]}>Share channel</Text>
-                        </TouchableOpacity>
+                        {!!shareUrl && (
+                            <>
+                                <View style={[sc.menuDivider, { backgroundColor: pal.cardBorder }]} />
+                                <TouchableOpacity style={sc.menuItem} onPress={shareChannel} activeOpacity={0.7}>
+                                    <Ionicons name="share-social-outline" size={18} color={pal.accent} />
+                                    <Text style={[sc.menuText, { color: pal.textPrimary }]}>Share channel</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
+                        {canReport && (
+                            <>
+                                <View style={[sc.menuDivider, { backgroundColor: pal.cardBorder }]} />
+                                <TouchableOpacity style={sc.menuItem} onPress={openReport} activeOpacity={0.7}>
+                                    <Ionicons name="flag-outline" size={18} color="#EF4444" />
+                                    <Text style={[sc.menuText, { color: '#EF4444' }]}>Report Channel</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
                         {following && (
                             <>
                                 <View style={[sc.menuDivider, { backgroundColor: pal.cardBorder }]} />
@@ -760,6 +872,65 @@ export default function ChannelDetailScreen({ navigation, route }) {
                         )}
                     </View>
                 </TouchableOpacity>
+            </Modal>
+
+            {/* POST ACTIONS (long-press): Copy / Forward */}
+            <PostActions
+                post={selectedPost}
+                channelId={channelId}
+                onClose={() => setSelectedPost(null)}
+                colors={{ bg: pal.card, text: pal.textPrimary, border: pal.cardBorder, accent: pal.accent }}
+            />
+
+            {/* REPORT CHANNEL */}
+            <Modal visible={showReport} transparent animationType="slide" onRequestClose={() => !reporting && setShowReport(false)}>
+                <KeyboardAvoidingView style={sc.sheetOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                    <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => !reporting && setShowReport(false)} />
+                    <View style={[sc.sheet, { backgroundColor: pal.card, paddingBottom: 20 + insets.bottom }]}>
+                        <View style={[sc.sheetHandle, { backgroundColor: pal.cardBorder }]} />
+                        <Text style={[sc.sheetTitle, { color: pal.textPrimary, marginBottom: 10 }]}>Report Channel</Text>
+                        <ScrollView keyboardShouldPersistTaps="handled">
+                            {REPORT_REASONS.map(r => {
+                                const active = reportReason === r.key;
+                                return (
+                                    <TouchableOpacity
+                                        key={r.key}
+                                        style={sc.reasonRow}
+                                        onPress={() => setReportReason(r.key)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons
+                                            name={active ? 'radio-button-on' : 'radio-button-off'}
+                                            size={20}
+                                            color={active ? pal.accent : pal.textMuted}
+                                        />
+                                        <Text style={[sc.menuText, { color: pal.textPrimary }]}>{r.label}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                            <TextInput
+                                style={[sc.reportInput, { color: pal.textPrimary, borderColor: pal.cardBorder }]}
+                                value={reportDesc}
+                                onChangeText={setReportDesc}
+                                placeholder="Add details (optional)"
+                                placeholderTextColor={pal.textMuted}
+                                multiline
+                                maxLength={500}
+                                editable={!reporting}
+                            />
+                        </ScrollView>
+                        <TouchableOpacity
+                            style={[sc.sheetBtn, { backgroundColor: pal.accent }, (!reportReason || reporting) && { opacity: 0.5 }]}
+                            onPress={submitReport}
+                            disabled={!reportReason || reporting}
+                            activeOpacity={0.85}
+                        >
+                            {reporting
+                                ? <ActivityIndicator size="small" color="#fff" />
+                                : <Text style={sc.sheetBtnText}>Submit report</Text>}
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* INFO SHEET — description/category/invite link pehle kahin dikhte hi nahi the */}
@@ -809,7 +980,7 @@ export default function ChannelDetailScreen({ navigation, route }) {
                             )}
                         </View>
 
-                        {!!channel?.inviteLink && (
+                        {!!shareUrl && (
                             <TouchableOpacity
                                 style={[sc.linkRow, { borderColor: pal.cardBorder }]}
                                 onPress={copyInviteLink}
@@ -817,20 +988,22 @@ export default function ChannelDetailScreen({ navigation, route }) {
                             >
                                 <Ionicons name="link-outline" size={18} color={pal.accent} />
                                 <Text style={[sc.linkText, { color: pal.textDesc }]} numberOfLines={1}>
-                                    {`${Config.Main_url}c/${channel.inviteLink}`}
+                                    {shareUrl}
                                 </Text>
                                 <Ionicons name="copy-outline" size={17} color={pal.textMuted} />
                             </TouchableOpacity>
                         )}
 
-                        <TouchableOpacity
-                            style={[sc.sheetBtn, { backgroundColor: pal.accent }]}
-                            onPress={shareChannel}
-                            activeOpacity={0.85}
-                        >
-                            <Ionicons name="share-social-outline" size={18} color="#fff" />
-                            <Text style={sc.sheetBtnText}>Share channel</Text>
-                        </TouchableOpacity>
+                        {!!shareUrl && (
+                            <TouchableOpacity
+                                style={[sc.sheetBtn, { backgroundColor: pal.accent }]}
+                                onPress={shareChannel}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="share-social-outline" size={18} color="#fff" />
+                                <Text style={sc.sheetBtnText}>Share channel</Text>
+                            </TouchableOpacity>
+                        )}
                     </TouchableOpacity>
                 </TouchableOpacity>
             </Modal>
@@ -957,6 +1130,9 @@ const sc = StyleSheet.create({
 
     linkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12, marginTop: 18 },
     linkText: { flex: 1, fontSize: 12 },
+
+    reasonRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
+    reportInput: { borderWidth: 1, borderRadius: 12, padding: 12, minHeight: 70, textAlignVertical: 'top', fontSize: 14, marginTop: 8 },
 
     sheetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, marginTop: 14 },
     sheetBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },

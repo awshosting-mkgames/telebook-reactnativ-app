@@ -13,6 +13,7 @@ import {
     Image,
     Modal,
     Platform,
+    Pressable,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -22,7 +23,9 @@ import {
 } from 'react-native';
 import { ThemeContext } from '../../../components/ThemeContext';
 import Config from '../../../services/config';
+import Hyperlink from 'react-native-hyperlink';
 import { claimPlayback, useExclusivePlayback } from '../../../utils/playbackManager';
+import { openSafeUrl } from '../../../services/channelActions';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const SLIDER_W = SCREEN_W - 32;
@@ -290,17 +293,25 @@ function MediaSlider({ attachments }) {
 }
 
 /* ─── Main Export ─────────────────────────────────────── */
-export default function PostCard({ item, onDelete }) {
+export default function PostCard({ item, onDelete, onLongPress }) {
     const { theme } = useContext(ThemeContext);
     const isLight = theme?.mode === 'light';
     const styles = getStyles(isLight);
 
     const viewCount = viewListData(item?.viewedBy);
     return (
-        <View style={styles.card}>
+        <Pressable style={styles.card} onLongPress={() => onLongPress?.(item)} delayLongPress={350}>
             <MediaSlider attachments={item?.attachments ?? []} />
             <View style={styles.body}>
-                {!!item.content && <Text style={styles.text}>{item.content}</Text>}
+                {/* Sirf http/https links clickable (openSafeUrl baaki schemes reject karta hai) */}
+                {!!item.content && (
+                    <Hyperlink
+                        linkStyle={{ color: '#2980b9', textDecorationLine: 'underline' }}
+                        onPress={(url) => openSafeUrl(url)}
+                    >
+                        <Text style={styles.text}>{item.content}</Text>
+                    </Hyperlink>
+                )}
                 <View style={styles.footer}>
                     <Text style={styles.date}>
                         <Ionicons name="eye" size={18} color={isLight ? '#969494' : '#8a8f96'} /> {viewCount}
@@ -310,7 +321,7 @@ export default function PostCard({ item, onDelete }) {
                     </TouchableOpacity>
                 </View>
             </View>
-        </View>
+        </Pressable>
     );
 }
 

@@ -32,3 +32,6 @@ export { default as Deleteaccount } from './Deleteaccount';
 export { default as InCallScreen } from './InCallScreen';
 export { default as Plans } from './Plans';
 export { default as Wallet } from './Wallet';
+export { default as PlanHistory } from './PlanHistory';
+export { default as LinkedDevices } from './LinkedDevices';
+export { default as AutoReply } from './AutoReply';

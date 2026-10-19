@@ -213,7 +213,7 @@ const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, o
     if (!visible || !currentGroup) return null;
 
     // status/my me user sirf id hoti hai — isliye apne status par naam fallback
-    const userName = isMine ? 'My Status' : (currentGroup?.user?.name || 'Unknown');
+    const userName = isMine ? 'My Status' : (currentGroup?.user?.name || currentGroup?.user?.mobile || 'User');
     const avatar = imgUrl(currentGroup?.user?.profilePicture) || FALLBACK_AVATAR;
 
     return (
@@ -473,7 +473,7 @@ const StatusCard = ({ group, isMe, myUserId, onPress, onAddPress, isDark }) => {
     const bg = mediaType === 'text' ? null : imgUrl(firstStatus?.mediaUrl);
     const avatar = imgUrl(group?.user?.profilePicture) || FALLBACK_AVATAR;
     const allSeen = statuses.length > 0 && statuses.every((st) => isSeenByMe(st, myUserId));
-    const name = isMe ? 'My Status' : (group?.user?.name || 'Unknown');
+    const name = isMe ? 'My Status' : (group?.user?.name || group?.user?.mobile || 'User');
 
     // Mera card, koi status nahi — pehle khali grey block dikhta tha.
     // Ab saaf "Add status" card hai jo seedha picker kholta hai.

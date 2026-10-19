@@ -86,6 +86,7 @@ const MessageList = ({
     isSelectMode,
     selectedMsgIds,
     onSelectMsg,
+    onReactionPress,
     hasMore,
     loadingMore,
     onLoadMore,
@@ -244,7 +245,7 @@ const MessageList = ({
             const olderMsg = messages[index + 1];
             const showDateSep =
                 !olderMsg || !isSameDay(item.createdAt, olderMsg.createdAt);
-            const isDark = theme?.background === "#000";
+            const isDark = theme?.mode ? theme.mode === "dark" : theme?.background === "#000";
 
             return (
                 <View>
@@ -273,6 +274,7 @@ const MessageList = ({
                         isSelectMode={isSelectMode}
                         isSelected={selectedMsgIds?.has(item._id)}
                         onSelect={onSelectMsg}
+                        onReactionPress={onReactionPress}
                         onReplyPress={scrollToOriginalMessage}
                         isHighlighted={highlightedMsgId === item._id}
                         isMatch={matchIdSet?.has(item._id)}
@@ -280,7 +282,7 @@ const MessageList = ({
                 </View>
             );
         },
-        [highlightedMsgId, isSelectMode, selectedMsgIds, theme, messages, matchIdSet, openPopup, retryMessage, onCancelUpload, MY_USER_ID, isGroup],
+        [highlightedMsgId, isSelectMode, selectedMsgIds, theme, messages, matchIdSet, onSelectMsg, onReactionPress, openPopup, retryMessage, onCancelUpload, MY_USER_ID, isGroup],
     );
 
     const ListFooterComponent = () => {
@@ -323,6 +325,8 @@ const MessageList = ({
             <FlatList
                 ref={flatRef}
                 data={messages}
+                // Selection/highlight badalne par rows re-render hon (warna bubble purani state dikhata)
+                extraData={[selectedMsgIds, isSelectMode, highlightedMsgId, matchIdSet, theme]}
                 keyExtractor={(item, i) => item._id ?? i.toString()}
                 renderItem={renderItem}
                 inverted

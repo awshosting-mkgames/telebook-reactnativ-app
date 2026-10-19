@@ -168,8 +168,8 @@ export default function MyBroadcastList({ navigation }) {
     );
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor="#1296f3" barStyle="light-content" />
-            <View style={styles.header}>
+            <StatusBar backgroundColor={theme.header ?? '#1296f3'} barStyle="light-content" />
+            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3' }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>

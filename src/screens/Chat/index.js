@@ -51,6 +51,8 @@ import MessageList from "./components/MessageList";
 import MessagePopup from "./components/MessagePopup";
 import SearchNavBar from "./components/SearchNavBar";
 import TextInputSection from "./components/TextInputSection";
+import Toast from "react-native-toast-message";
+import { isDeleteWindowExpired, isEditWindowExpired, windowErrorMessage } from "../../services/messageWindows";
 import { appendFile } from '../../utils/uploadFile';
 import { stopPlayback } from "../../utils/playbackManager";
 
@@ -66,9 +68,17 @@ const toImageUrl = (v, fallback) => {
 };
 
 // Server reactions ka shape { user, emoji } hai (ek user = ek reaction). emoji khaali = hatao.
-const withReaction = (m, userId, emoji) => {
+const withReaction = (m, userIdRaw, emoji) => {
+    // Ek user ki ek hi reaction: pehle hata ke (nayi ho to) jodte hain — same event do baar aaye to bhi count double nahi hota
+    const userId = idOf(userIdRaw);
     const others = (m.reactions ?? []).filter((r) => idOf(r.user ?? r.userId) !== userId);
     return { ...m, reactions: emoji ? [...others, { user: userId, emoji }] : others };
+};
+
+// Star set-semantics: mera id add/remove — same state dobara lage to koi badlav nahi (idempotent)
+const withStar = (m, userId, starred) => {
+    const others = (m.starredBy ?? []).filter((u) => idOf(u) !== userId);
+    return { ...m, starredBy: starred ? [...others, userId] : others };
 };
 
 export default function ChatScreen({ route, navigation }) {
@@ -78,7 +88,7 @@ export default function ChatScreen({ route, navigation }) {
 
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
-    const isDark = theme?.text === '#FFFFFF';
+    const isDark = theme?.mode ? theme.mode === 'dark' : theme?.text === '#FFFFFF';
 
     const maniAllData = useSelector((state) => state.totalappData);
     const MY_USER_ID = maniAllData?.userId ?? "";
@@ -303,6 +313,12 @@ export default function ChatScreen({ route, navigation }) {
         socketService.on("messages-deleted", onBulkDeleted);
         socketService.on("message-reaction-update", onReaction);
         socketService.on("message-edited", onEdited);
+        // M08: server mere baaki devices ko star change batata hai — _id se patch, set-semantics (idempotent)
+        const onStarred = ({ messageId, chatId: c, isStarred }) => {
+            if (c && c !== chatId) return;
+            setMessages((prev) => prev.map((m) => (m._id === messageId ? withStar(m, MY_USER_ID, !!isStarred) : m)));
+        };
+        socketService.on("message-starred", onStarred);
         // Group lock / admin / naam badla → header aur input turant sahi
         const onGroupUpdated = (chat) => {
             if (idOf(chat) !== chatId || typeof chat !== "object") return;
@@ -336,6 +352,7 @@ export default function ChatScreen({ route, navigation }) {
             socketService.off("messages-deleted", onBulkDeleted);
             socketService.off("message-reaction-update", onReaction);
             socketService.off("message-edited", onEdited);
+            socketService.off("message-starred", onStarred);
             socketService.off("group-updated", onGroupUpdated);
             socketService.off("user-online", onUserOnline);
             socketService.off("user-offline", onUserOffline);
@@ -758,7 +775,7 @@ export default function ChatScreen({ route, navigation }) {
         const res = await apiService({ method: "PUT", endpoint: `messages/${msg._id}`, data: { content } });
         if (!res?.success) {
             setMessages((prev) => prev.map((m) => (m._id === msg._id ? { ...m, ...before } : m)));
-            Alert.alert("Error", apiErrorMessage(res, "Message edit nahi hua"));
+            Alert.alert("Error", windowErrorMessage(res) ?? apiErrorMessage(res, "Could not edit message"));
             return;
         }
         // Server ne updated message object nahi lautaya is endpoint par — jo
@@ -1075,7 +1092,7 @@ export default function ChatScreen({ route, navigation }) {
     const handleDelete = () => {
         const id = selectedMsg?._id;
         closePopup();
-        Alert.alert("Delete message", "Ye message sirf aapke liye delete hoga.", [
+        Alert.alert("Delete message", "This will delete the message only for you.", [
             { text: "Cancel", style: "cancel" },
             { text: "Delete for me", style: "destructive", onPress: () => deleteMessage(id, false) },
         ]);
@@ -1083,25 +1100,51 @@ export default function ChatScreen({ route, navigation }) {
     const handleDeleteAll = () => {
         const id = selectedMsg?._id;
         closePopup();
-        Alert.alert("Delete for everyone", "Ye message sabke liye delete ho jayega.", [
+        Alert.alert("Delete for everyone", "This will delete the message for everyone in this chat.", [
             { text: "Cancel", style: "cancel" },
             { text: "Delete", style: "destructive", onPress: () => deleteMessage(id, true) },
         ]);
     };
-    const handleEdit = () => { const msg = selectedMsg; closePopup(); if (msg) startEdit(msg); };
-    // PUT /messages/:id/star toggle hai — response ka isStarred hi naya state
+    const handleEdit = () => {
+        const msg = selectedMsg; closePopup();
+        if (!msg) return;
+        if (isEditWindowExpired(msg)) { Toast.show({ type: "error", text1: "This message is too old to edit" }); return; }
+        startEdit(msg);
+    };
+    // PUT /messages/:id/star toggle hai. Optimistic update, fail ho to rollback; server ka
+    // isStarred hi final. temp_/deleted messages par star nahi.
+    const isStarredByMe = (m) => !!m?.starredBy?.some((u) => idOf(u) === MY_USER_ID);
+    const starOne = async (msg) => {
+        const msgId = msg?._id;
+        if (!msgId || String(msgId).startsWith("temp_") || msg.isDeleted || msg.isOptimistic) return { ok: false, skipped: true };
+        const before = isStarredByMe(msg);
+        setMessages((prev) => prev.map((m) => (m._id === msgId ? withStar(m, MY_USER_ID, !before) : m)));
+        const res = await apiService({ method: "PUT", endpoint: `messages/${msgId}/star` });
+        if (!res?.success) {
+            setMessages((prev) => prev.map((m) => (m._id === msgId ? withStar(m, MY_USER_ID, before) : m)));
+            return { ok: false, message: apiErrorMessage(res, "Could not update star") };
+        }
+        const starred = !!res.data?.isStarred;
+        setMessages((prev) => prev.map((m) => (m._id === msgId ? withStar(m, MY_USER_ID, starred) : m)));
+        return { ok: true };
+    };
     const handleStar = async () => {
         const msg = selectedMsg;
         closePopup();
-        if (!msg?._id) return;
-        const res = await apiService({ method: "PUT", endpoint: `messages/${msg._id}/star` });
-        if (!res?.success) { Alert.alert("Error", apiErrorMessage(res, "Star nahi hua")); return; }
-        const starred = !!res.data?.isStarred;
-        setMessages((prev) => prev.map((m) => {
-            if (m._id !== msg._id) return m;
-            const others = (m.starredBy ?? []).filter((u) => idOf(u) !== MY_USER_ID);
-            return { ...m, starredBy: starred ? [...others, MY_USER_ID] : others };
-        }));
+        const r = await starOne(msg);
+        if (r && !r.ok && !r.skipped) Alert.alert("Error", r.message);
+    };
+    // Multi-select: sirf selected ids. Sab pehle se starred ho to unstar, warna jo starred nahi unhe star.
+    const handleStarSelected = async () => {
+        if (selectedMsgIds.size === 0) return;
+        const picked = messages.filter((m) => selectedMsgIds.has(m._id) && !m.isDeleted && !m.isOptimistic && !String(m._id).startsWith("temp_"));
+        cancelSelectMode(); // stale selection har action ke baad saaf
+        if (!picked.length) return;
+        const allStarred = picked.every(isStarredByMe);
+        const targets = allStarred ? picked : picked.filter((m) => !isStarredByMe(m));
+        const results = await Promise.all(targets.map(starOne));
+        const failed = results.filter((r) => !r.ok && !r.skipped).length;
+        if (failed) Toast.show({ type: "error", text1: "Star failed", text2: `${failed} message${failed > 1 ? "s" : ""} could not be updated` });
     };
     const handleReact = (emoji) => { const msg = selectedMsg; closePopup(); reactToMessage(msg, emoji); };
     const handleCopy = () => {
@@ -1139,7 +1182,8 @@ export default function ChatScreen({ route, navigation }) {
             }
             // Target chats ka last message list me aa jaye
             syncAllTabData(dispatch, MY_USER_ID, { background: true });
-            Alert.alert("✓ Forwarded", `${messageIds.length > 1 ? messageIds.length + " messages" : "Message"} sent to ${chatIds.length} chat${chatIds.length > 1 ? "s" : ""}`);
+            // Blocking Alert ki jagah non-blocking toast (bahut items forward karne par popup nahi atkenge)
+            Toast.show({ type: "success", text1: "Forwarded", text2: `${messageIds.length > 1 ? messageIds.length + " messages" : "Message"} sent to ${chatIds.length} chat${chatIds.length > 1 ? "s" : ""}`, visibilityTime: 1800 });
         } catch (e) { Alert.alert("Forward failed", e.message); }
         finally { cancelSelectMode(); }
     };
@@ -1198,9 +1242,12 @@ export default function ChatScreen({ route, navigation }) {
             if (forEveryone) {
                 // DELETE /messages { messageIds: [...] } — ek hi call me saare
                 const res = await apiService({ method: "DELETE", endpoint: "messages", data: { messageIds: serverIds } });
-                if (!res?.success) throw new Error(apiErrorMessage(res));
-                // Dusron ke message server skip karta hai — sirf jo sach me delete hue unhe mark karo
-                const deleted = res.data?.deletedMessageIds ?? serverIds;
+                // 403 DELETE_WINDOW_EXPIRED: UI optimistic nahi tha, isliye kuch rollback nahi — message visible rehta hai
+                if (!res?.success) throw new Error(windowErrorMessage(res) ?? apiErrorMessage(res));
+                // Dusron ke / window ke bahar ke message server skip karta hai (skippedMessageIds) — wo visible rahte hain
+                const skipped = new Set((res.data?.skippedMessageIds ?? []).map(String));
+                const deleted = (res.data?.deletedMessageIds ?? serverIds).filter((id) => !skipped.has(String(id)));
+                if (skipped.size) Toast.show({ type: "info", text1: "Some messages could not be deleted for everyone" });
                 setMessages((prev) => prev.map((m) =>
                     deleted.includes(m._id)
                         ? { ...m, isDeleted: true, content: 'This message was deleted', attachments: [] }
@@ -1218,10 +1265,12 @@ export default function ChatScreen({ route, navigation }) {
                 }
                 setMessages((prev) => prev.filter((m) => !ids.includes(m._id)));
             }
-        } catch (e) { Alert.alert("Error", e?.message || "Message delete nahi hua, dobara try karo"); }
+        } catch (e) { Alert.alert("Error", e?.message || "Could not delete the message. Please try again."); }
     };
 
     const handleSelectMsg = (item) => {
+        // Deleted / abhi-bhejte (temp_) message select nahi hote
+        if (!item?._id || item.isDeleted || item.isOptimistic || String(item._id).startsWith("temp_")) return;
         setIsSelectMode(true);
         setSelectedMsgIds((prev) => {
             const next = new Set(prev);
@@ -1257,7 +1306,8 @@ export default function ChatScreen({ route, navigation }) {
                 onPress: async () => { await deleteMessage(ids, false); cancelSelectMode(); },
             },
         ];
-        if (allMine) {
+        const allExpired = ids.every((id) => isDeleteWindowExpired(messages.find((m) => m._id === id)));
+        if (allMine && !allExpired) {
             buttons.push({
                 text: 'Delete for Everyone', style: 'destructive',
                 onPress: async () => { await deleteMessage(ids, true); cancelSelectMode(); },
@@ -1265,7 +1315,7 @@ export default function ChatScreen({ route, navigation }) {
         }
         Alert.alert(
             'Delete Messages',
-            `${ids.length} message${ids.length > 1 ? 's' : ''} delete karo?`,
+            `Delete ${ids.length} message${ids.length > 1 ? 's' : ''}?\n\nDelete for Me removes ${ids.length > 1 ? 'them' : 'it'} only from your own view.${allMine && !allExpired ? ' Delete for Everyone removes ' + (ids.length > 1 ? 'them' : 'it') + ' for everyone in this chat.' : ''}`,
             buttons
         );
     };
@@ -1292,6 +1342,9 @@ export default function ChatScreen({ route, navigation }) {
         socketService.emit("message-reaction", { messageId: msgId, chatId, emoji: removing ? "" : emoji });
     };
 
+    // Reaction chip tap (MessageBubble sirf meri apni chip par call karta hai) — same emoji = hata do
+    const handleReactionPress = (msg, emoji) => reactToMessage(msg, emoji);
+
     const openDocInBrowser = async (url) => {
         const fullUrl = getFullUrl(url);
         // canOpenURL Android 11+ par https ke liye bhi false deta hai (manifest queries ke bina) —
@@ -1311,7 +1364,7 @@ export default function ChatScreen({ route, navigation }) {
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar backgroundColor="#1296f3" barStyle="light-content" />
+            <StatusBar backgroundColor={theme?.header ?? "#1296f3"} barStyle="light-content" />
 
             <ChatHeader
                 navigation={navigation}
@@ -1329,6 +1382,7 @@ export default function ChatScreen({ route, navigation }) {
                 onForwardSelected={handleForwardSelected}
                 onDeleteSelected={deleteSelectedMessages}
                 onCopySelected={handleCopySelected}
+                onStarSelected={handleStarSelected}
                 MY_USER_ID={MY_USER_ID}
                 fmtTime={fmtTime}
                 isSearchMode={isSearchMode}
@@ -1388,6 +1442,7 @@ export default function ChatScreen({ route, navigation }) {
                         isSelectMode={isSelectMode}
                         selectedMsgIds={selectedMsgIds}
                         onSelectMsg={handleSelectMsg}
+                        onReactionPress={handleReactionPress}
                         onCancelSelect={cancelSelectMode}
                         onDeleteSelected={deleteSelectedMessages}
                         onForwardSelected={handleForwardSelected}
@@ -1467,6 +1522,8 @@ export default function ChatScreen({ route, navigation }) {
                     onDelete={handleDelete}
                     onDeleteForAll={handleDeleteAll}
                     onEdit={handleEdit}
+                    canEdit={!isEditWindowExpired(selectedMsg)}
+                    canDeleteForAll={!isDeleteWindowExpired(selectedMsg)}
                     onForward={handleForward}
                     onStar={handleStar}
                     onReact={handleReact}

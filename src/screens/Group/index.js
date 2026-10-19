@@ -130,7 +130,7 @@ export default function GroupScreen({ navigation, route }) {
     const handleRemoveMember = (member) => {
         Alert.alert(
             'Remove Member',
-            `${member.name} ko group se remove karein?`,
+            `${member.name || member.mobile || 'User'} ko group se remove karein?`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -220,7 +220,7 @@ export default function GroupScreen({ navigation, route }) {
     const handleAddAdmin = (member) => {
         Alert.alert(
             'Make Admin',
-            `${member.name} ko admin banana chahte hain?`,
+            `${member.name || member.mobile || 'User'} ko admin banana chahte hain?`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -238,7 +238,7 @@ export default function GroupScreen({ navigation, route }) {
                                     ...prev,
                                     admins: [...(prev.admins || []), { _id: member._id, name: member.name }],
                                 }));
-                                Alert.alert('Done', `${member.name} ab admin hai!`);
+                                Alert.alert('Done', `${member.name || member.mobile || 'User'} ab admin hai!`);
                             } else {
                                 Alert.alert('Error', res?.message || 'Admin nahi ban saka');
                             }
@@ -253,7 +253,7 @@ export default function GroupScreen({ navigation, route }) {
     const handleRemoveAdmin = (member) => {
         Alert.alert(
             'Remove Admin',
-            `${member.name} ki admin rights hatana chahte hain?`,
+            `${member.name || member.mobile || 'User'} ki admin rights hatana chahte hain?`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -272,7 +272,7 @@ export default function GroupScreen({ navigation, route }) {
                                     ...prev,
                                     admins: (prev.admins || []).filter(a => a._id !== member._id),
                                 }));
-                                Alert.alert('Done', `${member.name} ab admin nahi hai`);
+                                Alert.alert('Done', `${member.name || member.mobile || 'User'} ab admin nahi hai`);
                             } else {
                                 Alert.alert('Error', res?.message || 'Admin remove nahi hua');
                             }

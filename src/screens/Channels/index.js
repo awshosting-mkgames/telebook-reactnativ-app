@@ -98,6 +98,7 @@ const Channels = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState('');
+    const [searchFocused, setSearchFocused] = useState(false);
     const [following, setFollowing] = useState({});
     const [loadingFollow, setLoadingFollow] = useState({});
 
@@ -268,6 +269,13 @@ const Channels = ({ navigation }) => {
                                 <Ionicons name="lock-closed" size={12} color={isDark ? '#666' : '#999'} />
                             )}
                         </View>
+                        {/* Sponsored (boosted) channel — server isSponsored bhejta hai; organic rows par kuch nahi */}
+                        {item.isSponsored === true && (
+                            <View style={[styles.sponsoredBadge, { alignSelf: 'flex-start', marginTop: 0, marginBottom: 2, paddingVertical: 2, backgroundColor: isDark ? '#07240f' : '#e8f8ee' }]}>
+                                <Ionicons name="star" size={10} color="#16a34a" />
+                                <Text style={styles.sponsoredText}>Sponsored</Text>
+                            </View>
+                        )}
                         {!!desc && (
                             <Text style={[styles.desc, { color: isDark ? '#777' : '#777' }]} numberOfLines={1}>{desc}</Text>
                         )}
@@ -466,12 +474,15 @@ const Channels = ({ navigation }) => {
         );
     };
 
+    // Header colour theme token se (dark me alag), fallback purana blue
+    const headerBg = theme?.header || '#1199ff';
     const sectionTitleColor = isDark ? '#d0d0d0' : '#222';
     const createBtnBg = isDark ? '#0d1e2e' : '#e8f4fd';
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <View style={styles.header}>
+            <StatusBar backgroundColor={headerBg} barStyle="light-content" />
+            <View style={[styles.header, { backgroundColor: headerBg }]}>
                 {/* Ye ek tab screen hai — back arrow tabhi jab sach me wapas ja sakein */}
                 {navigation.canGoBack() && (
                     <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -504,9 +515,11 @@ const Channels = ({ navigation }) => {
 
             {activeTab === 'all' && (
                 <>
-                    <View style={[styles.searchBar, { backgroundColor: isDark ? '#1e1e1e' : '#f2f2f2' }]}>
-                        <Ionicons name="search" size={17} color={isDark ? '#666' : '#aaa'} />
+                    <View style={[styles.searchBar, { backgroundColor: isDark ? '#1e1e1e' : '#f2f2f2', borderColor: searchFocused ? headerBg : 'transparent' }]}>
+                        <Ionicons name="search" size={17} color={searchFocused ? headerBg : (isDark ? '#666' : '#aaa')} />
                         <TextInput
+                            onFocus={() => setSearchFocused(true)}
+                            onBlur={() => setSearchFocused(false)}
                             style={[styles.searchInput, { color: theme.text }]}
                             placeholder="Search channels..."
                             placeholderTextColor={isDark ? '#666' : '#aaa'}
@@ -748,6 +761,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
         paddingVertical: 10,
         borderRadius: 22,
+        borderWidth: 1.5,
     },
     searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
 

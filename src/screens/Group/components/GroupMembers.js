@@ -50,7 +50,7 @@ const GroupMembers = ({
         if(checkUserRole(member._id) === 1) return;
         const isMemberAdmin = checkUserRole(member._id) === 2;
         Alert.alert(
-            member.name,
+            member.name || member.mobile || 'User',
             'Member ke liye action choose karein',
             [
                 { text: 'Cancel', style: 'cancel' },
@@ -101,12 +101,12 @@ const GroupMembers = ({
                         <Image
                             source={{
                                 uri: getImageUrl(member.profilePicture)
-                                    || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || '?')}&background=3498db&color=fff&size=100`,
+                                    || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.mobile || '?')}&background=3498db&color=fff&size=100`,
                             }}
                             style={styles.avatar}
                         />
                         <View style={{ flex: 1 }}>
-                            <Text style={[styles.name, { color: theme.text }]}>{member.name}</Text>
+                            <Text style={[styles.name, { color: theme.text }]}>{member.name || member.mobile || 'User'}</Text>
                             <Text style={styles.about} numberOfLines={1}>{member.mobile}</Text>
                         </View>
 

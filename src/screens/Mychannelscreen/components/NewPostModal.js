@@ -264,7 +264,7 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
                 isMultipart: true,
             });
 
-            onPosted(res?.message ?? null);
+            onPosted(res?.data?.message ?? res?.message ?? null);
             reset();
             onClose();
         } catch (error) {

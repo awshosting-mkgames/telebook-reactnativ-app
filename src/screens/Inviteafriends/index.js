@@ -77,10 +77,10 @@ export default function InviteAFriends({navigation}) {
 
     return (
         <SafeAreaView style={[styles.container,{ backgroundColor: theme.background}]}>
-             <StatusBar backgroundColor="#1199ff" barStyle="light-content" />
+             <StatusBar backgroundColor={theme.header || '#1199ff'} barStyle="light-content" />
 
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Ionicons name="arrow-back" size={26} color="white" />
                 </TouchableOpacity>

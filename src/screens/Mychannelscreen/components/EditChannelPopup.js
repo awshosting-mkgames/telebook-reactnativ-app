@@ -3,7 +3,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import {
     View, Text, StyleSheet, Modal, TouchableOpacity, TextInput,
     Image, ScrollView, ActivityIndicator, Alert,
-    KeyboardAvoidingView, Platform,
+    KeyboardAvoidingView, Platform, Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -27,11 +27,13 @@ export default function EditChannelPopup({ visible, onClose, channel, onUpdated 
     const [desc, setDesc] = useState('');
     const [newIcon, setNewIcon] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [isPrivate, setIsPrivate] = useState(false);
 
     useEffect(() => {
         if (channel && visible) {
             setName(channel?.channelName || channel?.name || '');
             setDesc(channel?.channelDescription || channel?.description || '');
+            setIsPrivate(!!channel?.isPrivate);
             setNewIcon(null);
         }
     }, [channel, visible]);
@@ -53,6 +55,8 @@ export default function EditChannelPopup({ visible, onClose, channel, onUpdated 
             const form = new FormData();
             form.append('channelName', name.trim());
             form.append('channelDescription', desc.trim());
+            // Server 'true'/'false' string expect karta hai (multipart)
+            form.append('isPrivate', isPrivate ? 'true' : 'false');
             if (newIcon) {
                 await appendFile(form, 'channelIcon', { uri: newIcon, type: 'image/jpeg', name: `icon_${Date.now()}.jpg` });
             }
@@ -61,6 +65,11 @@ export default function EditChannelPopup({ visible, onClose, channel, onUpdated 
                 endpoint: `channels/${channel?._id || channel?.id}/update`,
                 data: form, isMultipart: true,
             });
+            // apiService throw nahi karta — success flag check karna zaroori hai
+            if (!res?.success) {
+                Alert.alert('Error', res?.error?.message || 'Update nahi hua');
+                return;
+            }
             onUpdated(res?.data?.channel ?? res?.channel ?? res?.data ?? null);
             onClose();
         } catch {
@@ -126,6 +135,21 @@ export default function EditChannelPopup({ visible, onClose, channel, onUpdated 
                             maxLength={300}
                             editable={!saving}
                         />
+                        <View style={styles.switchRow}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.switchTitle}>{isPrivate ? 'Private channel' : 'Public channel'}</Text>
+                                <Text style={styles.switchHint}>
+                                    Public channels can be found and joined by anyone. Private channels need the invite link.
+                                </Text>
+                            </View>
+                            <Switch
+                                value={isPrivate}
+                                onValueChange={setIsPrivate}
+                                disabled={saving}
+                                trackColor={{ false: isLight ? '#d0d4da' : '#3a3d44', true: theme?.header || '#1199ff' }}
+                                thumbColor="#fff"
+                            />
+                        </View>
                         <View style={{ height: 20 }} />
                     </ScrollView>
                 </View>
@@ -150,5 +174,8 @@ const getStyles = (isLight) => StyleSheet.create({
     camBadge: { position: 'absolute', bottom: 2, right: 2, backgroundColor: '#1296f3', width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isLight ? '#fff' : '#1a1d23' },
     iconHint: { fontSize: 13, color: isLight ? '#aaa' : '#8a8f96' },
     label: { fontSize: 13, fontWeight: '700', color: isLight ? '#555' : '#c5c8cc', marginBottom: 8, marginTop: 16 },
+    switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20 },
+    switchTitle: { fontSize: 14, fontWeight: '700', color: isLight ? '#333' : '#e5e5e5' },
+    switchHint: { fontSize: 12, marginTop: 3, lineHeight: 17, color: isLight ? '#888' : '#8a8f96' },
     input: { borderWidth: 1.5, borderColor: isLight ? '#eee' : '#2a2d33', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: isLight ? '#111' : '#f5f5f5', backgroundColor: isLight ? '#fafafa' : '#22252b' },
 });

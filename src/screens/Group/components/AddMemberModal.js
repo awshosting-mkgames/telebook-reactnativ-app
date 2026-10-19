@@ -98,7 +98,7 @@ const AddMemberModal = ({ visible, onClose, chatId, existingMemberIds, onAdded }
                                     source={{ uri: c.appUser?.avatar || `https://avatar.iran.liara.run/public/boy?username=${c.name}` }}
                                     style={styles.chipAvatar}
                                 />
-                                <Text style={styles.chipName} numberOfLines={1}>{c.name.split(' ')[0]}</Text>
+                                <Text style={styles.chipName} numberOfLines={1}>{(c.name || c.phone || 'User').split(' ')[0]}</Text>
                                 <View style={styles.chipClose}>
                                     <Ionicons name="close" size={12} color="#3498db" />
                                 </View>
@@ -144,7 +144,7 @@ const AddMemberModal = ({ visible, onClose, chatId, existingMemberIds, onAdded }
                                     style={styles.avatar}
                                 />
                                 <View style={{ flex: 1, marginLeft: 13 }}>
-                                    <Text style={styles.name}>{item.name}</Text>
+                                    <Text style={styles.name}>{item.name || item.phone || 'User'}</Text>
                                     <Text style={styles.phone}>{item.phone}</Text>
                                 </View>
                                 <View style={[styles.checkbox, sel && styles.checkboxSel]}>

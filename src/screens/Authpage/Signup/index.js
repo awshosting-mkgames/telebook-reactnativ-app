@@ -27,35 +27,22 @@ const Signup = ({ navigation, renderSection }) => {
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
-        city: '',
         about: 'Hey there! I am using TeleBook',
     });
     const [focused, setFocused] = useState('');
 
-    const validateForm = () => {
-        if (!formData.name.trim()) {
-            Toast.show({ type: 'error', text1: 'Name required' });
-            return false;
-        }
-        if (!formData.city.trim()) {
-            Toast.show({ type: 'error', text1: 'City required' });
-            return false;
-        }
-        if (!formData.about.trim()) {
-            Toast.show({ type: 'error', text1: 'About required' });
-            return false;
-        }
-        return true;
-    };
-
     const handleSubmit = async () => {
-        if (!validateForm()) return;
         try {
             setLoading(true);
             const res = await apiService({
                 method: 'POST',
                 endpoint: 'auth/complete-profile',
-                data: formData,
+                // Name/about optional hain — sirf bhare hue fields bhejo (khali body bhi chalegi)
+                data: Object.fromEntries(
+                    Object.entries(formData)
+                        .map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])
+                        .filter(([, v]) => v),
+                ),
             });
             if (res?.success) {
                 const Data = res?.data;
@@ -75,7 +62,6 @@ const Signup = ({ navigation, renderSection }) => {
 
     const fields = [
         { key: 'name', label: t('full_name'), placeholder: t('enter_full_name'), icon: 'person-outline', type: 'default' },
-        { key: 'city', label: t('city'), placeholder: t('enter_city'), icon: 'location-outline', type: 'default' },
         { key: 'about', label: t('About'), placeholder: t('write_about'), icon: 'information-circle-outline', type: 'default' },
     ];
 

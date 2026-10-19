@@ -93,7 +93,7 @@ export default function BroadcastDetails({ route, navigation }) {
         subText: isDark ? '#8696a0' : '#667781',
         border: isDark ? '#2a3942' : '#ececec',
         inputBg: theme.inputBackground,
-        msgBubbleBg: isDark ? '#005c4b' : '#dcf8c6',
+        msgBubbleBg: theme.bubbleMine ?? (isDark ? '#1f3a52' : '#d9efff'), // ek hi token — Chat jaisa
         msgText: isDark ? '#e9edef' : '#111111',
         accent: '#1296f3',
     };
@@ -233,6 +233,14 @@ export default function BroadcastDetails({ route, navigation }) {
             setShowAddMember(false);
             setSelectedNew([]);
             fetchDetails();
+        } else if (res?.error?.code === 'PLAN_LIMIT') {
+            // Part 3 §3.4e: per-broadcast users ki limit — Upgrade ka rasta do
+            Alert.alert('Plan Limit Reached', ['Plan Limit Reached – Upgrade your plan to continue.', res.error.message].filter(Boolean).join('\n'), [
+                { text: 'Upgrade Plan', onPress: () => navigation.navigate('Plans') },
+                { text: 'Cancel', style: 'cancel' },
+            ]);
+        } else if (res && res.success === false) {
+            Alert.alert('Error', res?.error?.message || 'Could not add recipients');
         }
     };
 
@@ -353,8 +361,9 @@ export default function BroadcastDetails({ route, navigation }) {
     );
 
     // ── Header har state me same rehta hai (loading me bhi) ─────────────────
+    const headerBg = theme.header ?? '#1296f3';
     const Header = () => (
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: headerBg }]}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn} hitSlop={HIT}>
                 <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
             </TouchableOpacity>
@@ -389,7 +398,7 @@ export default function BroadcastDetails({ route, navigation }) {
 
     if (loading) return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar backgroundColor="#1296f3" barStyle="light-content" />
+            <StatusBar backgroundColor={headerBg} barStyle="light-content" />
             <Header />
             <View style={styles.loadingBox}>
                 <ActivityIndicator color={colors.accent} size="large" />
@@ -399,7 +408,7 @@ export default function BroadcastDetails({ route, navigation }) {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar backgroundColor="#1296f3" barStyle="light-content" />
+            <StatusBar backgroundColor={headerBg} barStyle="light-content" />
 
             <Header />
 

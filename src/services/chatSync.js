@@ -9,6 +9,7 @@ import {
 } from '../redex/slices/chatListSlice';
 import apiService from './apiService';
 import Config from './config';
+import { getAllContacts } from './contactsDb';
 import {
     CHAT_TABS,
     getAllTabChats,
@@ -30,6 +31,72 @@ const DEFAULT_GROUP = 'https://cdn-icons-png.flaticon.com/512/681/681494.png';
 
 const resolveAvatar = (path, fallback) => (!path ? fallback : Config.MEDIA_URL + path);
 
+// ── Phonebook naam cache ─────────────────────────────────────────────────────
+// Chat list ka title = phonebook me saved naam, nahi to registered mobile number
+// (server ka profile naam list title kabhi nahi banta — wo sirf profile page par dikhta hai).
+// processChat sync hai (ChatListSocketSync bhi use karta hai), isliye contacts SQL se
+// ek baar phone→name map memory me rakhte hain aur contact change par refresh karte hain.
+let phoneNameCache = new Map();
+
+const last10 = (v) => String(v ?? '').replace(/\D/g, '').slice(-10);
+
+// Number ko ek jaisa format do: country code pata ho to '+91 98765 43210', warna 10 digits
+export const formatMobile = (mobile, countryCode) => {
+    const d = last10(mobile);
+    if (!d) return '';
+    const cc = String(countryCode ?? '').replace(/\D/g, '');
+    if (cc && d.length === 10) return `+${cc} ${d.slice(0, 5)} ${d.slice(5)}`;
+    return d;
+};
+
+export const loadPhoneNameCache = async () => {
+    try {
+        const contacts = await getAllContacts();
+        const map = new Map();
+        contacts.forEach((c) => {
+            const key = last10(c?.phone ?? c?.mobile);
+            const name = (c?.name || '').trim();
+            // 'Unknown' contactSync ka placeholder hai, asli saved naam nahi
+            if (key && name && name !== 'Unknown') map.set(key, name);
+        });
+        phoneNameCache = map;
+    } catch (e) {
+        console.log('⚠️ loadPhoneNameCache error:', e);
+    }
+    return phoneNameCache;
+};
+
+// displayName / isSaved nikalo — group par kuch nahi badalta
+const resolveOneToOneName = (other, fallbackName) => {
+    const key = last10(other?.mobile);
+    const saved = key ? phoneNameCache.get(key) : null;
+    if (saved) return { displayName: saved, isSaved: true };
+    const num = formatMobile(other?.mobile, other?.countryCode);
+    return { displayName: num || fallbackName || 'User', isSaved: false };
+};
+
+// Maujooda chats ke naam naye cache se dobara nikalo (contacts badalne par / SQL se load par)
+const relabelTabs = (tabs) => {
+    const out = {};
+    Object.keys(tabs || {}).forEach((tab) => {
+        out[tab] = (tabs[tab] || []).map((c) => {
+            if (!c || c.isGroupChat || !c.displayUser) return c;
+            const r = resolveOneToOneName(c.displayUser, c.displayName);
+            return c.displayName === r.displayName && c.isSaved === r.isSaved ? c : { ...c, ...r };
+        });
+    });
+    return out;
+};
+
+/** Contacts badle (sync/refresh) to chat list ke naam bhi turant update karo. */
+export const refreshChatNames = () => async (dispatch, getState) => {
+    await loadPhoneNameCache();
+    const tabs = getState()?.chatList?.tabs;
+    if (!tabs) return;
+    dispatch(setAllTabs(relabelTabs(tabs)));
+    dispatch(persistChatTabs());
+};
+
 // raw API chat → display-ready object (wahi shape jo screens pehle se use karti hain)
 export const processChat = (item, myUserId) => {
     if (item?.isGroupChat) {
@@ -41,9 +108,11 @@ export const processChat = (item, myUserId) => {
         };
     }
     const other = item?.users?.find((u) => u?._id !== myUserId);
+    const { displayName, isSaved } = resolveOneToOneName(other, item?.chatName);
     return {
         ...item,
-        displayName: other?.name || item.chatName || 'Unknown',
+        displayName,
+        isSaved,
         displayAvatar: resolveAvatar(other?.profilePicture, DEFAULT_AVATAR),
         displayUser: other || null,
     };
@@ -127,8 +196,10 @@ export const loadTabsFromDb = async (dispatch) => {
     const [tabs, lastSyncedAt] = await Promise.all([
         getAllTabChats(),
         getChatsSyncedAt(),
+        loadPhoneNameCache(),
     ]);
-    dispatch(setAllTabs(tabs));
+    // Purane cached chats me bhi phonebook naam / number lagao
+    dispatch(setAllTabs(relabelTabs(tabs)));
     if (lastSyncedAt) dispatch(syncFinished(lastSyncedAt));
     return tabs;
 };
@@ -149,6 +220,8 @@ export const syncAllTabData = async (dispatch, myUserId, opts = {}) => {
     if (!background) dispatch(loadStarted());
 
     try {
+        // processChat se pehle phonebook cache taiyar ho
+        await loadPhoneNameCache();
         // Chaaron tabs parallel me — ek doosre par depend nahi karte.
         // Blocked list bhi saath me (Block / Unblock label ke liye); wo fail ho
         // to sync fail nahi hona chahiye.
@@ -165,7 +238,7 @@ export const syncAllTabData = async (dispatch, myUserId, opts = {}) => {
         const syncedAt = Date.now();
         await setChatsSyncedAt(syncedAt);
 
-        const tabs = await getAllTabChats();
+        const tabs = relabelTabs(await getAllTabChats());
         dispatch(setAllTabs(tabs));
         dispatch(syncFinished(syncedAt));
 

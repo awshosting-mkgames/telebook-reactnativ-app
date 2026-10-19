@@ -1,6 +1,6 @@
 // screens/Mychannelscreen/index.js
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator, Alert,
     FlatList,
@@ -11,6 +11,10 @@ import {
     View,
 } from 'react-native';
 import apiService from '../../services/apiService';
+import {
+    POSTS_PAGE_SIZE, copyChannelLink, fetchChannelById, fetchPostsPage,
+    mergePosts, shareChannelLink, showToast,
+} from '../../services/channelActions';
 import { ThemeContext } from '../../components/ThemeContext';
 
 // ── Components ────────────────────────────────────────────────────────────────
@@ -18,6 +22,7 @@ import ChannelListHeader from './components/ChannelListHeader';
 import DeleteChannelModal from './components/DeleteChannelModal';
 import EditChannelPopup from './components/EditChannelPopup';
 import NewPostModal from './components/NewPostModal';
+import PostActions from './components/PostActions';
 import PostCard from './components/PostCard';
 import SubCard from './components/SubCard';
 
@@ -27,6 +32,8 @@ export default function MyChannelScreen({ navigation, route }) {
     const { theme } = useContext(ThemeContext);
     const isLight = theme?.mode === 'light';
     const styles = getStyles(isLight);
+    const headerBg = theme?.header || '#1199ff';
+    const listRef = useRef(null);
 
     const [channel, setChannel] = useState(null);
     const [posts, setPosts] = useState([]);
@@ -38,6 +45,11 @@ export default function MyChannelScreen({ navigation, route }) {
     const [showNewPost, setShowNewPost] = useState(false);
     const [showEdit, setShowEdit] = useState(false);
     const [showDelete, setShowDelete] = useState(false);   // ✅ delete popup
+    const [selectedPost, setSelectedPost] = useState(null); // long-press action sheet
+    // Pagination: posts newest-first rakhe jate hain, list `inverted` hai => newest neeche
+    const [hasMore, setHasMore] = useState(false);
+    const pageRef = useRef(1);
+    const loadingMoreRef = useRef(false);
 
     // ── API ───────────────────────────────────────────────────────────────────
     const fetchChannel = useCallback(async () => {
@@ -47,13 +59,32 @@ export default function MyChannelScreen({ navigation, route }) {
         } catch (e) { console.error(e); }
     }, [channelId]);
 
+    // Page 1 = sabse naye posts. Reset/refresh par list replace hoti hai.
     const fetchPosts = useCallback(async () => {
         try {
-            const res = await apiService({ method: 'GET', endpoint: `channels/${channelId}/messages` });
-            const list = res?.messages ?? res?.data?.messages ?? [];
-            setPosts(Array.isArray(list) ? [...list].reverse() : []);
+            const r = await fetchPostsPage(channelId, 1, POSTS_PAGE_SIZE);
+            if (!r) return;
+            pageRef.current = 1;
+            setPosts(mergePosts([], r.posts));
+            setHasMore(r.hasMore);
         } catch (e) { console.error(e); }
     }, [channelId]);
+
+    // Purane posts: user upar scroll kare to agla page; _id se de-dupe
+    const loadMorePosts = useCallback(async () => {
+        if (loadingMoreRef.current || !hasMore) return;
+        loadingMoreRef.current = true;
+        try {
+            const next = pageRef.current + 1;
+            const r = await fetchPostsPage(channelId, next, POSTS_PAGE_SIZE);
+            if (r) {
+                pageRef.current = next;
+                setPosts(prev => mergePosts(prev, r.posts));
+                setHasMore(r.hasMore);
+            }
+        } catch (e) { console.error(e); }
+        finally { loadingMoreRef.current = false; }
+    }, [channelId, hasMore]);
 
     const fetchSubscribers = useCallback(async () => {
         try {
@@ -98,17 +129,42 @@ export default function MyChannelScreen({ navigation, route }) {
     };
 
     const handlePosted = (newPost) => {
-        if (newPost) setPosts(p => [...p, newPost]); else fetchPosts();
+        // Naya post sabse upar (newest-first data) => inverted list me sabse neeche
+        if (newPost?._id) {
+            setPosts(p => mergePosts([newPost], p));
+            requestAnimationFrame(() => listRef.current?.scrollToOffset?.({ offset: 0, animated: true }));
+        } else {
+            fetchPosts().then(() => listRef.current?.scrollToOffset?.({ offset: 0, animated: true }));
+        }
         fetchChannel();
     };
 
     const handleUpdated = (updated) => {
-        if (updated) setChannel(updated); else fetchChannel();
+        // merge: update response me shareUrl na ho to purani value na jaye
+        if (updated) setChannel(prev => ({ ...(prev || {}), ...updated })); else fetchChannel();
     };
 
     // ✅ Channel delete success → back chale jao
     const handleChannelDeleted = () => {
         navigation.goBack();
+    };
+
+    // ── Copy / Share link (sirf shareUrl; internal id kabhi nahi) ─────────────
+    const ensureChannelWithShareUrl = async () => {
+        if (channel?.shareUrl) return channel;
+        const c = await fetchChannelById(channelId);
+        if (c) setChannel(prev => ({ ...(prev || {}), ...c }));
+        return c;
+    };
+    const handleCopyLink = async () => {
+        const c = await ensureChannelWithShareUrl();
+        if (!copyChannelLink(c?.shareUrl)) showToast('Link not available', 'error');
+    };
+    const handleShareLink = async () => {
+        const c = await ensureChannelWithShareUrl();
+        if (!(await shareChannelLink(c))) {
+            if (!c?.shareUrl) showToast('Link not available', 'error');
+        }
     };
 
     // ── Shared ListHeader ─────────────────────────────────────────────────────
@@ -122,14 +178,16 @@ export default function MyChannelScreen({ navigation, route }) {
             onEdit={() => setShowEdit(true)}
             onNewPost={() => setShowNewPost(true)}
             onDeleteChannel={() => setShowDelete(true)}
+            onCopyLink={handleCopyLink}
+            onShareLink={handleShareLink}
         />
     );
 
     if (loading) {
         return (
             <SafeAreaView style={styles.container}>
-                <StatusBar backgroundColor="#1296f3" barStyle="light-content" />
-                <ActivityIndicator color="#1296f3" size="large" style={{ marginTop: 120 }} />
+                <StatusBar backgroundColor={headerBg} barStyle="light-content" />
+                <ActivityIndicator color={headerBg} size="large" style={{ marginTop: 120 }} />
             </SafeAreaView>
         );
     }
@@ -141,15 +199,19 @@ export default function MyChannelScreen({ navigation, route }) {
             {/* POSTS TAB */}
             {activeTab === 'posts' ? (
                 <FlatList
+                    ref={listRef}
+                    inverted
                     data={posts}
                     keyExtractor={(item, i) => (item?._id || i).toString()}
-                    renderItem={({ item }) => <PostCard item={item} onDelete={handleDelete} />}
-                    ListHeaderComponent={<ListHeader />}
-                    contentContainerStyle={{ paddingBottom: 110 }}
+                    renderItem={({ item }) => <PostCard item={item} onDelete={handleDelete} onLongPress={setSelectedPost} />}
+                    // inverted list me Footer = visual top: channel header sabse upar, posts uske neeche,
+                    // sabse naya post sabse neeche
+                    ListFooterComponent={<ListHeader />}
+                    onEndReached={loadMorePosts}
+                    onEndReachedThreshold={0.4}
+                    // FAB (bottom) ke neeche content na chhupe => inverted me paddingTop = visual bottom
+                    contentContainerStyle={{ paddingTop: 110, flexGrow: 1, justifyContent: 'flex-end' }}
                     showsVerticalScrollIndicator={false}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={() => loadAll(true)} colors={['#1296f3']} />
-                    }
                     ListEmptyComponent={
                         <View style={styles.empty}>
                             <Ionicons name="cloud-upload-outline" size={50} color={isLight ? '#ddd' : '#3a3d44'} />
@@ -182,6 +244,18 @@ export default function MyChannelScreen({ navigation, route }) {
                     }
                 />
             )}
+
+            <PostActions
+                post={selectedPost}
+                channelId={channelId}
+                onClose={() => setSelectedPost(null)}
+                colors={{
+                    bg: isLight ? '#fff' : '#1a1d23',
+                    text: isLight ? '#111' : '#f5f5f5',
+                    border: isLight ? '#ddd' : '#3a3d44',
+                    accent: headerBg,
+                }}
+            />
 
             {/* FAB */}
             <TouchableOpacity style={styles.fab} onPress={() => setShowNewPost(true)}>

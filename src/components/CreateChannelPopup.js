@@ -3,6 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useContext, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Animated,
     Dimensions,
     Image,
@@ -10,12 +11,14 @@ import {
     Modal,
     Platform,
     StyleSheet,
+    Switch,
     Text,
     TextInput,
     TouchableOpacity,
     TouchableWithoutFeedback,
     View,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
 import { ThemeContext } from '../components/ThemeContext';
 import apiService from '../services/apiService';
@@ -26,10 +29,12 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CreateChannelPopup = ({ visible, onClose }) => {
     const { theme } = useContext(ThemeContext);
     const isDark = theme.text === '#FFFFFF';
+    const navigation = useNavigation();
 
     const [channelName, setChannelName] = useState('');
     const [image, setImage] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [isPrivate, setIsPrivate] = useState(false);
 
     const shiftAnim = useRef(new Animated.Value(0)).current;
 
@@ -62,7 +67,8 @@ const CreateChannelPopup = ({ visible, onClose }) => {
         setLoading(true);
         const formData = new FormData();
         formData.append('channelName', channelName);
-        formData.append('isPrivate', false);
+        // Server string 'true'/'false' parse karta hai (multipart)
+        formData.append('isPrivate', isPrivate ? 'true' : 'false');
         const filename = image.split('/').pop();
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : 'image';
@@ -74,9 +80,18 @@ const CreateChannelPopup = ({ visible, onClose }) => {
                 Toast.show({ type: 'success', text1: 'Success 🎉' });
                 setChannelName('');
                 setImage(null);
+                setIsPrivate(false);
                 onClose();
             } else if (response.error?.code === 'PLAN_LIMIT') {
-                Toast.show({ type: 'error', text1: 'Plan limit reached', text2: response.error.message });
+                // CreateGroup / CreateBroadcast jaisa hi Plan Limit alert
+                Alert.alert(
+                    'Plan Limit Reached',
+                    ['Plan Limit Reached \u2013 Upgrade your plan to continue.', response.error.message].filter(Boolean).join('\n'),
+                    [
+                        { text: 'Upgrade Plan', onPress: () => { onClose(); navigation.navigate('Plans'); } },
+                        { text: 'Cancel', style: 'cancel' },
+                    ],
+                );
             } else {
                 Toast.show({ type: 'error', text1: 'Failed', text2: response.error?.message || 'Try again' });
             }
@@ -174,9 +189,23 @@ const CreateChannelPopup = ({ visible, onClose }) => {
                                 {channelName.length}/30
                             </Text>
 
-                            <Text style={[styles.disclaimer, { color: disclaimerClr }]}>
-                                Anyone can discover your channel and see your updates.
-                            </Text>
+                            <View style={styles.switchRow}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.switchTitle, { color: titleColor }]}>
+                                        {isPrivate ? 'Private channel' : 'Public channel'}
+                                    </Text>
+                                    <Text style={[styles.switchHint, { color: disclaimerClr }]}>
+                                        Public channels can be found and joined by anyone. Private channels need the invite link.
+                                    </Text>
+                                </View>
+                                <Switch
+                                    value={isPrivate}
+                                    onValueChange={setIsPrivate}
+                                    disabled={loading}
+                                    trackColor={{ false: isDark ? '#444' : '#ccc', true: theme.header || '#1199ff' }}
+                                    thumbColor="#fff"
+                                />
+                            </View>
 
                         </View>
                     </TouchableWithoutFeedback>
@@ -206,6 +235,9 @@ const styles = StyleSheet.create({
     inputLabel: { fontSize: 11, color: '#25D366', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
     input: { fontSize: 16, marginTop: 4, paddingVertical: 6 },
     charCount: { fontSize: 11, textAlign: 'right', marginBottom: 12 },
+    switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 },
+    switchTitle: { fontSize: 14, fontWeight: '700' },
+    switchHint: { fontSize: 12, lineHeight: 17, marginTop: 2 },
     disclaimer: { textAlign: 'center', fontSize: 12, lineHeight: 18, marginTop: 4 },
 });
 

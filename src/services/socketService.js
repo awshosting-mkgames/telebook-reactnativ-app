@@ -65,7 +65,8 @@ class SocketService {
             transports: ['websocket'],
             reconnection:      true,
             reconnectionDelay: 1000,
-            reconnectionAttempts: 10,
+            reconnectionDelayMax: 10000, // backoff cap 10s
+            reconnectionAttempts: Infinity, // network aate hi hamesha reconnect try karo
         });
 
         // Jo screens socket banne se pehle `on()` kar chuki hain, unke listeners

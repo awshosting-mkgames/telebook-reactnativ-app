@@ -11,14 +11,17 @@ const ChatHeader = ({
     navigation, chatName, chatImage, isGroup, isBroadcast,
     isTyping, isOnline, gotouserDetails, chatDaetils,
     isSelectMode, selectedCount, onCancelSelect, onForwardSelected,
-    onDeleteSelected, onCopySelected, MY_USER_ID, fmtTime,
+    onDeleteSelected, onCopySelected, onStarSelected, MY_USER_ID, fmtTime,
     isSearchMode, searchText, onSearchChange, onOpenSearch, onCloseSearch,
     onClearChat, getFullUrl, isBlocked, onToggleBlock,
     onVoiceCall, onVideoCall, callsAvailable,
 }) => {
     const [menuVisible, setMenuVisible] = useState(false);
     const { theme } = useContext(ThemeContext);
-    const isDark = theme?.text === '#FFFFFF';
+    const isDark = theme?.mode ? theme.mode === 'dark' : theme?.text === '#FFFFFF';
+    // Header colour theme token se (dark me neutral dark, light me wahi blue)
+    const headerBg = theme?.header ?? '#1296f3';
+    const headerStyle = [styles.header, { backgroundColor: headerBg }];
 
     const menuBg = isDark ? '#1f2c34' : '#ffffff';
     const menuText = isDark ? '#e9edef' : '#222222';
@@ -27,7 +30,7 @@ const ChatHeader = ({
     // ── Search mode ───────────────────────────────────────────────
     if (isSearchMode) {
         return (
-            <View style={styles.header}>
+            <View style={headerStyle}>
                 <TouchableOpacity onPress={onCloseSearch} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
@@ -54,13 +57,16 @@ const ChatHeader = ({
     // ── Select mode ───────────────────────────────────────────────
     if (isSelectMode) {
         return (
-            <View style={styles.header}>
+            <View style={headerStyle}>
                 <TouchableOpacity onPress={onCancelSelect} style={styles.backBtn}>
                     <Ionicons name="close" size={22} color="#fff" />
                 </TouchableOpacity>
                 <Text style={[styles.name, { flex: 1 }]}>{selectedCount} selected</Text>
                 <TouchableOpacity onPress={onCopySelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
                     <Ionicons name="copy-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onStarSelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
+                    <Ionicons name="star-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={onForwardSelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
                     <Ionicons name="share-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
@@ -78,7 +84,7 @@ const ChatHeader = ({
 
     return (
         <>
-            <View style={styles.header}>
+            <View style={headerStyle}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>

@@ -60,21 +60,22 @@ const MessageBubble = ({
     setImageModalUri, setVideoModalUri, openDocInBrowser,
     setReplyMsg, setShowEmoji, fmtTime,
     isSelectMode, isHighlighted, isSelected, onSelect, onReplyPress, isMatch,
-    openPopup, retryMessage, onCancelUpload,
+    openPopup, retryMessage, onCancelUpload, onReactionPress,
 }) => {
     const { t } = useTranslation();
     const isMine = item.sender?._id === MY_USER_ID || item.sender === MY_USER_ID;
-    const isDark = theme?.text === '#FFFFFF';
+    // theme.mode se dark detect (text colour compare karna fragile tha)
+    const isDark = theme?.mode ? theme.mode === 'dark' : theme?.text === '#FFFFFF';
 
-
-    const mineBg = isDark ? '#005c4b' : '#dcf8c6';
+    // Outgoing bubble ka ek hi source: theme.bubbleMine (fallback sirf safety ke liye)
+    const mineBg = theme?.bubbleMine ?? (isDark ? '#1f3a52' : '#d9efff');
     const theirsBg = isDark ? '#1e2428' : '#ffffff';
     const normalBg = isMine ? mineBg : theirsBg;
     const matchBg = isDark ? '#3a3a1e' : '#FFFDE7'; // matched bubbles ka halka tint
     const bg = isHighlighted                         // active match — strong yellow
         ? '#996101'
         : isSelected                                 // select-mode — blue
-            ? '#B3E5FC'
+            ? (theme?.bubbleSelected ?? (isDark ? '#2a5d7c' : '#B3E5FC'))
             : isMatch                                // baaki matches — halka yellow
                 ? matchBg
                 : normalBg;
@@ -90,8 +91,10 @@ const MessageBubble = ({
     // media type (image/video/document/audio) isi se progress overlay dikhata hai.
     const isPendingUpload = isMine && item.status === 'sending' && !!item.attachments?.[0]?._pendingUpload;
     // Tap: select mode me select/unselect, failed message par retry
+    // Deleted ya abhi-bhejte (temp_) message select nahi hone chahiye
+    const canSelect = !item.isDeleted && !item.isOptimistic && !String(item._id ?? '').startsWith('temp_');
     const handlePress = () => {
-        if (isSelectMode) return onSelect(item);
+        if (isSelectMode) return canSelect ? onSelect(item) : undefined;
         if (isFailed) retryMessage?.(item);
     };
     // Long press: actions popup (reply, forward, star, react, delete...). Select mode me toggle.
@@ -99,7 +102,7 @@ const MessageBubble = ({
         if (item.isDeleted) return;
         if (isFailed) return openPopup?.(item); // Retry / Delete
         if (item.isOptimistic) return;
-        if (isSelectMode || !openPopup) return onSelect(item);
+        if (isSelectMode || !openPopup) return canSelect ? onSelect(item) : undefined;
         openPopup(item);
     };
     // Reactions ko emoji ke hisaab se group karo: ❤️ 2  👍 1
@@ -109,9 +112,13 @@ const MessageBubble = ({
             return acc;
         }, {})
     );
+    // Meri apni reaction (agar hai) — sirf usi chip par tap se hatega
+    const myReactionEmoji = (item.reactions ?? []).find(
+        (r) => r?.emoji && (r.user?._id ?? r.user ?? r.userId) === MY_USER_ID
+    )?.emoji;
     const isStarred = !!item.starredBy?.some((u) => (u?._id ?? u) === MY_USER_ID);
     // Media par tap: select mode me select, warna full-screen viewer
-    const openMedia = (open) => () => (isSelectMode ? onSelect(item) : open());
+    const openMedia = (open) => () => (isSelectMode ? (canSelect ? onSelect(item) : undefined) : open());
 
 
     const Shawtime = moment(item.createdAt).format('hh:mm A');
@@ -194,15 +201,7 @@ const MessageBubble = ({
                                         <Image source={{ uri: getFullUrl(att.url) }} style={styles.msgMedia} resizeMode="cover" />
                                         {isPendingUpload ? (
                                             <UploadOverlay progress={item.uploadProgress ?? 0} onCancel={() => onCancelUpload?.(item._id)} />
-                                        ) : (
-                                            <TouchableOpacity
-                                                style={styles.zoomBtn}
-                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                                onPress={() => setImageModalUri(getFullUrl(att.url))}
-                                            >
-                                                <Ionicons name="expand" size={16} color="#fff" />
-                                            </TouchableOpacity>
-                                        )}
+                                        ) : null}
                                     </Pressable>
                                 ))}
 
@@ -221,18 +220,9 @@ const MessageBubble = ({
                                         {isPendingUpload ? (
                                             <UploadOverlay progress={item.uploadProgress ?? 0} onCancel={() => onCancelUpload?.(item._id)} />
                                         ) : (
-                                            <>
-                                                <View pointerEvents="none" style={styles.videoOverlay}>
-                                                    <Ionicons name="play" size={30} color="#fff" />
-                                                </View>
-                                                <TouchableOpacity
-                                                    style={styles.zoomBtn}
-                                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                                    onPress={() => setVideoModalUri(getFullUrl(att.url))}
-                                                >
-                                                    <Ionicons name="expand" size={16} color="#fff" />
-                                                </TouchableOpacity>
-                                            </>
+                                            <View pointerEvents="none" style={styles.videoOverlay}>
+                                                <Ionicons name="play" size={30} color="#fff" />
+                                            </View>
                                         )}
                                     </Pressable>
                                 ))}
@@ -295,6 +285,7 @@ const MessageBubble = ({
                                 readBy={item.readBy}
                                 senderId={item.sender?._id}
                                 myId={MY_USER_ID}
+                                isDark={isDark}
                             />
                         </View>
                         {isFailed && (
@@ -306,9 +297,17 @@ const MessageBubble = ({
                     {reactionGroups.length > 0 && !item.isDeleted && (
                         <View style={[styles.reactionRow, { backgroundColor: isDark ? '#1f2c34' : '#ffffff' }]}>
                             {reactionGroups.map(([emoji, count]) => (
-                                <Text key={emoji} style={styles.reactionText}>
-                                    {emoji}{count > 1 ? <Text style={[styles.reactionCount, { color: timeColor }]}> {count}</Text> : null}
-                                </Text>
+                                // Sirf meri reaction wale chip par tap kaam karta hai; baaki par kuch nahi
+                                <Pressable
+                                    key={emoji}
+                                    hitSlop={6}
+                                    disabled={isSelectMode || emoji !== myReactionEmoji || item.isOptimistic}
+                                    onPress={() => onReactionPress?.(item, emoji)}
+                                >
+                                    <Text style={styles.reactionText}>
+                                        {emoji}{count > 1 ? <Text style={[styles.reactionCount, { color: timeColor }]}> {count}</Text> : null}
+                                    </Text>
+                                </Pressable>
                             ))}
                         </View>
                     )}
@@ -332,7 +331,6 @@ const styles = StyleSheet.create({
     bubbleTheirs: { borderTopLeftRadius: 4 },
     contentContainer: { overflow: 'hidden' },
     mediaWrap: { position: 'relative' },
-    zoomBtn: { position: 'absolute', top: 8, right: 8, width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
     msgText: { fontSize: 15, lineHeight: 20 },
     msgMedia: { width: SCREEN_W * 0.65, height: SCREEN_W * 0.65, borderRadius: 8, backgroundColor: '#eee' },
     audioWrapper: { width: SCREEN_W * 0.65 },

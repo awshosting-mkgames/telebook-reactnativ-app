@@ -30,6 +30,11 @@ export const ENTITY_ROUTE_MAP = {
         screen:    'InCall',
         getParams: (d) => ({ callId: d.entityId, type: d.callType, isIncoming: true }),
     },
+    // Plan expiry reminder (backend scheduler: entity 'plan', extra.action 'plan_expiry')
+    plan: {
+        screen:    'Plans',
+        getParams: () => ({}),
+    },
     promo: {
         screen:    'PromoScreen',
         getParams: (d) => ({ promoId: d.entityId }),

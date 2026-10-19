@@ -33,7 +33,46 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#010100"
-      }
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "telebook.app",
+              "pathPrefix": "/u/"
+            },
+            {
+              "scheme": "https",
+              "host": "telebook.app",
+              "pathPrefix": "/c/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "telebook",
+              "host": "u"
+            },
+            {
+              "scheme": "telebook",
+              "host": "c"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/Logo.png"
@@ -78,6 +117,7 @@
       "expo-audio",
       "expo-sqlite"
     ],
-    "owner": "mmh25"
+    "owner": "mmh25",
+    "scheme": "telebook"
   }
 }

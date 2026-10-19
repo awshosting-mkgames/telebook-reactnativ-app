@@ -1,13 +1,14 @@
 import { useCallback, useContext, useState } from 'react';
 import {
-    ActivityIndicator, FlatList, Modal, Platform, Pressable,
+    ActivityIndicator, FlatList, Platform, ScrollView,
     SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
-import { fetchPlans, fetchMyPlan, fetchPlanHistory } from '../../redex/slices/plansSlice';
+import PlanExpiryBanner from '../../components/PlanExpiryBanner';
+import { fetchPlans, fetchMyPlan } from '../../redex/slices/plansSlice';
 import { fetchPaymentConfig, getCachedPaymentConfig, canBuy } from '../../services/paymentConfigStore';
 import { handleBuyPlan } from '../../services/paymentActions';
 
@@ -22,22 +23,41 @@ const USAGE_LABELS = {
     autoReply: 'Auto Reply',
 };
 
-const fmtDate = (iso) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+// Comparison table rows (Part3 3.1/3.9) — plan.limits ke keys, highlights se nahi.
+const COMPARE_ROWS = [
+    { key: 'devices', label: 'Devices' },
+    { key: 'themes', label: 'Themes' },
+    { key: 'pins', label: 'Favourites' },
+    { key: 'groups', label: 'Groups' },
+    { key: 'broadcasts', label: 'Broadcasts' },
+    { key: 'broadcastRecipients', label: 'Users per broadcast' },
+    { key: 'stickerPacks', label: 'Sticker groups' },
+    { key: 'autoReply', label: 'Auto Reply' },
+];
+
+// Countable nahi hain (server `used` null deta hai) — "0 / N" ki jagah "up to N"
+const NON_COUNTABLE = ['themes', 'stickerPacks', 'broadcastRecipients'];
+
+const isUnlimitedVal = (v) => v === -1 || v === 'unlimited';
+const fmtLimit = (v) => {
+    if (v === undefined || v === null) return '—';
+    if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+    if (isUnlimitedVal(v)) return 'Unlimited';
+    return String(v);
 };
+// Feature plan mein milta hai? (0 / false / missing = nahi)
+const limitGrantsFeature = (v) => v === true || isUnlimitedVal(v) || (typeof v === 'number' && v > 0);
 
 export default function Plans({ navigation }) {
     const { theme } = useContext(ThemeContext);
     const dispatch = useDispatch();
     const plansState = useSelector((s) => s.plans);
-    const { plans, plansLoading, me, meLoading, history, historyLoading, historyPagination } = plansState;
+    const { plans, plansLoading, me, meLoading } = plansState;
 
-    const [showHistory, setShowHistory] = useState(false);
     const [paymentConfig, setPaymentConfig] = useState(getCachedPaymentConfig());
 
     const isDark = theme?.mode === 'dark';
+    const headerBg = theme?.header || '#1199ff';
     const colors = {
         bg: isDark ? '#121212' : '#f2f4f7',
         card: isDark ? '#1e1e1e' : '#ffffff',
@@ -58,19 +78,55 @@ export default function Plans({ navigation }) {
     const usage = me?.usage || {};
     const isActivePlan = !!entitlements?.isActive;
 
+    // Sabse sasta plan jo yeh feature deta hai (locked rows ke liye "required plan")
+    const sortedPlans = [...plans].sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
+    const requiredPlanFor = (key) => sortedPlans.find((p) => limitGrantsFeature(p?.limits?.[key]));
+
+    const renderLockedRow = (key, label) => {
+        const req = requiredPlanFor(key);
+        return (
+            <View key={key} style={styles.usageRow}>
+                <View style={styles.usageTop}>
+                    <View style={styles.lockLabel}>
+                        <Ionicons name="lock-closed" size={13} color={colors.sub} />
+                        <Text style={[styles.usageLabel, { color: colors.txt }]}>{label}</Text>
+                    </View>
+                    <Text style={[styles.usageValue, { color: colors.sub }]}>{req ? `Requires ${req.name}` : 'Locked'}</Text>
+                </View>
+                {!!req && (
+                    <TouchableOpacity style={[styles.lockCta, { borderColor: headerBg }]} onPress={() => onBuyPlan(req)}>
+                        <Text style={{ color: headerBg, fontSize: 12, fontWeight: '700' }}>{buyActive ? `Upgrade to ${req.name}` : 'Upgrade'}</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+        );
+    };
+
     const renderUsageRow = (key, entry) => {
         const label = USAGE_LABELS[key] || key;
         if (entry && typeof entry.allowed === 'boolean') {
+            if (!entry.allowed) return renderLockedRow(key, label);
             return (
                 <View key={key} style={styles.usageRow}>
                     <Text style={[styles.usageLabel, { color: colors.txt }]}>{label}</Text>
-                    <Text style={{ color: entry.allowed ? '#27ae60' : '#999', fontSize: 12, fontWeight: '600' }}>
-                        {entry.allowed ? 'Available' : 'Not available'}
-                    </Text>
+                    <Text style={{ color: '#27ae60', fontSize: 12, fontWeight: '600' }}>Available</Text>
                 </View>
             );
         }
         const isUnlimited = entry?.limit === 'unlimited';
+        // Limit 0 = plan mein yeh feature hai hi nahi -> locked
+        if (!isUnlimited && Number(entry?.limit) === 0) return renderLockedRow(key, label);
+        // Non-countable rows: "0 / N" misleading hai, "up to N" dikhao
+        if (NON_COUNTABLE.includes(key) && entry?.used == null) {
+            return (
+                <View key={key} style={styles.usageRow}>
+                    <View style={styles.usageTop}>
+                        <Text style={[styles.usageLabel, { color: colors.txt }]}>{label}</Text>
+                        <Text style={[styles.usageValue, { color: colors.sub }]}>{isUnlimited ? 'Unlimited' : `up to ${entry?.limit}`}</Text>
+                    </View>
+                </View>
+            );
+        }
         const used = entry?.used ?? 0;
         const limitNum = isUnlimited ? null : Number(entry?.limit ?? 0);
         const pct = isUnlimited || !limitNum ? 0 : Math.min(100, (used / limitNum) * 100);
@@ -84,7 +140,7 @@ export default function Plans({ navigation }) {
                 </View>
                 {!isUnlimited && (
                     <View style={styles.usageBarBg}>
-                        <View style={[styles.usageBarFill, { width: `${pct}%` }]} />
+                        <View style={[styles.usageBarFill, { width: `${pct}%`, backgroundColor: headerBg }]} />
                     </View>
                 )}
             </View>
@@ -96,8 +152,8 @@ export default function Plans({ navigation }) {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar backgroundColor="#0084ff" barStyle="light-content" />
-            <View style={styles.header}>
+            <StatusBar backgroundColor={headerBg} barStyle="light-content" />
+            <View style={[styles.header, { backgroundColor: headerBg }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
@@ -113,6 +169,7 @@ export default function Plans({ navigation }) {
                     contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
                     ListHeaderComponent={
                         <>
+                            <PlanExpiryBanner showButton={false} style={{ marginHorizontal: 0, marginTop: 0, marginBottom: 14 }} />
                             {/* Current plan card */}
                             <View style={[styles.currentCard, { backgroundColor: colors.card }]}>
                                 {isActivePlan ? (
@@ -136,7 +193,7 @@ export default function Plans({ navigation }) {
                                     </>
                                 )}
 
-                                <TouchableOpacity style={styles.historyLink} onPress={() => { setShowHistory(true); dispatch(fetchPlanHistory({ page: 1 })); }}>
+                                <TouchableOpacity style={styles.historyLink} onPress={() => navigation.navigate('PlanHistory')}>
                                     <Text style={styles.historyLinkText}>View plan history</Text>
                                     <Ionicons name="chevron-forward" size={14} color="#0084ff" />
                                 </TouchableOpacity>
@@ -152,6 +209,40 @@ export default function Plans({ navigation }) {
 
                             <Text style={[styles.sectionLabel, { color: colors.sub, marginTop: 12 }]}>AVAILABLE PLANS</Text>
                         </>
+                    }
+                    ListFooterComponent={
+                        !!plans.length && (
+                            <View style={[styles.card, { backgroundColor: colors.card, marginTop: 4 }]}>
+                                <Text style={[styles.sectionLabel, { color: colors.sub }]}>COMPARE PLANS</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                    <View>
+                                        <View style={[styles.tRow, { borderBottomColor: colors.divider }]}>
+                                            <Text style={[styles.tLabelCell, { color: colors.sub }]}>Feature</Text>
+                                            {plans.map((p) => (
+                                                <View key={p.code} style={styles.tCell}>
+                                                    <Text style={[styles.tHead, { color: colors.txt }]} numberOfLines={1}>{p.name}</Text>
+                                                    {!!p.badge?.label && <Text style={[styles.tBadge, { color: p.badge.color || colors.sub }]} numberOfLines={1}>{p.badge.label}</Text>}
+                                                </View>
+                                            ))}
+                                        </View>
+                                        {COMPARE_ROWS.map((row) => (
+                                            <View key={row.key} style={[styles.tRow, { borderBottomColor: colors.divider }]}>
+                                                <Text style={[styles.tLabelCell, { color: colors.txt }]}>{row.label}</Text>
+                                                {plans.map((p) => {
+                                                    const v = p.limits?.[row.key];
+                                                    const on = limitGrantsFeature(v);
+                                                    return (
+                                                        <View key={p.code} style={styles.tCell}>
+                                                            <Text style={{ color: on ? colors.txt : colors.sub, fontSize: 13, fontWeight: on ? '600' : '400' }}>{fmtLimit(v)}</Text>
+                                                        </View>
+                                                    );
+                                                })}
+                                            </View>
+                                        ))}
+                                    </View>
+                                </ScrollView>
+                            </View>
+                        )
                     }
                     renderItem={({ item: plan }) => {
                         const isCurrent = isActivePlan && entitlements?.planCode === plan.code;
@@ -176,9 +267,16 @@ export default function Plans({ navigation }) {
                                     </View>
                                 ))}
                                 {isCurrent ? (
-                                    <View style={[styles.ctaBtn, styles.ctaCurrent]}>
-                                        <Text style={styles.ctaCurrentText}>Current plan</Text>
-                                    </View>
+                                    <>
+                                        <View style={[styles.ctaBtn, styles.ctaCurrent]}>
+                                            <Text style={styles.ctaCurrentText}>Current plan</Text>
+                                        </View>
+                                        {buyActive && (
+                                            <TouchableOpacity style={styles.ctaBtn} onPress={() => onBuyPlan(plan)}>
+                                                <Text style={styles.ctaText}>Renew</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </>
                                 ) : (
                                     <TouchableOpacity
                                         style={[styles.ctaBtn, !buyActive && styles.ctaInfo]}
@@ -195,41 +293,6 @@ export default function Plans({ navigation }) {
                 />
             )}
 
-            {/* History sheet */}
-            <Modal visible={showHistory} transparent animationType="slide" onRequestClose={() => setShowHistory(false)}>
-                <Pressable style={styles.overlay} onPress={() => setShowHistory(false)}>
-                    <Pressable style={[styles.sheet, { backgroundColor: colors.card }]} onStartShouldSetResponder={() => true}>
-                        <View style={styles.sheetHandle} />
-                        <Text style={[styles.sheetTitle, { color: colors.txt }]}>Plan History</Text>
-                        {historyLoading && !history.length ? (
-                            <ActivityIndicator color="#0084ff" style={{ marginVertical: 24 }} />
-                        ) : (
-                            <FlatList
-                                data={history}
-                                keyExtractor={(item) => item._id}
-                                style={{ maxHeight: 420 }}
-                                onEndReachedThreshold={0.5}
-                                onEndReached={() => {
-                                    const p = historyPagination;
-                                    if (p && p.page < p.pages) dispatch(fetchPlanHistory({ page: p.page + 1 }));
-                                }}
-                                renderItem={({ item }) => (
-                                    <View style={[styles.historyRow, { borderBottomColor: colors.divider }]}>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={[styles.historyPlan, { color: colors.txt }]}>{item.planName}</Text>
-                                            <Text style={[styles.historySub, { color: colors.sub }]}>
-                                                {fmtDate(item.startAt)} – {fmtDate(item.endAt)} · {item.source}
-                                            </Text>
-                                        </View>
-                                        <Text style={[styles.historyStatus, { color: item.status === 'active' ? '#27ae60' : colors.sub }]}>{item.status}</Text>
-                                    </View>
-                                )}
-                                ListEmptyComponent={<Text style={{ color: colors.sub, textAlign: 'center', marginVertical: 20 }}>No plan history yet</Text>}
-                            />
-                        )}
-                    </Pressable>
-                </Pressable>
-            </Modal>
         </SafeAreaView>
     );
 }
@@ -237,7 +300,7 @@ export default function Plans({ navigation }) {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        backgroundColor: '#0084ff', flexDirection: 'row', alignItems: 'center', gap: 18,
+        flexDirection: 'row', alignItems: 'center', gap: 18,
         paddingHorizontal: 16, paddingBottom: 14,
         paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
     },
@@ -278,6 +341,13 @@ const styles = StyleSheet.create({
     ctaCurrent: { backgroundColor: 'rgba(39,174,96,0.12)' },
     ctaCurrentText: { color: '#27ae60', fontSize: 14, fontWeight: '700' },
 
+    lockLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    lockCta: { alignSelf: 'flex-start', marginTop: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+    tRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },
+    tLabelCell: { width: 140, fontSize: 13, fontWeight: '600' },
+    tCell: { width: 92, alignItems: 'center' },
+    tHead: { fontSize: 13, fontWeight: '700' },
+    tBadge: { fontSize: 10, fontWeight: '600', marginTop: 1 },
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
     sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 30, maxHeight: '80%' },
     sheetHandle: { width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2, alignSelf: 'center', marginBottom: 14 },

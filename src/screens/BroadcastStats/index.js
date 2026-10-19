@@ -141,7 +141,7 @@ export default function BroadcastStats({ route, navigation }) {
 
     if (loading) return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3' }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
@@ -156,10 +156,10 @@ export default function BroadcastStats({ route, navigation }) {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor="#1296f3" barStyle="light-content" />
+            <StatusBar backgroundColor={theme.header ?? '#1296f3'} barStyle="light-content" />
 
             {/* HEADER */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3' }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>

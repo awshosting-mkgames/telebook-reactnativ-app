@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import moment from 'moment';
 import { useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
+    Alert,
     Image,
     Modal,
     Platform,
@@ -15,17 +15,23 @@ import {
     StyleSheet,
     Switch,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useDispatch, useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
+import PlanExpiryBanner from '../../components/PlanExpiryBanner';
 import i18n, { LANG_STORAGE_KEY } from '../../i18n/i18n';
+import { clearChatList } from '../../redex/slices/chatListSlice';
 import { settotalappData } from '../../redex/slices/totalappDataSlice';
+import apiService from '../../services/apiService';
+import { syncAllTabData } from '../../services/chatSync';
+import { clearChatsDb } from '../../services/chatsDb';
 import Config from '../../services/config';
-import { contactSync } from '../../services/contactSync';
 import { logoutUser } from '../../services/Logoutcall';
+import { clearMessagesDb } from '../../services/messagesDb';
 import {
     fetchNotificationSettings,
     fetchPrivacy,
@@ -33,6 +39,10 @@ import {
     saveNotificationSettings,
     savePrivacy,
 } from '../../services/profileSync';
+
+// Product decision pending (local vs server vs both): scope yahin se configurable hai.
+// 'chats' | 'calls' | 'all' — backend POST settings/clear-all-data ka scope.
+const CLEAR_ALL_SCOPE = 'all';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 const avatarUrl = (key) => (!key ? DEFAULT_AVATAR : /^https?:/.test(key) ? key : Config.MEDIA_URL + key);
@@ -111,11 +121,9 @@ export default function Settings({ navigation }) {
     const dispatch = useDispatch();
     const maniAllData = useSelector((state) => state.totalappData);
     const user = maniAllData?.user || {};
-    const syncing = useSelector((state) => state.contacts?.syncing ?? false);
-    const lastSyncedAt = useSelector((state) => state.contacts?.lastSyncedAt ?? null);
-    const contactCount = useSelector((state) => state.contacts?.contacts?.length ?? 0);
 
     const isDark = theme?.mode === 'dark';
+    const headerBg = theme?.header || '#1199ff';
     const colors = {
         bg: isDark ? '#121212' : '#f2f4f7',
         card: isDark ? '#1e1e1e' : '#ffffff',
@@ -132,6 +140,8 @@ export default function Settings({ navigation }) {
     const [privacyPick, setPrivacyPick] = useState(null); // kaunsa field choose ho raha hai
     const [notif, setNotif] = useState(user.notificationSettings ?? null);
     const [loggingOut, setLoggingOut] = useState(false);
+    const [clearText, setClearText] = useState('');
+    const [clearing, setClearing] = useState(false);
 
     // Screen khulte hi profile + settings server se taaza
     useEffect(() => {
@@ -167,19 +177,37 @@ export default function Settings({ navigation }) {
         else { setNotif(prev); Toast.show({ type: 'error', text1: 'Could not save', text2: res.message }); }
     };
 
-    const handleContactSync = async () => {
-        if (syncing) return;
-        const result = await contactSync(dispatch);
-        if (result.ok) {
-            Toast.show({ type: 'success', text1: 'Contacts synced', text2: `${result.count} contacts updated` });
+    // Clear All Data — step 1: kya clear hoga batao, step 2: modal mein CLEAR type karwao.
+    const startClearAll = () => {
+        Alert.alert(t('ca_warn_title'), t('ca_warn_msg'), [
+            { text: t('Cancel'), style: 'cancel' },
+            { text: t('ca_continue'), style: 'destructive', onPress: () => { setClearText(''); setSheet('clear'); } },
+        ]);
+    };
+
+    const confirmClearAll = async () => {
+        if (clearText.trim() !== 'CLEAR' || clearing) return;
+        setClearing(true);
+        const res = await apiService({ method: 'POST', endpoint: 'settings/clear-all-data', data: { confirm: 'CLEAR', scope: CLEAR_ALL_SCOPE } });
+        if (!res?.success || res.data?.success === false) {
+            setClearing(false);
+            Toast.show({ type: 'error', text1: t('ca_error'), text2: res?.error?.message });
             return;
         }
-        const message = result.reason === 'permission-denied'
-            ? 'Contacts permission is needed to sync'
-            : result.reason === 'no-contacts'
-                ? 'No contacts found on this device'
-                : 'Could not sync contacts. Please try again.';
-        Toast.show({ type: 'error', text1: 'Sync failed', text2: message });
+        // Server ne hide kar diya (idempotent) — ab local SQLite cache saaf karke list dobara lao
+        try {
+            if (CLEAR_ALL_SCOPE !== 'calls') {
+                await clearChatsDb();
+                await clearMessagesDb();
+                dispatch(clearChatList());
+                if (user?._id) await syncAllTabData(dispatch, user._id);
+            }
+        } catch (e) {
+            console.log('clear-all local cache error:', e);
+        }
+        setClearing(false);
+        close();
+        Toast.show({ type: 'success', text1: t('ca_cleared') });
     };
 
     const handleLogout = async () => {
@@ -189,9 +217,6 @@ export default function Settings({ navigation }) {
     };
 
     const currentLangLabel = LANGUAGES.find((l) => l.code === selectedLang)?.label || 'English';
-    const contactSyncSubtitle = syncing
-        ? 'Syncing...'
-        : lastSyncedAt ? `${contactCount} contacts · ${moment(lastSyncedAt).fromNow()}` : 'Tap to sync your contacts';
     const privacySummary = privacy ? `Last seen: ${privacyLabel(privacy.lastSeen)} · Photo: ${privacyLabel(privacy.profilePhoto)}` : 'Last seen, profile photo, about';
     const notifSummary = notif
         ? (notif.messageNotifications === false && notif.groupNotifications === false ? 'Muted' : notif.sound === false ? 'Silent' : 'On')
@@ -199,9 +224,9 @@ export default function Settings({ navigation }) {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar barStyle="light-content" backgroundColor="#0084ff" />
+            <StatusBar barStyle="light-content" backgroundColor={headerBg} />
 
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: headerBg }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
@@ -209,6 +234,7 @@ export default function Settings({ navigation }) {
             </View>
 
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+                <PlanExpiryBanner />
                 {/* Profile card → Profile screen (photo, name, about sab wahan) */}
                 <TouchableOpacity
                     style={[styles.profileCard, { backgroundColor: colors.card }]}
@@ -236,14 +262,12 @@ export default function Settings({ navigation }) {
                 <Section label="APP" colors={colors}>
                     <Item icon={isDark ? 'moon-outline' : 'sunny-outline'} color="#e67e22" title="Theme" subtitle={isDark ? 'Dark' : 'Light'} onPress={() => setSheet('theme')} colors={colors} />
                     <Item icon="globe-outline" color="#1abc9c" title={t('Language')} subtitle={currentLangLabel} onPress={() => setSheet('lang')} colors={colors} />
-                    <Item
-                        icon="sync-outline" color="#3498db" title="Contact Sync" subtitle={contactSyncSubtitle}
-                        onPress={handleContactSync} colors={colors}
-                        right={syncing ? <ActivityIndicator size="small" color="#0084ff" /> : undefined}
-                    />
                     <Item icon="megaphone-outline" color="#27ae60" title="Broadcast Lists" subtitle="Send one message to many" onPress={() => navigation.navigate('MyBroadcastList')} colors={colors} />
                     <Item icon="card-outline" color="#9b59b6" title="Plans / Subscription" subtitle="View your plan and usage" onPress={() => navigation.navigate('Plans')} colors={colors} />
-                    <Item icon="wallet-outline" color="#f39c12" title="Coin Wallet" subtitle="Balance, packs & history" onPress={() => navigation.navigate('Wallet')} colors={colors} last />
+                    <Item icon="receipt-outline" color="#8e44ad" title={t('st_plan_history')} subtitle={t('st_plan_history_sub')} onPress={() => navigation.navigate('PlanHistory')} colors={colors} />
+                    <Item icon="wallet-outline" color="#f39c12" title="Coin Wallet" subtitle="Balance, packs & history" onPress={() => navigation.navigate('Wallet')} colors={colors} />
+                    <Item icon="chatbox-ellipses-outline" color="#2980b9" title={t('st_auto_reply')} subtitle={t('st_auto_reply_sub')} onPress={() => navigation.navigate('AutoReply')} colors={colors} />
+                    <Item icon="laptop-outline" color="#34495e" title={t('st_linked_devices')} subtitle={t('st_linked_devices_sub')} onPress={() => navigation.navigate('LinkedDevices')} colors={colors} last />
                 </Section>
 
                 <Section label="HELP" colors={colors}>
@@ -254,6 +278,7 @@ export default function Settings({ navigation }) {
 
                 <Section colors={colors}>
                     <Item icon="log-out-outline" color="#e74c3c" title={t('logout')} onPress={() => setSheet('logout')} colors={colors} danger />
+                    <Item icon="trash-bin-outline" color="#d35400" title={t('ca_title')} subtitle={t('ca_sub')} onPress={startClearAll} colors={colors} danger />
                     <Item icon="trash-outline" color="#c0392b" title={t('Delete Account')} subtitle={t('Permanently delete your account')} onPress={() => navigation.navigate('Deleteaccount')} colors={colors} danger last />
                 </Section>
 
@@ -372,6 +397,38 @@ export default function Settings({ navigation }) {
                 ))}
             </Sheet>
 
+            {/* Clear All Data — step 2: type CLEAR */}
+            <Modal visible={sheet === 'clear'} transparent animationType="fade" onRequestClose={clearing ? undefined : close}>
+                <Pressable style={styles.overlay} onPress={clearing ? undefined : close}>
+                    <Pressable style={[styles.logoutPopup, { backgroundColor: colors.card }]} onPress={() => { }}>
+                        <Text style={[styles.logoutTitle, { color: colors.txt }]}>{t('ca_confirm_title')}</Text>
+                        <Text style={[styles.logoutMsg, { color: colors.sub, marginBottom: 14 }]}>{t('ca_confirm_hint')}</Text>
+                        <TextInput
+                            value={clearText}
+                            onChangeText={setClearText}
+                            autoCapitalize="characters"
+                            autoCorrect={false}
+                            placeholder="CLEAR"
+                            placeholderTextColor={colors.sub}
+                            editable={!clearing}
+                            style={[styles.clearInput, { color: colors.txt, borderColor: colors.divider }]}
+                        />
+                        <View style={styles.logoutBtns}>
+                            <TouchableOpacity style={[styles.logoutCancelBtn, { borderColor: colors.divider }]} onPress={close} disabled={clearing}>
+                                <Text style={[styles.logoutCancelText, { color: colors.txt }]}>{t('Cancel')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.logoutConfirmBtn, clearText.trim() !== 'CLEAR' && { opacity: 0.4 }]}
+                                onPress={confirmClearAll}
+                                disabled={clearText.trim() !== 'CLEAR' || clearing}
+                            >
+                                {clearing ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.logoutConfirmText}>{t('ca_clear')}</Text>}
+                            </TouchableOpacity>
+                        </View>
+                    </Pressable>
+                </Pressable>
+            </Modal>
+
             {/* Logout */}
             <Modal visible={sheet === 'logout'} transparent animationType="fade" onRequestClose={close}>
                 <Pressable style={styles.overlay} onPress={loggingOut ? undefined : close}>
@@ -399,7 +456,7 @@ export default function Settings({ navigation }) {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        backgroundColor: '#0084ff', flexDirection: 'row', alignItems: 'center', gap: 18,
+        flexDirection: 'row', alignItems: 'center', gap: 18,
         paddingHorizontal: 16, paddingBottom: 14,
         paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
     },
@@ -451,6 +508,7 @@ const styles = StyleSheet.create({
     logoutIconWrap: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#fff0ee', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
     logoutTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
     logoutMsg: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 22 },
+    clearInput: { width: '100%', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, letterSpacing: 2, textAlign: 'center', marginBottom: 16 },
     logoutBtns: { flexDirection: 'row', gap: 12, width: '100%' },
     logoutCancelBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, borderWidth: 1.5, alignItems: 'center' },
     logoutCancelText: { fontSize: 15, fontWeight: '600' },

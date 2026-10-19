@@ -6,6 +6,7 @@
  * yahan wire NAHI kiye — REST ke saath duplicate-initiation race ban jaati).
  */
 
+import { Alert } from 'react-native';
 import Toast from 'react-native-toast-message';
 import apiService from './apiService';
 import socketService from './socketService';
@@ -23,8 +24,40 @@ const ERROR_MESSAGES = {
 };
 
 // POST /api/calls {calleeId, type} → navigate to InCall on success.
+// Part 2 §2.17: call se pehle rate + balance dikhao aur confirm lo. Coins band
+// ho (wallet 404) ya wallet fetch fail ho to confirm chhod kar call chalne do
+// — server hi asli check karta hai (INSUFFICIENT_COINS).
+async function confirmCallCost(type) {
+    try {
+        const w = await apiService({ method: 'GET', endpoint: 'wallet' });
+        if (!isOk(w)) return true;
+        const d = w.data.data ?? {};
+        const rates = d.rates ?? {};
+        const perUnit = type === 'video' ? rates.videoCoinsPerUnit : rates.audioCoinsPerUnit;
+        if (!perUnit) return true;                       // muft call
+        const unit = rates.billingUnit === 'second' ? 'second' : 'minute';
+        const secs = d.talkTimeSeconds?.[type === 'video' ? 'video' : 'audio'];
+        const approx = secs != null
+            ? (unit === 'minute' ? `~${Math.floor(secs / 60)} min` : `~${secs} sec`)
+            : null;
+        const msg = [
+            `${perUnit} coin${perUnit > 1 ? 's' : ''} per ${unit} (${type} call), charged for every started ${unit}.`,
+            `Your balance: ${d.balance ?? 0} coins${approx ? ` (${approx})` : ''}.`,
+        ].join('\n');
+        return await new Promise((resolve) => {
+            Alert.alert(type === 'video' ? 'Start video call?' : 'Start voice call?', msg, [
+                { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                { text: 'Call', onPress: () => resolve(true) },
+            ], { cancelable: true, onDismiss: () => resolve(false) });
+        });
+    } catch (_) {
+        return true;
+    }
+}
+
 export async function startCall({ navigation, calleeId, type, remoteUser }) {
     if (!calleeId) return { ok: false };
+    if (!(await confirmCallCost(type))) return { ok: false, cancelled: true };
     const res = await apiService({ method: 'POST', endpoint: 'calls', data: { calleeId, type } });
     if (isOk(res)) {
         const { call, agora, billing } = res.data.data ?? {};

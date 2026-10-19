@@ -107,8 +107,8 @@ const CreateGroup = ({ navigation, route }) => {
             if (res.success) {
                 Alert.alert('Group Created!', `"${groupName}" successfully created`, [{ text: 'OK', onPress: () => navigation.navigate('tab') }]);
             } else if (res?.error?.code === 'PLAN_LIMIT') {
-                Alert.alert('Plan limit reached', res.error.message, [
-                    { text: 'Upgrade', onPress: () => navigation.navigate('Plans') },
+                Alert.alert('Plan Limit Reached', ['Plan Limit Reached – Upgrade your plan to continue.', res.error.message].filter(Boolean).join('\n'), [
+                    { text: 'Upgrade Plan', onPress: () => navigation.navigate('Plans') },
                     { text: 'Cancel', style: 'cancel' },
                 ]);
             } else {
@@ -127,7 +127,7 @@ const CreateGroup = ({ navigation, route }) => {
         <KeyboardAvoidingView style={[styles.container, { backgroundColor: pageBg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
             {/* ── Header ── */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
                 <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
@@ -206,7 +206,7 @@ const CreateGroup = ({ navigation, route }) => {
                                 <View key={item?.id?.toString() ?? i} style={styles.chip}>
                                     <Avatar uri={getAvatar(item)} name={item.name} size={44} border="#4491f2" />
                                     <Text style={[styles.chipName, { color: textSec }]} numberOfLines={1}>
-                                        {item.name?.split(' ')[0]}
+                                        {(item.name || item.phone || 'User').split(' ')[0]}
                                     </Text>
                                 </View>
                             ))}
@@ -219,7 +219,7 @@ const CreateGroup = ({ navigation, route }) => {
                             <View key={item?.id?.toString() ?? i} style={[styles.memberRow, { borderBottomColor: rowBorder }, i === members.length - 1 && { borderBottomWidth: 0 }]}>
                                 <Avatar uri={getAvatar(item)} name={item.name} size={44} />
                                 <View style={styles.memberInfo}>
-                                    <Text style={[styles.memberName, { color: textPrimary }]}>{item.name}</Text>
+                                    <Text style={[styles.memberName, { color: textPrimary }]}>{item.name || item.phone || 'User'}</Text>
                                     <Text style={[styles.memberPhone, { color: textSec }]}>{item.phone}</Text>
                                 </View>
                                 <View style={[styles.checkCircle, { backgroundColor: checkBg }]}>
