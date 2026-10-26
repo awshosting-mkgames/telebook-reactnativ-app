@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(adb -s R9ZW10AAK5T shell \"pidof com.Telebookapp.Telebook\")",
+      "Bash(adb -s R9ZW10AAK5T logcat -d -t 2000)",
+      "Bash(adb -s R9ZW10AAK5T logcat -d -b all -t 3000)",
+      "WebSearch",
+      "Bash(adb -s R9ZW10AAK5T shell am force-stop com.Telebookapp.Telebook)",
+      "Bash(adb -s R9ZW10AAK5T logcat -d)",
+      "Bash(adb -s R9ZW10AAK5T shell input tap 50 106)",
+      "Bash(adb -s R9ZW10AAK5T shell input tap 576 99)",
+      "Bash(adb -s R9ZW10AAK5T shell input keyevent KEYCODE_BACK)",
+      "Bash(adb -s R9ZW10AAK5T shell input tap 497 99)",
+      "Bash(adb -s R9ZW10AAK5T shell input tap 240 433)",
+      "Bash(adb -s R9ZW10AAK5T shell input tap 599 1459)",
+      "Bash(adb -s R9ZW10AAK5T shell wm size)",
+      "Bash(adb -s R9ZW10AAK5T shell monkey -p com.Telebookapp.Telebook -c android.intent.category.LAUNCHER 1)",
+      "Bash(adb -s R9ZW10AAK5T shell input tap 549 1448)",
+      "Bash(adb -s R9ZW10AAK5T shell input tap 360 1407)",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit --amend -m ' *)",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"require\\('@babel/core'\\).transformFileSync\\('index.js',{presets:['babel-preset-expo']}\\);console.log\\('syntax ok'\\)\")",
+      "Bash(sed -n '/header: {/,/},/p' index.js)",
+      "Bash(eas whoami *)",
+      "Bash(keytool -list -v -keystore android/app/telebook.jks -storepass android)",
+      "Bash(eas build:view be83e8f0-d37f-42fb-b46b-0d47af85e620)",
+      "Bash(~/Library/Android/sdk/build-tools/36.0.0/aapt2 dump *)",
+      "Bash(eas build:version:get -p android)"
+    ]
+  }
+}
