@@ -4,7 +4,6 @@ import {
     StyleSheet, ActivityIndicator, Image, Platform, StatusBar, Share,
 } from 'react-native';
 
-// Avatar with fallback initials
 const AvatarImg = ({ uri, name: rawName = '', size = 50, style }) => {
     const [error, setError] = useState(false);
     const name = rawName || '';
@@ -49,11 +48,7 @@ const FindContact = ({ navigation, route }) => {
     const [searchText, setSearchText] = useState('');
     const [selectedContacts, setSelectedContacts] = useState([]);
 
-    // Select sirf app par registered contacts ho sakte hain, par list me baaki
-    // contacts bhi "invite" ke saath dikhte hain — warna jis phone me koi app
-    // user nahi hai, uske liye screen puri khali lagti thi.
-    // Redux se direct derive karte hain — beech me state rakhne se list sync ke
-    // baad stale reh jati thi.
+
     const filteredContacts = useMemo(() => {
         const q = searchText.trim().toLowerCase();
         if (!q) return allContacts ?? [];
@@ -174,22 +169,16 @@ const FindContact = ({ navigation, route }) => {
                     contentContainerStyle={[styles.chipsScroll, { paddingTop: 8 }]}
                     renderItem={({ item }) => (
                         <View style={styles.chipWrap}>
-                            {/* Avatar row with close button absolutely on top-right */}
                             <View style={styles.chipAvatarWrap}>
                                 <AvatarImg uri={getAvatar(item)} name={item.name || item.phone || 'User'} size={CHIP_AVATAR} />
                                 <TouchableOpacity
                                     onPress={() => removeSelected(item.id)}
                                     style={[styles.chipRemove, { backgroundColor: isDark ? '#0a0a0a' : '#ffffff' }]}
-                                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                                >
+                                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }} >
                                     <Ionicons name="close-circle" size={18} color="#4491f2" />
                                 </TouchableOpacity>
                             </View>
-                            {/* Name strictly below avatar, no overlap */}
-                            <Text
-                                style={[styles.chipName, { color: isDark ? '#7ab4f5' : '#4491f2' }]}
-                                numberOfLines={1}
-                            >
+                            <Text style={[styles.chipName, { color: isDark ? '#7ab4f5' : '#4491f2' }]} numberOfLines={1} >
                                 {(item.name || item.phone || 'User').split(' ')[0]}
                             </Text>
                         </View>

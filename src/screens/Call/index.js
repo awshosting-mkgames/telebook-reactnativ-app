@@ -1,9 +1,10 @@
 import { useCallback, useContext, useState } from 'react';
 import {
-    ActivityIndicator, FlatList, Image, Platform, SafeAreaView,
+    ActivityIndicator, FlatList, Image,
     StatusBar, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
@@ -25,9 +26,13 @@ const fmtWhen = (iso) => {
     return `${d.getDate()}/${d.getMonth() + 1}, ${time}`;
 };
 
+// Freechat header (38px avatar + 10 top + 14 bottom padding) ke barabar, taaki saare tabs ka header same height ka ho
+const HEADER_CONTENT_HEIGHT = 62;
+
 export default function Call({ navigation }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
 
     const [calls, setCalls] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -71,7 +76,7 @@ export default function Call({ navigation }) {
         fetchCalls(page + 1);
     };
 
-    // Row par tap karne se usi contact ko wapas call lagao.
+
     const recall = (item) => {
         if (!item?.user?._id) return;
         startCall({
@@ -114,9 +119,10 @@ export default function Call({ navigation }) {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor={theme?.header || '#1199ff'} barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: theme?.header || '#1199ff' }]}>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+            {/* Android 15/16 me edge-to-edge force hai: status bar ke neeche header ko insets.top se hi dhakna padta hai */}
+            <View style={[styles.header, { backgroundColor: theme?.header || '#1199ff', height: HEADER_CONTENT_HEIGHT + insets.top, paddingTop: insets.top }]}>
                 <Text style={styles.headerTitle}>{t('Calls')}</Text>
             </View>
 
@@ -147,7 +153,7 @@ export default function Call({ navigation }) {
                     }
                 />
             )}
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -157,8 +163,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingBottom: 14,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 10,
     },
     headerTitle: { color: '#fff', fontSize: 20, fontWeight: '700' },
 

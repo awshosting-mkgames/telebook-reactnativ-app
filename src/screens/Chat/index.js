@@ -39,7 +39,7 @@ import { persistChatTabs, syncAllTabData } from "../../services/chatSync";
 import { apiErrorMessage, setBlocked } from "../../services/chatActions";
 import { startCall } from "../../services/callHelpers";
 import { getCachedCallsConfig } from "../../services/callConfigStore";
-import { loadCachedMessages, cacheMessages } from "../../services/messageSync";
+import { loadCachedMessages, cacheMessages, getMemoryMessages } from "../../services/messageSync";
 import { markMessageDeletedLocally } from "../../services/messagesDb";
 import Images from "../../utils/images";
 
@@ -101,9 +101,11 @@ export default function ChatScreen({ route, navigation }) {
     const [isBroadcast, setIsBroadcast] = useState(false);
     const [otherUserId, setOtherUserId] = useState(route.params?.otherUserId ?? null);
     const [chatDaetils, setchatDaetils] = useState("");
-    const [messages, setMessages] = useState([]);
+    // Memory cache ho to pehle hi frame me messages (spinner/blank nahi)
+    const [messages, setMessages] = useState(() => (getMemoryMessages(route.params?.chatId) || []));
+    const [cacheReady, setCacheReady] = useState(messages.length > 0);
     const [inputText, setInputText] = useState("");
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(messages.length === 0);
     const [sending, setSending] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const [replyMsg, setReplyMsg] = useState(null);
@@ -239,10 +241,8 @@ export default function ChatScreen({ route, navigation }) {
             const msgChatId = msg?.chat?._id ?? msg?.chat;
             if (msgChatId === chatId) {
                 const senderId = msg?.sender?._id ?? msg?.sender;
-                // Apna message server se wapas aaye ya same event do baar aaye to duplicate na bane
                 setMessages((prev) => {
                     if (prev.some((m) => m._id === msg._id)) return prev;
-                    // Socket message me replyTo kabhi sirf id hoti hai — list se poora message jodo
                     const replyTo = typeof msg.replyTo === "string"
                         ? prev.find((m) => m._id === msg.replyTo) ?? null
                         : msg.replyTo;
@@ -251,8 +251,7 @@ export default function ChatScreen({ route, navigation }) {
                 cacheMessages(chatId, [msg]);
                 if (senderId === MY_USER_ID) return;
                 setIsTyping(false);
-                // message-delivered socketService khud bhejta hai. Read sirf tab
-                // jab chat sach me screen par dikh rahi ho (API doc section 7).
+
                 if (AppState.currentState === "active" && isFocusedRef.current) {
                     socketService.emit("message-read", { messageId: msg._id, chatId });
                 } else {
@@ -377,6 +376,7 @@ export default function ChatScreen({ route, navigation }) {
         (async () => {
             const cached = await loadCachedMessages(chatId);
             if (cancelled) return;
+            setCacheReady(true);
             if (cached.length) {
                 setMessages((prev) => (prev.length ? prev : cached.map((m) => ({ ...m, status: determineStatus(m) }))));
                 setLoading(false);
@@ -1425,6 +1425,7 @@ export default function ChatScreen({ route, navigation }) {
                         flatRef={flatRef}
                         messages={messages}
                         loading={loading}
+                        cacheReady={cacheReady}
                         MY_USER_ID={MY_USER_ID}
                         isGroup={isGroup}
                         isBroadcast={isBroadcast}

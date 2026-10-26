@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { serializeDbWrite } from './sqliteWriteQueue';
 
 // Contacts ka persistent store. Redux sirf current (in-memory) copy rakhta hai,
 // asli data yahin rehta hai aur app start par yahan se Redux me load hota hai.
@@ -58,7 +59,7 @@ const rowToContact = (row) => ({
  * Har row par alag runAsync karne se har statement dobara compile hota aur
  * har write apna transaction kholta — isse kaafi dheema pad jata hai.
  */
-export const upsertContacts = async (contacts = []) => {
+export const upsertContacts = (contacts = []) => serializeDbWrite(async () => {
     if (!contacts.length) return 0;
 
     const db = await getDb();
@@ -96,7 +97,7 @@ export const upsertContacts = async (contacts = []) => {
     }
 
     return written;
-};
+});
 
 /** Saare contacts — registered pehle, phir naam ke hisaab se. */
 export const getAllContacts = async () => {
@@ -110,7 +111,7 @@ export const getAllContacts = async () => {
 };
 
 /** Device se hate hue contacts DB se bhi hata do. */
-export const deleteContactsNotIn = async (phones = []) => {
+export const deleteContactsNotIn = (phones = []) => serializeDbWrite(async () => {
     const db = await getDb();
     if (!phones.length) {
         const res = await db.runAsync('DELETE FROM contacts');
@@ -139,7 +140,7 @@ export const deleteContactsNotIn = async (phones = []) => {
     });
 
     return removed;
-};
+});
 
 export const getLastSyncedAt = async () => {
     const db = await getDb();
@@ -149,20 +150,20 @@ export const getLastSyncedAt = async () => {
     return row?.value ? Number(row.value) : null;
 };
 
-export const setLastSyncedAt = async (timestamp) => {
+export const setLastSyncedAt = (timestamp) => serializeDbWrite(async () => {
     const db = await getDb();
     await db.runAsync(
         `INSERT INTO contacts_meta (key, value) VALUES ('lastSyncedAt', ?)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
         [String(timestamp)]
     );
-};
+});
 
 /** Logout par sab saaf karne ke liye. */
-export const clearContactsDb = async () => {
+export const clearContactsDb = () => serializeDbWrite(async () => {
     const db = await getDb();
     await db.withTransactionAsync(async () => {
         await db.execAsync('DELETE FROM contacts');
         await db.execAsync('DELETE FROM contacts_meta');
     });
-};
+});

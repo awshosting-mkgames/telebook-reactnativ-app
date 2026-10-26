@@ -111,8 +111,6 @@ export default function ContextMenuPopup({ visible, item, onClose, onPin, onDele
                 <View style={styles.overlay}>
                     <TouchableWithoutFeedback>
                         <Animated.View style={[styles.popup, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
-
-                            {/* Header */}
                             <View style={styles.header}>
                                 <Image
                                     source={{ uri: item.displayAvatar || DEFAULT_AVATAR }}
@@ -132,8 +130,6 @@ export default function ContextMenuPopup({ visible, item, onClose, onPin, onDele
                                     </View>
                                 )}
                             </View>
-
-                            {/* Menu Items */}
                             <View style={styles.menuBody}>
                                 {menuItems.map((m, i) => (
                                     <React.Fragment key={m.label}>

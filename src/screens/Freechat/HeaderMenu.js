@@ -57,7 +57,7 @@ export default function HeaderMenu({ visible, onClose, onProfile, onSyncData, sy
         },
         {
             icon: 'person-outline',
-            label: 'My Profile',
+            label: 'Settings',
             sublabel: 'View & edit your profile',
             color: '#25D366',
             bg: iconBgs.profile,

@@ -28,7 +28,6 @@ import {
 import { ensureChatTabsLoaded, loadTabsFromDb, persistChatTabs, syncAllTabData } from '../../services/chatSync';
 import { isChatPinned as chatIsPinned, setBlocked, setChatPinned } from '../../services/chatActions';
 import { deleteChatFromDb } from '../../services/chatsDb';
-import { contactSync } from '../../services/contactSync';
 import apiService from '../../services/apiService';
 
 import ContextMenuPopup from './ContextMenuPopup';
@@ -47,20 +46,18 @@ const Freechat = ({ navigation }) => {
     const dispatch = useDispatch();
 
     const isDark = theme.text === '#FFFFFF';
-
     const [activeFilter, setActiveFilter] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [menuVisible, setMenuVisible] = useState(false);
     const [menuItem, setMenuItem] = useState(null);
     const [headerMenuVisible, setHeaderMenu] = useState(false);
     const placements = useBadgePlacements();
-    // Global 'More people on Telebook' search state
+
     const [remote, setRemote] = useState({ users: [], loading: false, loadingMore: false, page: 1, hasMore: false, done: false });
     const remoteReq = useRef(0);
     const openingChat = useRef(false);
 
-    // Tab change par koi API/loading nahi — chaaron tabs ka data pehle se
-    // Redux me hai, isliye filter switch instant hona chahiye (no spinner).
+
     const changeFilter = (f) => {
         if (f === activeFilter) return;
         setActiveFilter(f);
@@ -69,56 +66,27 @@ const Freechat = ({ navigation }) => {
     const maniAllData = useSelector((state) => state.totalappData);
     const MY_USER_ID = maniAllData?.userId ?? '';
     const userData = maniAllData?.user ?? null;
-
-    // Contact sync sirf OTP success aur Settings se hota hai. Yahan sirf
-    // Redux ka flag padhte hain taki header par status dikha saken.
-    const syncLoading = useSelector((state) => state.contacts?.syncing ?? false);
-
-    // Tab change par koi API nahi — chaaron tabs ka data pehle se Redux me hai
-    // (app open par SQL se, ya SQL khali hone par pehli sync se).
     const chats = useSelector((state) => state.chatList.tabs?.[activeFilter] ?? []);
     const loading = useSelector((state) => state.chatList.loading);
     const syncing = useSelector((state) => state.chatList.syncing);
     const blockedIds = useSelector((state) => state.chatList.blockedIds ?? []);
 
-    // Chats tab par aate hi: list khali mili to SQL se dobara load (koi API nahi,
-    // jab tak SQL bhi khali na ho)
+
     useFocusEffect(useCallback(() => {
         dispatch(ensureChatTabsLoaded(MY_USER_ID));
     }, [dispatch, MY_USER_ID]));
 
     const handleSyncData = useCallback(async () => {
         if (syncing) return;
-        // background: true — poora loader nahi dikhega. Requirement: loader sirf
-        // tab jab SQL se Redux me data load ho raha ho. Manual sync ke liye
-        // header par "Syncing..." indicator kaafi hai, UI purane data par chalti rahegi.
+
         await syncAllTabData(dispatch, MY_USER_ID, { background: true });
     }, [syncing, dispatch, MY_USER_ID]);
 
-    // WhatsApp jaisa manual contact-sync button, header me — koi automatic sync nahi.
-    const handleSyncContacts = useCallback(async () => {
-        if (syncLoading) return;
-        const result = await contactSync(dispatch);
-        if (result.ok) {
-            Toast.show({ type: 'success', text1: 'Contacts synced', text2: `${result.count} contacts updated` });
-            return;
-        }
-        const message = result.reason === 'permission-denied'
-            ? 'Contacts permission is needed to sync'
-            : result.reason === 'no-contacts'
-                ? 'No contacts found on this device'
-                : 'Could not sync contacts. Please try again.';
-        Toast.show({ type: 'error', text1: 'Sync failed', text2: message });
-    }, [syncLoading, dispatch]);
-
-    // Socket se list update ab app root par hota hai (components/ChatListSocketSync.js),
-    // taaki koi bhi tab / screen khuli ho, list hamesha taaza rahe.
 
     const filteredChats = searchQuery.trim()
         ? chats.filter((c) => {
             const q = searchQuery.toLowerCase().trim();
             const digits = q.replace(/\D/g, '');
-            // API user ka number `mobile` me deti hai
             const mobile = String(c.displayUser?.mobile ?? '');
             return (
                 c.displayName?.toLowerCase().includes(q) ||
@@ -137,9 +105,7 @@ const Freechat = ({ navigation }) => {
         ...filteredChats.filter(c => !isChatPinned(c)),
     ];
 
-    // ── Global search ('More people on Telebook') ────────────────────────────
-    // Local filter hamesha chalta hai. Local results kam (<3) hon aur query name (>=3 chars)
-    // ya mobile (>=10 digits) ho tabhi 400ms debounce ke baad users/search. Har keystroke par nahi.
+
     const q = searchQuery.trim();
     const qDigits = q.replace(/\D/g, '');
     const looksLikeNumber = /^[\d\s+()-]+$/.test(q);
@@ -359,31 +325,7 @@ const Freechat = ({ navigation }) => {
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>
                     <Text style={[styles.headerTitle, { color: theme.headerText || '#fff' }]}>{userData?.name || userData?.mobile || 'Chats'}</Text>
-                    {syncing ? (
-                        <Text style={styles.syncingLabel}>Syncing...</Text>
-                    ) : syncLoading ? (
-                        <Text style={styles.syncingLabel}>Syncing contacts...</Text>
-                    ) : null}
                 </View>
-                <TouchableOpacity
-                    onPress={handleSyncContacts}
-                    style={styles.headerIconBtn}
-                    activeOpacity={0.7}
-                    disabled={syncLoading}
-                >
-                    {syncLoading ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                        <Ionicons name="sync-outline" size={21} color="#fff" />
-                    )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                    onPress={() => navigation.navigate('Contact')}
-                    style={styles.headerIconBtn}
-                    activeOpacity={0.7}
-                >
-                    <Ionicons name="add" size={24} color="#fff" />
-                </TouchableOpacity>
                 <TouchableOpacity onPress={() => setHeaderMenu(true)} style={styles.threeDotBtn} activeOpacity={0.7}>
                     <Ionicons name="ellipsis-vertical" size={22} color="#fff" />
                 </TouchableOpacity>
@@ -415,7 +357,7 @@ const Freechat = ({ navigation }) => {
                     </TouchableOpacity>
                 ))}
             </View>
-            {loading ? (
+            {loading && sortedChats.length === 0 ? (
                 <View style={styles.loaderWrap}>
                     <ActivityIndicator size="large" color="#1199ff" />
                     <Text style={[styles.loadingText, { color: isDark ? '#666' : '#aaa' }]}>Loading chats...</Text>
@@ -426,10 +368,8 @@ const Freechat = ({ navigation }) => {
                     keyExtractor={(item) => item._id.toString()}
                     renderItem={renderChat}
                     showsVerticalScrollIndicator={false}
-                    // Search ka keyboard khula ho tab bhi ek hi tap me chat khule
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
-                    // Separator lines hata di (Part1 #24) — row ke beech koi line nahi
                     contentContainerStyle={sortedChats.length === 0 && !remoteActive ? styles.emptyContainer : styles.listContent}
                     ListFooterComponent={renderRemoteFooter}
                     ListEmptyComponent={
@@ -447,6 +387,13 @@ const Freechat = ({ navigation }) => {
                     }
                 />
             )}
+            <TouchableOpacity
+                onPress={() => navigation.navigate('Contact')}
+                style={styles.fab}
+                activeOpacity={0.8}
+            >
+                <Ionicons name="add" size={28} color="#fff" />
+            </TouchableOpacity>
         </SafeAreaView>
     );
 };
@@ -473,6 +420,7 @@ const styles = StyleSheet.create({
     syncingLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 11, marginTop: 1 },
     headerIconBtn: { padding: 6, minWidth: 30, alignItems: 'center' },
     threeDotBtn: { padding: 6 },
+    fab: { position: 'absolute', bottom: 15, right: 15, width: 56, height: 56, borderRadius: 28, backgroundColor: '#1199ff', alignItems: 'center', justifyContent: 'center', elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 4 },
 
     remoteSection: { paddingTop: 10 },
     remoteTitle: { fontSize: 13, fontWeight: '600', paddingHorizontal: 16, paddingVertical: 6 },

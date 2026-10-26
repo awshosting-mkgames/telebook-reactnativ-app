@@ -5,6 +5,21 @@ import { getAllCachedMessages, setMessagesSyncedAt, upsertMessages } from './mes
 // upsertMessages() already idempotent overwrite-by-id karta hai, isliye
 // cache write kabhi bhi kisi bhi up-to-date message array ke saath safe hai.
 
+// In-memory mirror — chat dobara kholne par SQL ka async wait bhi na ho
+// (pehla frame hi messages ke saath render ho, spinner/blank flash na aaye).
+const memCache = new Map();
+const byNewest = (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+
+export const getMemoryMessages = (chatId) => memCache.get(String(chatId)) || null;
+export const clearMemoryMessages = () => memCache.clear();
+
+const mergeMemory = (chatId, messages) => {
+    const key = String(chatId);
+    const map = new Map((memCache.get(key) || []).map((m) => [m._id, m]));
+    messages.forEach((m) => { if (m?._id && !String(m._id).startsWith('temp_')) map.set(m._id, m); });
+    memCache.set(key, Array.from(map.values()).sort(byNewest));
+};
+
 /**
  * SQL se ek chat ke saare cached messages padh lo (koi network call nahi).
  * Screen jaisa newest-first array deta hai, seedha setMessages() me daalne ke liye.
@@ -12,7 +27,9 @@ import { getAllCachedMessages, setMessagesSyncedAt, upsertMessages } from './mes
  */
 export const loadCachedMessages = async (chatId) => {
     try {
-        return await getAllCachedMessages(chatId);
+        const rows = await getAllCachedMessages(chatId);
+        if (rows.length) mergeMemory(chatId, rows);
+        return rows;
     } catch (error) {
         console.log('⚠️ loadCachedMessages error:', error);
         return [];
@@ -27,6 +44,7 @@ export const loadCachedMessages = async (chatId) => {
  */
 export const cacheMessages = async (chatId, messages = []) => {
     try {
+        mergeMemory(chatId, messages);
         await upsertMessages(chatId, messages);
         await setMessagesSyncedAt(chatId, Date.now());
     } catch (error) {

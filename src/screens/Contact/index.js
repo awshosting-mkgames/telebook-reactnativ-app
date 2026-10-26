@@ -35,13 +35,11 @@ export default function Contact({ navigation }) {
     const [searchResult, setSearchResult] = useState([]);
     const [searchLoading, setSearchLoading] = useState(false);
     const [contactSearch, setContactSearch] = useState('');
-    // Number search ka server lookup (local contact me nahi mila to)
     const [remote, setRemote] = useState({ loading: false, users: [], done: false });
     const remoteReq = useRef(0);
     const headerBg = theme.header || '#1199ff';
 
-    // Mobile number (>=10 digits) type kiya aur local contact match nahi mila => 400ms debounce, phir lookup.
-    // Naya type karne par purani request ka response ignore (remoteReq id).
+
     useEffect(() => {
         const id = ++remoteReq.current;
         const raw = search.trim();
@@ -60,7 +58,6 @@ export default function Contact({ navigation }) {
         return () => clearTimeout(timer);
     }, [search, searchResult.length, MY_USER_ID]);
 
-    // Header ka 'Contact Refresh' — fail hone par chats/contacts kabhi delete nahi hote (contactSync purana data rakhta hai)
     const handleRefreshContacts = async () => {
         if (loading) return;
         const result = await contactSync(dispatch);
@@ -298,8 +295,7 @@ export default function Contact({ navigation }) {
                     disabled={loading}
                     style={styles.refreshBtn}
                     accessibilityLabel="Contact Refresh"
-                    activeOpacity={0.7}
-                >
+                    activeOpacity={0.7} >
                     {loading ? (
                         <ActivityIndicator size="small" color={theme.headerText || 'white'} />
                     ) : (
@@ -328,7 +324,8 @@ export default function Contact({ navigation }) {
                     </Text>
                 </View>
             </View>
-            {loading ? (
+            {/* Sync background me chalta hai; bada loader sirf tab jab dikhane ko koi contact hi na ho */}
+            {loading && contacts.length === 0 ? (
                 <ActivityIndicator size="large" color="#4491f2" style={{ marginTop: 100 }} />
             ) : (
                 <View style={{ flex: 1 }}>

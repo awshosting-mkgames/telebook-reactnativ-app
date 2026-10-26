@@ -9,3 +9,9 @@ ios/
 
 .DS_Store
 *.log
+
+# EAS local signing credentials (passwords)
+credentials.json
+*.jks
+*.apk
+*.aab

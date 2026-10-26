@@ -9,6 +9,7 @@ import { clearChatsDb } from './chatsDb';
 import { clearContactsDb } from './contactsDb';
 import { getDeviceId } from './deviceId';
 import { clearMessagesDb } from './messagesDb';
+import { clearMemoryMessages } from './messageSync';
 import { saveData } from './staticStorage';
 
 // Koi ek step (network / SQLite) atak jaye to bhi logout poora ho
@@ -43,6 +44,7 @@ export const logoutUser = async (_navigation, dispatch) => {
         // Contacts / chats SQL me rehte hain — agla user pichhle user ka data na dekhe
         await withTimeout(clearContactsDb());
         await withTimeout(clearChatsDb());
+        clearMemoryMessages();
         await withTimeout(clearMessagesDb());
     } finally {
         dispatch(clearContacts());

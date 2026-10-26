@@ -284,13 +284,15 @@ export const ensureChatTabsLoaded = (myUserId) => async (dispatch, getState) => 
  * SQL khali hai    → syncAllTabData() → SQL → Redux
  */
 export const initChatTabs = async (dispatch, myUserId) => {
-    dispatch(loadStarted());
     try {
-        const hasLocal = await hasChatData();
+        // Loader yahan nahi: SQL read milliseconds ka kaam hai, uske liye spinner
+        // dikhane se cached data hone par bhi list ke upar loader chalta tha.
+        // lastSyncedAt bhi dekhte hain — user ke 0 chats hon to chat_tabs khali
+        // hota hai, par sync pehle ho chuka hota hai (har open par loader nahi).
+        const [hasRows, syncedAt] = await Promise.all([hasChatData(), getChatsSyncedAt()]);
 
-        if (hasLocal) {
+        if (hasRows || syncedAt) {
             await loadTabsFromDb(dispatch);
-            dispatch(loadFinished());
             // SQL wala data turant dikh gaya; ab background me server se taaza
             // kar lo (loader nahi) — app band rehne ke dauran aaye message / nayi
             // chats bhi list me aa jayein.
@@ -298,13 +300,12 @@ export const initChatTabs = async (dispatch, myUserId) => {
             return { ok: true, fromSql: true };
         }
 
-        // Loader pehle se on hai; syncAllTabData usi ko aage chalata rahega
+        // Sach me pehli baar (SQL poora khali): yahi ek case hai jahan loader sahi hai.
+        // syncAllTabData(non-background) khud loadStarted/loadFinished karta hai.
         const result = await syncAllTabData(dispatch, myUserId);
         return { ...result, fromSql: false };
     } catch (error) {
         console.log('❌ initChatTabs error:', error);
         return { ok: false, fromSql: false, reason: error?.message };
-    } finally {
-        dispatch(loadFinished());
     }
 };

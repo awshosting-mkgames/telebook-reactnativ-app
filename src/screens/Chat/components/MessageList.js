@@ -69,6 +69,7 @@ const MessageList = ({
     flatRef,
     messages = [],
     loading,
+    cacheReady = true,
     MY_USER_ID,
     isGroup,
     isBroadcast,
@@ -307,6 +308,10 @@ const MessageList = ({
     // hai (asli pehli load). Agar cache/pehle se fetched messages maujood
     // hain, background refresh ke liye upar ek chhota inline indicator kaafi
     // hai — poori chat screen ko baar-baar block karna WhatsApp jaisa nahi tha.
+    // SQL cache check ho raha hai — na spinner, na "no messages" flash
+    if (!cacheReady && messages.length === 0) {
+        return <View style={styles.loaderContainer} />;
+    }
     if (loading && messages.length === 0) {
         return (
             <View style={styles.loaderContainer}>

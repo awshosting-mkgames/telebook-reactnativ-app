@@ -2,19 +2,17 @@
   "expo": {
     "name": "Telebook",
     "slug": "Free-chat",
-    "version": "1.0.0",
+    "version": "0.0.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "android": {
-      "package": "com.Telebookapp.Telebook",
-      "versionCode": 3,
+      "package": "com.telebookapp.chatapp",
+      "versionCode": 4,
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
@@ -28,7 +26,16 @@
         "RECORD_AUDIO",
         "MODIFY_AUDIO_SETTINGS",
         "BLUETOOTH_CONNECT",
-        "USE_FULL_SCREEN_INTENT"
+        "USE_FULL_SCREEN_INTENT",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -50,10 +57,7 @@
               "pathPrefix": "/c/"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         },
         {
           "action": "VIEW",
@@ -67,20 +71,12 @@
               "host": "c"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },
     "web": {
       "favicon": "./assets/Logo.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "b62fcbf2-8282-4407-a8fe-25e110d6cd99"
-      }
     },
     "plugins": [
       [
@@ -97,7 +93,8 @@
         {
           "android": {
             "usesCleartextTraffic": true,
-            "enableProguardInReleaseBuilds": false
+            "enableProguardInReleaseBuilds": false,
+            "enableMinifyInReleaseBuilds": false
           }
         }
       ],
@@ -115,9 +112,16 @@
       "@react-native-firebase/messaging",
       "expo-video",
       "expo-audio",
-      "expo-sqlite"
+      "expo-sqlite",
+      "./plugins/withAdiRegistration",
+      "./plugins/withRemoveForegroundPermissions"
     ],
-    "owner": "mmh25",
-    "scheme": "telebook"
+    "owner": "ambujexpo25",
+    "scheme": "telebook",
+    "extra": {
+      "eas": {
+        "projectId": "ced2885f-7e3a-44cb-964c-860e2478ba7f"
+      }
+    }
   }
 }

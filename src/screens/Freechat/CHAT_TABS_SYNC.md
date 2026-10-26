@@ -88,9 +88,9 @@ syncAllTabData(dispatch, myUserId, { background?: boolean })
 |---|---|---|---|
 | 1 | `initChatTabs()` — SQL khali hone par | `false` | **Haan** |
 | 2 | Header → Sync Data | `true` | Nahi |
-| 3 | Socket trigger | `true` | Nahi |
+| 3 | Socket `message-received`: sirf jab chat list me nahi aur row local se ban nahi sakti; group events (added/removed/updated) hamesha | `true` | Nahi |
 | 4 | `initChatTabs()` — SQL me data ho to, SQL load ke baad | `true` | Nahi |
-| 5 | App wapas foreground me aaye | `true` | Nahi |
+| 5 | App wapas foreground me aaye (last sync ko 30s se zyada ho to) | `true` | Nahi |
 
 Iske alawa kahin se call **mat** karo. Pin / delete / block ke baad refresh ke liye
 `loadTabsFromDb(dispatch)` use hota hai — wo sirf SQL→Redux hai, koi API nahi.
