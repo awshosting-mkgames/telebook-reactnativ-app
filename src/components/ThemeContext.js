@@ -1,12 +1,17 @@
-import React, { createContext, useEffect, useState } from 'react';
+import React, { createContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LightTheme, DarkTheme } from '../utils/theme';
 
 export const ThemeContext = createContext();
 
+// Backend `user.themeColor` (hex). Galat / khali ho to default theme hi chalega.
+const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+export const isValidThemeColor = (c) => typeof c === 'string' && HEX.test(c.trim());
+
 export const ThemeProvider = ({ children }) => {
     const [theme, setTheme] = useState(LightTheme);
     const [loading, setLoading] = useState(true);
+    const [brandColor, setBrandColor] = useState(null);
 
     // Load theme from async
     useEffect(() => {
@@ -37,10 +42,18 @@ export const ThemeProvider = ({ children }) => {
         await AsyncStorage.setItem('APP_THEME', newTheme.mode);
     };
 
+    // Brand color sirf main / maincolor aur header par; dark theme ka header kala hi rehta hai.
+    const themed = useMemo(() => {
+        if (!brandColor) return theme;
+        const next = { ...theme, main: brandColor, maincolor: brandColor };
+        if (theme.mode === 'light') next.header = brandColor;
+        return next;
+    }, [theme, brandColor]);
+
     if (loading) return null;
 
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme }}>
+        <ThemeContext.Provider value={{ theme: themed, toggleTheme, setBrandColor }}>
             {children}
         </ThemeContext.Provider>
     );

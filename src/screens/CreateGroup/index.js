@@ -11,6 +11,10 @@ import { ThemeContext } from '../../components/ThemeContext';
 import apiService from '../../services/apiService';
 import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
+import AddWalletAmt from '../../components/AddWalletAmt';
+
+// Backend ye codes bheje to: group limit / coins kam — wallet me coins add karwao
+const COIN_ERROR_CODES = ['GROUP_LIMIT', 'INSUFFICIENT_COINS', 'INSUFFICIENT_BALANCE'];
 
 
 const PALETTE = ['#4491f2', '#AF52DE', '#25D366', '#FF9500', '#FF3B30', '#5AC8FA', '#FF2D55'];
@@ -47,6 +51,7 @@ const CreateGroup = ({ navigation, route }) => {
     const [groupImage, setGroupImage] = useState(null);
     const [loading, setLoading] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
+    const [walletSheet, setWalletSheet] = useState({ visible: false, message: '' });
 
 
     const pageBg = isDark ? '#0d0d0d' : '#f4f6fb';
@@ -106,8 +111,11 @@ const CreateGroup = ({ navigation, route }) => {
             const res = await apiService({ method: 'POST', endpoint: 'chats/group', data: fd, isMultipart: true });
             if (res.success) {
                 Alert.alert('Group Created!', `"${groupName}" successfully created`, [{ text: 'OK', onPress: () => navigation.navigate('tab') }]);
+            } else if (COIN_ERROR_CODES.includes(res?.error?.code)) {
+                setWalletSheet({ visible: true, message: res?.error?.message || 'Group limit poori ho gayi. Naya group banane ke liye wallet me coins add karo.' });
             } else if (res?.error?.code === 'PLAN_LIMIT') {
                 Alert.alert('Plan Limit Reached', ['Plan Limit Reached – Upgrade your plan to continue.', res.error.message].filter(Boolean).join('\n'), [
+                    { text: 'Add Coins', onPress: () => setWalletSheet({ visible: true, message: res?.error?.message || '' }) },
                     { text: 'Upgrade Plan', onPress: () => navigation.navigate('Plans') },
                     { text: 'Cancel', style: 'cancel' },
                 ]);
@@ -270,6 +278,12 @@ const CreateGroup = ({ navigation, route }) => {
                     </Pressable>
                 </Pressable>
             </Modal>
+            <AddWalletAmt
+                visible={walletSheet.visible}
+                message={walletSheet.message}
+                onClose={() => setWalletSheet((w) => ({ ...w, visible: false }))}
+                onPaid={handleCreate}
+            />
         </KeyboardAvoidingView>
     );
 };

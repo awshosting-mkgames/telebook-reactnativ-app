@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider, useDispatch, useSelector, useStore } from 'react-redux';
@@ -7,7 +7,7 @@ import Toast from 'react-native-toast-message';
 
 import ChatListSocketSync from './components/ChatListSocketSync';
 import StatusBarComponent from './components/StatusBarcom';
-import { ThemeProvider } from './components/ThemeContext';
+import { ThemeProvider, ThemeContext, isValidThemeColor } from './components/ThemeContext';
 import AppNavigator from './navigation';
 import { persistor, store } from './redex/store';
 import socketService from './services/socketService';
@@ -150,6 +150,19 @@ const ChatTabsLoader = () => {
     return null;
 };
 
+// Login / auth-me ke user object se `themeColor` leke theme me lagata hai.
+// Logout par user null hota hai to default color wapas aa jata hai.
+const ThemeColorSync = () => {
+    const { setBrandColor } = useContext(ThemeContext);
+    const color = useSelector((state) => state.totalappData?.user?.themeColor ?? null);
+
+    useEffect(() => {
+        setBrandColor(isValidThemeColor(color) ? color.trim() : null);
+    }, [color, setBrandColor]);
+
+    return null;
+};
+
 const SocketManager = () => {
     const maniAllData = useSelector((state) => state.totalappData);
     const token  = maniAllData?.apiToken ?? null;
@@ -211,6 +224,7 @@ export default function App() {
                         <ChatListSocketSync />
                         <ProfileLoader />
                         <ContactsLoader />
+                        <ThemeColorSync />
                         <ChatTabsLoader />
                         <CallConfigLoader />
                         <IncomingCallManager />
