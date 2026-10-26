@@ -1,10 +1,13 @@
 import axios from 'axios';
 import Config from './config';
+import { APP_BUILD_HEADERS } from './appBuild';
 
 
 const axiosInstance = axios.create({
     baseURL: Config.BASE_URL,
     timeout: 30000,
+    // Har request me X-App-Build — dekhein appBuild.js
+    headers: { ...APP_BUILD_HEADERS },
 });
 
 // Loop guard: logoutUser khud `auth/logout` call karta hai jo dobara 401

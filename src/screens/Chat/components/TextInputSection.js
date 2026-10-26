@@ -7,6 +7,7 @@ import {
     Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import Config from '../../../services/config';
+import { APP_BUILD_HEADERS } from '../../../services/appBuild';
 
 const EMOJIS = ['😀', '😂', '😍', '🥰', '😎', '👍', '❤️', '🔥', '🎉', '🙏', '✅', '🫡',
     '😅', '🤣', '😊', '😇', '🤩', '🤗', '😏', '😒', '😞', '😔', '😢', '😭',
@@ -33,7 +34,7 @@ const StickerPanel = ({ onSendSticker, isDark, getFullUrl }) => {
             setError(null);
             const res = await fetch(`${Config?.BASE_URL}users/stickers`, {
                 method: 'GET',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...APP_BUILD_HEADERS },
             });
             const json = await res.json();
             // API response: { success: true, data: [{ url, filename, fileType, fileSize }] }
