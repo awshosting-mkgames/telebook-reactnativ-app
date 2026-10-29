@@ -11,12 +11,13 @@ const ChatHeader = ({
     navigation, chatName, chatImage, isGroup, isBroadcast,
     isTyping, isOnline, gotouserDetails, chatDaetils,
     isSelectMode, selectedCount, onCancelSelect, onForwardSelected,
-    onDeleteSelected, onCopySelected, onStarSelected, MY_USER_ID, fmtTime,
+    onDeleteSelected, onCopySelected, onStarSelected, onReplySelected, onMoreSelected, onSelectAll, MY_USER_ID, fmtTime,
     isSearchMode, searchText, onSearchChange, onOpenSearch, onCloseSearch,
     onClearChat, getFullUrl, isBlocked, onToggleBlock,
     onVoiceCall, onVideoCall, callsAvailable,
 }) => {
     const [menuVisible, setMenuVisible] = useState(false);
+    const [selMenuVisible, setSelMenuVisible] = useState(false);
     const { theme } = useContext(ThemeContext);
     const isDark = theme?.mode ? theme.mode === 'dark' : theme?.text === '#FFFFFF';
     // Header colour theme token se (dark me neutral dark, light me wahi blue)
@@ -61,7 +62,12 @@ const ChatHeader = ({
                 <TouchableOpacity onPress={onCancelSelect} style={styles.backBtn}>
                     <Ionicons name="close" size={22} color="#fff" />
                 </TouchableOpacity>
-                <Text style={[styles.name, { flex: 1 }]}>{selectedCount} selected</Text>
+                <Text style={[styles.name, { flex: 1 }]}>{selectedCount}</Text>
+                {selectedCount === 1 && !!onReplySelected && (
+                    <TouchableOpacity onPress={onReplySelected} style={styles.headerActionBtn}>
+                        <Ionicons name="arrow-undo-outline" size={22} color="#fff" />
+                    </TouchableOpacity>
+                )}
                 <TouchableOpacity onPress={onCopySelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
                     <Ionicons name="copy-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
                 </TouchableOpacity>
@@ -74,6 +80,27 @@ const ChatHeader = ({
                 <TouchableOpacity onPress={onDeleteSelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
                     <Ionicons name="trash-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
                 </TouchableOpacity>
+                <TouchableOpacity onPress={() => setSelMenuVisible(true)} style={styles.headerActionBtn}>
+                    <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
+                </TouchableOpacity>
+                <Modal visible={selMenuVisible} transparent animationType="fade" onRequestClose={() => setSelMenuVisible(false)}>
+                    <Pressable style={styles.menuOverlay} onPress={() => setSelMenuVisible(false)}>
+                        <View style={[styles.menuBox, { backgroundColor: menuBg }]}>
+                            {selectedCount === 1 && !!onMoreSelected && (
+                                <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => { setSelMenuVisible(false); onMoreSelected(); }}>
+                                    <Ionicons name="options-outline" size={18} color="#1296f3" />
+                                    <Text style={[styles.menuText, { color: menuText }]}>More options</Text>
+                                </TouchableOpacity>
+                            )}
+                            {!!onSelectAll && (
+                                <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => { setSelMenuVisible(false); onSelectAll(); }}>
+                                    <Ionicons name="checkmark-done-outline" size={18} color="#1296f3" />
+                                    <Text style={[styles.menuText, { color: menuText }]}>Select all</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </Pressable>
+                </Modal>
             </View>
         );
     }

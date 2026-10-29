@@ -3,6 +3,8 @@ import apiService from '../../services/apiService';
 
 const initialState = {
     plans: [],
+    plansEnabled: true,
+    plansReason: null,
     freeLimits: null,
     paymentModes: null,
     plansLoading: false,
@@ -62,6 +64,8 @@ const plansSlice = createSlice({
             .addCase(fetchPlans.fulfilled, (state, action) => {
                 state.plansLoading = false;
                 state.plans = action.payload?.plans ?? [];
+                state.plansEnabled = action.payload?.enabled !== false;
+                state.plansReason = action.payload?.reason ?? null;
                 state.freeLimits = action.payload?.freeLimits ?? null;
                 state.paymentModes = action.payload?.payment ?? null;
             })

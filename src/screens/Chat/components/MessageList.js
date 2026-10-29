@@ -79,6 +79,7 @@ const MessageList = ({
     setVideoModalUri,
     openPopup,
     openDocInBrowser,
+    openLocalDoc,
     retryMessage,
     onCancelUpload,
     setReplyMsg,
@@ -267,6 +268,7 @@ const MessageList = ({
                         setVideoModalUri={setVideoModalUri}
                         openPopup={openPopup}
                         openDocInBrowser={openDocInBrowser}
+                        openLocalDoc={openLocalDoc}
                         retryMessage={retryMessage}
                         onCancelUpload={onCancelUpload}
                         setReplyMsg={setReplyMsg}

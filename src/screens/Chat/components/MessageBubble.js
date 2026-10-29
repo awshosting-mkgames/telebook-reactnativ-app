@@ -12,7 +12,7 @@ import AudioPlayer from './AudioPlayer';
 import SwipeableMessage from './SwipeableMessage';
 import Ticks from './Ticks';
 import moment from 'moment';
-import { useMediaUri } from '../../../utils/mediaCache';
+import { useMediaDownload } from '../../../utils/mediaCache';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -34,10 +34,100 @@ const VideoThumb = memo(({ uri, style }) => {
         : <View style={[style, { backgroundColor: '#1b1b1b' }]} />;
 });
 
-// Chat image: pehle dekhi hui photo local cache se (offline bhi), size chat width ke hisaab se
-const ChatImage = memo(({ uri, style }) => {
-    const src = useMediaUri(uri);
-    return <Image source={{ uri: src }} style={style} resizeMode="cover" />;
+const fmtSize = (b) => {
+    const n = Number(b);
+    if (!n) return '';
+    if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+// WhatsApp jaisa download button / progress (media abhi device me nahi hai)
+const DownloadBadge = ({ dl, size, label }) => (
+    <View pointerEvents="none" style={styles.dlBadge}>
+        {dl.downloading ? (
+            <>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.dlText}>{Math.round((dl.progress || 0) * 100)}%</Text>
+            </>
+        ) : (
+            <>
+                <Ionicons name={dl.failed ? 'refresh' : 'arrow-down'} size={18} color="#fff" />
+                <Text style={styles.dlText}>{dl.failed ? 'Retry' : (size || label || '')}</Text>
+            </>
+        )}
+    </View>
+);
+
+// Image: download ke baad hi dikhti/khulti hai; apni bheji hui auto-cache hoti hai.
+const ImageAtt = memo(({ uri, size, auto, style, wrapStyle, pending, guard, onOpen, onLongPress }) => {
+    const dl = useMediaDownload(uri, { auto });
+    return (
+        <Pressable
+            style={wrapStyle}
+            onPress={pending ? pending.onPress : guard(() => (dl.ready ? onOpen(dl.localUri) : dl.start()))}
+            onLongPress={onLongPress}
+            delayLongPress={200}
+        >
+            {dl.ready
+                ? <Image source={{ uri: dl.localUri }} style={style} resizeMode="cover" />
+                : <View style={[style, { backgroundColor: '#2b2b2b' }]} />}
+            {pending ? pending.overlay : (!dl.ready && dl.checked ? <DownloadBadge dl={dl} size={size} /> : null)}
+        </Pressable>
+    );
+});
+
+const VideoAtt = memo(({ uri, size, auto, style, wrapStyle, pending, guard, onOpen, onLongPress }) => {
+    const dl = useMediaDownload(uri, { auto });
+    return (
+        <Pressable
+            style={wrapStyle}
+            onPress={pending ? pending.onPress : guard(() => (dl.ready ? onOpen(dl.localUri) : dl.start()))}
+            onLongPress={onLongPress}
+            delayLongPress={200}
+        >
+            {/* Native video view touch kha leta hai — overlay upar rahe isliye pointerEvents none */}
+            <View pointerEvents="none" style={style}>
+                {dl.ready ? <VideoThumb uri={dl.localUri} style={style} /> : <View style={[style, { backgroundColor: '#1b1b1b' }]} />}
+            </View>
+            {pending ? pending.overlay : dl.ready ? (
+                <View pointerEvents="none" style={styles.videoOverlay}>
+                    <Ionicons name="play" size={30} color="#fff" />
+                </View>
+            ) : (dl.checked ? <DownloadBadge dl={dl} size={size} /> : null)}
+        </Pressable>
+    );
+});
+
+// Audio: download hone tak sirf download button, uske baad normal player (local file se, offline bhi)
+const AudioAtt = memo(({ uri, size, auto, isMine, isDark, guard, onLongPress }) => {
+    const dl = useMediaDownload(uri, { auto });
+    if (dl.ready) return <AudioPlayer url={dl.localUri} isMine={isMine} isDark={isDark} />;
+    return (
+        <Pressable style={styles.audioUploadRow} onPress={guard(() => dl.start())} onLongPress={onLongPress} delayLongPress={200}>
+            {dl.downloading
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Ionicons name={dl.failed ? 'refresh' : 'arrow-down-circle'} size={26} color="#fff" />}
+            <Text style={styles.docName}>
+                {dl.downloading ? `Downloading… ${Math.round((dl.progress || 0) * 100)}%` : `Voice message${size ? ` · ${size}` : ''}`}
+            </Text>
+        </Pressable>
+    );
+});
+
+const DocAtt = memo(({ uri, att, auto, guard, onOpen, onLongPress }) => {
+    const dl = useMediaDownload(uri, { auto });
+    return (
+        <TouchableOpacity style={styles.docRow} onPress={guard(() => (dl.ready ? onOpen(dl.localUri, att) : dl.start()))} onLongPress={onLongPress}>
+            <MaterialCommunityIcons name={docIcon(att)} size={24} color="#fff" />
+            <View style={{ flex: 1 }}>
+                <Text style={styles.docName} numberOfLines={1}>{att.filename || 'Document'}</Text>
+                {!dl.ready && !!att.fileSize && <Text style={styles.dlText}>{fmtSize(att.fileSize)}</Text>}
+            </View>
+            {!dl.ready && (dl.downloading
+                ? <><ActivityIndicator size="small" color="#fff" /><Text style={styles.dlText}>{Math.round((dl.progress || 0) * 100)}%</Text></>
+                : dl.checked ? <Ionicons name={dl.failed ? 'refresh' : 'arrow-down-circle-outline'} size={22} color="#fff" /> : null)}
+        </TouchableOpacity>
+    );
 });
 
 // Document ka icon file type ke hisaab se (har file PDF nahi hoti)
@@ -64,7 +154,7 @@ const UploadOverlay = ({ progress = 0, onCancel }) => (
 
 const MessageBubble = ({
     item, MY_USER_ID, isGroup, theme, getFullUrl,
-    setImageModalUri, setVideoModalUri, openDocInBrowser,
+    setImageModalUri, setVideoModalUri, openDocInBrowser, openLocalDoc,
     setReplyMsg, setShowEmoji, fmtTime,
     isSelectMode, isHighlighted, isSelected, onSelect, onReplyPress, isMatch,
     openPopup, retryMessage, onCancelUpload, onReactionPress,
@@ -104,13 +194,14 @@ const MessageBubble = ({
         if (isSelectMode) return canSelect ? onSelect(item) : undefined;
         if (isFailed) retryMessage?.(item);
     };
-    // Long press: actions popup (reply, forward, star, react, delete...). Select mode me toggle.
+    // Long press: select mode shuru / toggle. Failed message par Retry/Delete popup.
     const handleLongPress = () => {
         if (item.isDeleted) return;
         if (isFailed) return openPopup?.(item); // Retry / Delete
         if (item.isOptimistic) return;
-        if (isSelectMode || !openPopup) return canSelect ? onSelect(item) : undefined;
-        openPopup(item);
+        // WhatsApp jaisa: long press seedha select mode shuru karta hai (header me actions)
+        if (canSelect && onSelect) return onSelect(item);
+        openPopup?.(item);
     };
     // Reactions ko emoji ke hisaab se group karo: ❤️ 2  👍 1
     const reactionGroups = Object.entries(
@@ -127,6 +218,11 @@ const MessageBubble = ({
     // Media par tap: select mode me select, warna full-screen viewer
     const openMedia = (open) => () => (isSelectMode ? (canSelect ? onSelect(item) : undefined) : open());
 
+
+    const pendingProps = isPendingUpload ? {
+        onPress: () => onCancelUpload?.(item._id),
+        overlay: <UploadOverlay progress={item.uploadProgress ?? 0} onCancel={() => onCancelUpload?.(item._id)} />,
+    } : null;
 
     const Shawtime = moment(item.createdAt).format('hh:mm A');
 
@@ -198,40 +294,33 @@ const MessageBubble = ({
                         ) : (
                             <View style={styles.contentContainer}>
                                 {item.messageType === 'image' && item.attachments?.map((att, i) => (
-                                    <Pressable
+                                    <ImageAtt
                                         key={i}
-                                        style={styles.mediaWrap}
-                                        onPress={isPendingUpload ? () => onCancelUpload?.(item._id) : openMedia(() => setImageModalUri(getFullUrl(att.url)))}
+                                        uri={getFullUrl(att.url)}
+                                        size={fmtSize(att.fileSize)}
+                                        auto={isMine}
+                                        style={styles.msgImage}
+                                        wrapStyle={styles.mediaWrap}
+                                        pending={pendingProps}
+                                        guard={openMedia}
+                                        onOpen={setImageModalUri}
                                         onLongPress={handleLongPress}
-                                        delayLongPress={200}
-                                    >
-                                        <ChatImage uri={getFullUrl(att.url)} style={styles.msgImage} />
-                                        {isPendingUpload ? (
-                                            <UploadOverlay progress={item.uploadProgress ?? 0} onCancel={() => onCancelUpload?.(item._id)} />
-                                        ) : null}
-                                    </Pressable>
+                                    />
                                 ))}
 
                                 {item.messageType === 'video' && item.attachments?.map((att, i) => (
-                                    <Pressable
+                                    <VideoAtt
                                         key={i}
-                                        style={styles.videoThumbWrap}
-                                        onPress={isPendingUpload ? () => onCancelUpload?.(item._id) : openMedia(() => setVideoModalUri(getFullUrl(att.url)))}
+                                        uri={getFullUrl(att.url)}
+                                        size={fmtSize(att.fileSize)}
+                                        auto={isMine}
+                                        style={styles.msgImage}
+                                        wrapStyle={styles.videoThumbWrap}
+                                        pending={pendingProps}
+                                        guard={openMedia}
+                                        onOpen={setVideoModalUri}
                                         onLongPress={handleLongPress}
-                                        delayLongPress={200}
-                                    >
-                                        {/* Native video view touch kha leta hai — overlay upar rahe isliye pointerEvents none */}
-                                        <View pointerEvents="none" style={styles.msgImage}>
-                                            <VideoThumb uri={getFullUrl(att.url)} style={styles.msgImage} />
-                                        </View>
-                                        {isPendingUpload ? (
-                                            <UploadOverlay progress={item.uploadProgress ?? 0} onCancel={() => onCancelUpload?.(item._id)} />
-                                        ) : (
-                                            <View pointerEvents="none" style={styles.videoOverlay}>
-                                                <Ionicons name="play" size={30} color="#fff" />
-                                            </View>
-                                        )}
-                                    </Pressable>
+                                    />
                                 ))}
 
                                 {item.messageType === 'audio' && item.attachments?.map((att, i) => (
@@ -242,7 +331,15 @@ const MessageBubble = ({
                                                 <Text style={styles.docName}>Uploading voice message… {item.uploadProgress ?? 0}%</Text>
                                             </Pressable>
                                         ) : (
-                                            <AudioPlayer url={getFullUrl(att.url)} isMine={isMine} isDark={isDark} />
+                                            <AudioAtt
+                                                uri={getFullUrl(att.url)}
+                                                size={fmtSize(att.fileSize)}
+                                                auto={isMine}
+                                                isMine={isMine}
+                                                isDark={isDark}
+                                                guard={openMedia}
+                                                onLongPress={handleLongPress}
+                                            />
                                         )}
                                     </View>
                                 ))}
@@ -256,10 +353,15 @@ const MessageBubble = ({
                                             </Text>
                                         </Pressable>
                                     ) : (
-                                        <TouchableOpacity key={i} style={styles.docRow} onPress={openMedia(() => openDocInBrowser(att.url))} onLongPress={handleLongPress}>
-                                            <MaterialCommunityIcons name={docIcon(att)} size={24} color="#fff" />
-                                            <Text style={styles.docName} numberOfLines={1}>{att.filename || 'Document'}</Text>
-                                        </TouchableOpacity>
+                                        <DocAtt
+                                            key={i}
+                                            uri={getFullUrl(att.url)}
+                                            att={att}
+                                            auto={isMine}
+                                            guard={openMedia}
+                                            onOpen={openLocalDoc}
+                                            onLongPress={handleLongPress}
+                                        />
                                     )
                                 ))}
 
@@ -351,6 +453,8 @@ const styles = StyleSheet.create({
     msgMedia: { width: SCREEN_W * 0.65, height: SCREEN_W * 0.65, borderRadius: 8, backgroundColor: '#eee' },
     audioWrapper: { width: SCREEN_W * 0.65 },
     videoThumbWrap: { width: SCREEN_W * 0.8 - 12, height: (SCREEN_W * 0.8 - 12) * 1.1, justifyContent: 'center', alignItems: 'center', borderRadius: 8, overflow: 'hidden' },
+    dlBadge: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.3)' },
+    dlText: { color: '#fff', fontSize: 11, fontWeight: '600' },
     videoOverlay: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 30, padding: 10 },
     docRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, backgroundColor: '#1296f3', borderRadius: 8, width: SCREEN_W * 0.65 },
     docName: { color: '#fff', fontSize: 13, flex: 1 },

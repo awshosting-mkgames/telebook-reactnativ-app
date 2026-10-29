@@ -9,6 +9,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 const DIR = `${FileSystem.documentDirectory}media_cache/`;
 const known = new Map();     // url -> local uri (memory me jaldi lookup)
 const inflight = new Map();  // url -> Promise (same file do baar download na ho)
+const progressListeners = new Map(); // url -> Set<(0..1) => void>
 let dirReady = null;
 
 const isRemote = (u) => /^https?:/i.test(u ?? '');
@@ -50,8 +51,12 @@ export const cacheMedia = (url) => {
             await ensureDir();
             const path = localPathFor(url);
             const tmp = `${path}.part`;
-            const res = await FileSystem.downloadAsync(url, tmp);
-            if (res.status && res.status >= 400) { await FileSystem.deleteAsync(tmp, { idempotent: true }); return null; }
+            const emit = (p) => progressListeners.get(url)?.forEach((fn) => fn(p));
+            const dl = FileSystem.createDownloadResumable(url, tmp, {}, ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
+                if (totalBytesExpectedToWrite > 0) emit(totalBytesWritten / totalBytesExpectedToWrite);
+            });
+            const res = await dl.downloadAsync();
+            if (!res || (res.status && res.status >= 400)) { await FileSystem.deleteAsync(tmp, { idempotent: true }); return null; }
             await FileSystem.moveAsync({ from: tmp, to: path });
             known.set(url, path);
             return path;
@@ -82,4 +87,47 @@ export const useMediaUri = (url, { autoCache = true } = {}) => {
         return () => { alive = false; };
     }, [url, autoCache]);
     return uri;
+};
+
+// WhatsApp jaisa manual download: pehle 'idle' (download button), tap par 'downloading' (progress),
+// phir 'ready' + localUri. Ek baar download ke baad offline bhi local file se khulta hai.
+// auto=true (apne bheje hue media) me bina tap ke background me cache ho jata hai.
+export const useMediaDownload = (url, { auto = false } = {}) => {
+    const remote = isRemote(url);
+    const [localUri, setLocalUri] = useState(() => (remote ? (known.get(url) ?? null) : url));
+    const [checked, setChecked] = useState(!remote || known.has(url));
+    const [downloading, setDownloading] = useState(() => remote && inflight.has(url));
+    const [progress, setProgress] = useState(0);
+    const [failed, setFailed] = useState(false);
+
+    const start = () => {
+        if (!remote) return Promise.resolve(url);
+        setFailed(false); setDownloading(true); setProgress(0);
+        const job = cacheMedia(url);
+        return job.then((local) => {
+            if (local) setLocalUri(local); else setFailed(true);
+            setDownloading(false);
+            return local;
+        });
+    };
+
+    useEffect(() => {
+        if (!remote) { setLocalUri(url || null); setChecked(true); return undefined; }
+        let alive = true;
+        const fn = (p) => { if (alive) setProgress(p); };
+        if (!progressListeners.has(url)) progressListeners.set(url, new Set());
+        progressListeners.get(url).add(fn);
+        getLocalUri(url).then((local) => {
+            if (!alive) return;
+            setChecked(true);
+            if (local) { setLocalUri(local); return; }
+            setLocalUri(null);
+            if (inflight.has(url)) { setDownloading(true); inflight.get(url).then((l) => { if (alive) { if (l) setLocalUri(l); setDownloading(false); } }); }
+            else if (auto) start();
+        });
+        return () => { alive = false; progressListeners.get(url)?.delete(fn); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [url, auto]);
+
+    return { localUri, ready: !!localUri, checked, downloading, progress, failed, start };
 };

@@ -52,7 +52,7 @@ export default function Plans({ navigation }) {
     const { theme } = useContext(ThemeContext);
     const dispatch = useDispatch();
     const plansState = useSelector((s) => s.plans);
-    const { plans, plansLoading, me, meLoading } = plansState;
+    const { plans, plansLoading, plansError, plansReason, me, meLoading } = plansState;
 
     const [paymentConfig, setPaymentConfig] = useState(getCachedPaymentConfig());
 
@@ -209,6 +209,23 @@ export default function Plans({ navigation }) {
 
                             <Text style={[styles.sectionLabel, { color: colors.sub, marginTop: 12 }]}>AVAILABLE PLANS</Text>
                         </>
+                    }
+                    ListEmptyComponent={
+                        <View style={[styles.card, { backgroundColor: colors.card, alignItems: 'center' }]}>
+                            <Ionicons name="pricetags-outline" size={34} color={colors.sub} />
+                            <Text style={[styles.currentPlanName, { color: colors.txt, marginTop: 8 }]}>No plans available</Text>
+                            <Text style={[styles.currentSub, { color: colors.sub, textAlign: 'center' }]}>
+                                {plansError
+                                    ? `Could not load plans: ${typeof plansError === 'string' ? plansError : 'network error'}`
+                                    : plansReason === 'FEATURE_OFF' ? 'Plans are currently disabled by the server.'
+                                    : plansReason === 'LEGACY_CLIENT' ? 'Please update the app to see plans.'
+                                    : plansReason === 'NO_ACTIVE_PLANS' ? 'No active plans have been set up yet.'
+                                    : 'Pull to retry in a moment.'}
+                            </Text>
+                            <TouchableOpacity style={[styles.lockCta, { borderColor: headerBg, marginTop: 12 }]} onPress={() => dispatch(fetchPlans())}>
+                                <Text style={{ color: headerBg, fontSize: 12, fontWeight: '700' }}>Retry</Text>
+                            </TouchableOpacity>
+                        </View>
                     }
                     ListFooterComponent={
                         !!plans.length && (

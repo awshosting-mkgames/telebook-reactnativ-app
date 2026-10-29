@@ -1354,6 +1354,25 @@ export default function ChatScreen({ route, navigation }) {
 
     const cancelSelectMode = () => { setIsSelectMode(false); setSelectedMsgIds(new Set()); };
 
+    const isSelectable = (m) => !!m?._id && !m.isDeleted && !m.isOptimistic && !String(m._id).startsWith("temp_");
+    const handleReplySelected = () => {
+        if (selectedMsgIds.size !== 1) return;
+        const msg = messages.find((m) => selectedMsgIds.has(m._id));
+        cancelSelectMode();
+        if (msg) setReplyMsg(msg);
+    };
+    // Ek message select ho to poora popup (react, edit, block...) kholo
+    const handleMoreSelected = () => {
+        if (selectedMsgIds.size !== 1) return;
+        const msg = messages.find((m) => selectedMsgIds.has(m._id));
+        cancelSelectMode();
+        if (msg) { setSelectedMsg(msg); setShowPopup(true); }
+    };
+    const handleSelectAll = () => {
+        setSelectedMsgIds(new Set(messages.filter(isSelectable).map((m) => m._id)));
+        setIsSelectMode(true);
+    };
+
     const handleCopySelected = () => {
         if (selectedMsgIds.size === 0) return;
         const Clipboard = require("@react-native-clipboard/clipboard").default;
@@ -1425,6 +1444,19 @@ export default function ChatScreen({ route, navigation }) {
         catch { Alert.alert("Error", "File open nahi ho sakti"); }
     };
 
+    // Download ho chuki local file ko system viewer se kholo (offline bhi chalta hai)
+    const openLocalDoc = async (localUri, att) => {
+        try {
+            const Sharing = require("expo-sharing");
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(localUri, { mimeType: att?.fileType, dialogTitle: att?.filename || "Open file" });
+                return;
+            }
+        } catch (e) { /* neeche fallback */ }
+        try { await Linking.openURL(localUri); }
+        catch { Alert.alert("Error", "File open nahi ho sakti"); }
+    };
+
     const gotouserDetails = () => navigation.navigate(isGroup ? "Group" : "ChatUserDetailScreen", { chatId });
 
     // ── Search match helpers ──────────────────────────────────────
@@ -1455,6 +1487,9 @@ export default function ChatScreen({ route, navigation }) {
                 onDeleteSelected={deleteSelectedMessages}
                 onCopySelected={handleCopySelected}
                 onStarSelected={handleStarSelected}
+                onReplySelected={handleReplySelected}
+                onMoreSelected={handleMoreSelected}
+                onSelectAll={handleSelectAll}
                 MY_USER_ID={MY_USER_ID}
                 fmtTime={fmtTime}
                 isSearchMode={isSearchMode}
@@ -1507,6 +1542,7 @@ export default function ChatScreen({ route, navigation }) {
                         setVideoModalUri={setVideoModalUri}
                         openPopup={openPopup}
                         openDocInBrowser={openDocInBrowser}
+                        openLocalDoc={openLocalDoc}
                         retryMessage={retryMessage}
                         onCancelUpload={cancelUpload}
                         setReplyMsg={setReplyMsg}
