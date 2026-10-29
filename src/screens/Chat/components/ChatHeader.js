@@ -6,6 +6,7 @@ import {
     TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { ThemeContext } from '../../../components/ThemeContext';
+import { useNameResolver } from '../../../services/nameResolver';
 
 const ChatHeader = ({
     navigation, chatName, chatImage, isGroup, isBroadcast,
@@ -18,6 +19,7 @@ const ChatHeader = ({
 }) => {
     const [menuVisible, setMenuVisible] = useState(false);
     const [selMenuVisible, setSelMenuVisible] = useState(false);
+    const resolveName = useNameResolver();
     const { theme } = useContext(ThemeContext);
     const isDark = theme?.mode ? theme.mode === 'dark' : theme?.text === '#FFFFFF';
     // Header colour theme token se (dark me neutral dark, light me wahi blue)
@@ -108,6 +110,9 @@ const ChatHeader = ({
     // ── Normal mode ───────────────────────────────────────────────
     const otherUser = chatDaetils?.users?.find(u => u._id !== MY_USER_ID);
     const lastSeenValue = otherUser?.lastSeen ?? null;
+    // Phonebook me save nahi: number title ke neeche profile naam (ya "Unknown") chhote text me
+    const otherName = !isGroup && !isBroadcast && otherUser ? resolveName(otherUser) : null;
+    const profileSub = otherName && !otherName.isSaved ? otherName.subtitle : null;
 
     return (
         <>
@@ -128,6 +133,7 @@ const ChatHeader = ({
                     <Text style={styles.name} numberOfLines={1}>
                         {isBroadcast ? '📢 ' : ''}{chatName}
                     </Text>
+                    {!!profileSub && <Text style={styles.sub} numberOfLines={1}>{profileSub}</Text>}
                     {isTyping ? (
                         <Text style={styles.subTyping}>typing...</Text>
                     ) : !isGroup && isOnline ? (
