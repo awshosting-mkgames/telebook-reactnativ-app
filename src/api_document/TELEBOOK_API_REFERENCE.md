@@ -9285,3 +9285,21 @@ Run on two devices with users A and B. Every item should pass.
 - [ ] Reinstall the app on B while staying logged in (or clear its token): after reopening, A's message still reaches B as a push.
 - [ ] Log out on B, then send from A: B's phone gets no push. Log in as another account on B's phone: it never shows the first account's notifications.
 - [ ] Airplane mode for 20 s then off: socket reconnects and the open chat still receives typing and reactions.
+
+
+---
+
+## Addendum (2026-10-29) — contact-name priority & plans
+
+**`GET /api/plans`** — `data.reason` added. It is `null` when plans are returned, otherwise why `plans` is empty:
+`FEATURE_OFF` (`features.plans` off / `FEATURE_PLANS=false`), `LEGACY_CLIENT` (request had no `X-App-Build` header while `planRollout.legacyClientsExempt` is on) or `NO_ACTIVE_PLANS` (no active plan in DB).
+
+**`mobile` now included** (10-digit string) so the app can show the receiver's phonebook name:
+- `sender` of messages, `replyTo.sender`, system messages (`messages/*`, `chats/*` message lists) and broadcast messages.
+- `user` / `viewedBy[].user` in status APIs.
+- `caller` in the socket event `call:incoming` (`{ _id, name, mobile, profilePicture }`).
+Channel post senders are intentionally **not** given a mobile.
+
+**Display-name rule (client):** phonebook saved name → else mobile number as title with profile `name` (or "Unknown") as small secondary text. Profile name is never the title.
+
+**Push notifications:** the server now builds the title per receiver from their synced `contact-cache` (phonebook saved name, else the sender's mobile number). Applies to message push, incoming-call push (`callerName`, new `callerMobile`) and missed-call push. Lookup is cached in memory for 5 minutes per receiver.
