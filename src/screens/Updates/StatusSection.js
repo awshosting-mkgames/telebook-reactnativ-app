@@ -27,6 +27,7 @@ import apiService from '../../services/apiService';
 import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
 import { claimPlayback, useExclusivePlayback } from '../../utils/playbackManager';
+import { useNameResolver } from '../../services/nameResolver';
 const STATUS_DURATION = 5000;
 const VIDEO_MAX_SECS = 30;
 const FALLBACK_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
@@ -68,6 +69,7 @@ const getMediaType = (status) => {
 
 // ─── StatusViewer — fullscreen, no theme needed (always dark) ────────────────
 const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, onDelete, onViewed }) => {
+    const resolveName = useNameResolver();
     const insets = useSafeAreaInsets();
     const [groupIdx, setGroupIdx] = useState(startGroupIdx);
     const [statusIdx, setStatusIdx] = useState(0);
@@ -213,7 +215,7 @@ const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, o
     if (!visible || !currentGroup) return null;
 
     // status/my me user sirf id hoti hai — isliye apne status par naam fallback
-    const userName = isMine ? 'My Status' : (currentGroup?.user?.name || currentGroup?.user?.mobile || 'User');
+    const userName = isMine ? 'My Status' : resolveName(currentGroup?.user).title;
     const avatar = imgUrl(currentGroup?.user?.profilePicture) || FALLBACK_AVATAR;
 
     return (
@@ -467,13 +469,14 @@ const tc = StyleSheet.create({
 
 // ─── StatusCard ───────────────────────────────────────────────────────────────
 const StatusCard = ({ group, isMe, myUserId, onPress, onAddPress, isDark }) => {
+    const resolveName = useNameResolver();
     const statuses = toArr(group?.statuses);
     const firstStatus = statuses[0];
     const mediaType = getMediaType(firstStatus);
     const bg = mediaType === 'text' ? null : imgUrl(firstStatus?.mediaUrl);
     const avatar = imgUrl(group?.user?.profilePicture) || FALLBACK_AVATAR;
     const allSeen = statuses.length > 0 && statuses.every((st) => isSeenByMe(st, myUserId));
-    const name = isMe ? 'My Status' : (group?.user?.name || group?.user?.mobile || 'User');
+    const name = isMe ? 'My Status' : resolveName(group?.user).title;
 
     // Mera card, koi status nahi — pehle khali grey block dikhta tha.
     // Ab saaf "Add status" card hai jo seedha picker kholta hai.

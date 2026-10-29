@@ -61,3 +61,32 @@ export function stopRingtone() {
         try { RingtoneModule.stopRingtone(); } catch (e) { console.warn('[ringtoneModule] stop error:', e?.message); }
     }
 }
+
+// ── Ringback (caller ko "ring ho rahi hai" ki awaaz) ─────────────────────────
+// Outgoing call me jab tak samne wala utha nahi leta, caller ko tu-tu tone sunayi deni chahiye.
+const RINGBACK_ASSET = require('../../assets/sounds/ringback.wav');
+let ringbackPlayer = null;
+let ringbackWanted = false;
+
+export async function playRingback() {
+    ringbackWanted = true;
+    if (ringbackPlayer) return;
+    try {
+        await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false, shouldPlayInBackground: false });
+        if (!ringbackWanted || ringbackPlayer) return; // await ke beech stop aa gaya
+        ringbackPlayer = createAudioPlayer(RINGBACK_ASSET);
+        ringbackPlayer.loop = true;
+        ringbackPlayer.volume = 1;
+        ringbackPlayer.play();
+    } catch (e) {
+        console.warn('[ringtoneModule] ringback error:', e?.message);
+    }
+}
+
+export function stopRingback() {
+    ringbackWanted = false;
+    if (ringbackPlayer) {
+        try { ringbackPlayer.pause(); ringbackPlayer.remove?.(); } catch (e) { /* already released */ }
+        ringbackPlayer = null;
+    }
+}

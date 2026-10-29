@@ -6,6 +6,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { useNameResolver } from '../../../services/nameResolver';
 
 const SearchResultsList = ({
     results = [],
@@ -15,6 +16,7 @@ const SearchResultsList = ({
     fmtTime,
     onResultPress,
 }) => {
+    const resolveName = useNameResolver();
     const isDark = theme?.background === "#000";
 
     if (isSearching) {
@@ -60,7 +62,7 @@ const SearchResultsList = ({
                         style={[styles.name, { color: isDark ? "#fff" : "#111" }]}
                         numberOfLines={1}
                     >
-                        {item.sender?.name ?? "User"}
+                        {resolveName(item.sender).title}
                     </Text>
                     <Text
                         style={[styles.content, { color: isDark ? "#bbb" : "#555" }]}

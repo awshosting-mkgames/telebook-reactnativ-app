@@ -197,6 +197,7 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                     {/* Content */}
                     <View style={styles.chatContent}>
                         <View style={styles.chatTopRow}>
+                            <View style={{ flex: 1, marginRight: 8 }}>
                             <View style={styles.nameRow}>
                                 {isGroup && (
                                     <View style={styles.groupTag}>
@@ -206,12 +207,11 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                                 <Text style={[styles.name, { color: theme.text || '#111' }]} numberOfLines={1}>
                                     {item.displayName}
                                 </Text>
-                                {isUnknown && (
-                                    <View style={[styles.unknownChip, { backgroundColor: isLight ? '#eceff1' : '#2a2f32' }]}>
-                                        <Text style={[styles.unknownChipText, { color: subColor }]} numberOfLines={1}>Unknown</Text>
-                                    </View>
-                                )}
                                 {isBlocked && <Ionicons name="ban" size={13} color="#FF3B30" />}
+                            </View>
+                            {isUnknown && !!item.displaySub && (
+                                <Text style={[styles.unknownChipText, { color: subColor }]} numberOfLines={1}>{item.displaySub}</Text>
+                            )}
                             </View>
                             <Text style={[styles.time, { color: subColor }, unread > 0 && styles.timeUnread]}>{timeStr}</Text>
                         </View>

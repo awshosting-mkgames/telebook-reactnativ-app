@@ -13,6 +13,7 @@ import SwipeableMessage from './SwipeableMessage';
 import Ticks from './Ticks';
 import moment from 'moment';
 import { useMediaDownload } from '../../../utils/mediaCache';
+import { useNameResolver } from '../../../services/nameResolver';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -160,6 +161,7 @@ const MessageBubble = ({
     openPopup, retryMessage, onCancelUpload, onReactionPress,
 }) => {
     const { t } = useTranslation();
+    const resolveName = useNameResolver();
     const isMine = item.sender?._id === MY_USER_ID || item.sender === MY_USER_ID;
     // theme.mode se dark detect (text colour compare karna fragile tha)
     const isDark = theme?.mode ? theme.mode === 'dark' : theme?.text === '#FFFFFF';
@@ -257,7 +259,7 @@ const MessageBubble = ({
                     ]}>
                         {isGroup && !isMine && (
                             <Text numberOfLines={1} style={styles.senderName}>
-                                {item.sender?.name ?? 'User'}
+                                {resolveName(item.sender).title}
                             </Text>
                         )}
                         {item.isForwarded && !item.isDeleted && (
@@ -275,7 +277,7 @@ const MessageBubble = ({
                                 <View style={styles.replyBar} />
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.replyName} numberOfLines={1}>
-                                        {item.replyTo.sender?.name ?? 'User'}
+                                        {resolveName(item.replyTo.sender).title}
                                     </Text>
                                     <Text style={[styles.replyText, { color: replyTextC }]} numberOfLines={1}>
                                         {item.replyTo.messageType !== 'text'

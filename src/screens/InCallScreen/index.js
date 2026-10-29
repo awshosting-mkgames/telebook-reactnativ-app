@@ -12,9 +12,10 @@ import socketService from '../../services/socketService';
 import { acceptCall, endCall, rejectCall, resumeHeld, swapCalls } from '../../services/callHelpers';
 import { cancelIncomingCallNotification } from '../../components/notification';
 import { showOverLockScreen } from '../../services/lockScreenModule';
-import { playRingtone, stopRingtone } from '../../services/ringtoneModule';
+import { playRingback, playRingtone, stopRingback, stopRingtone } from '../../services/ringtoneModule';
 import Config from '../../services/config';
 import IncomingCallOverlay from '../Call/IncomingCallOverlay';
+import { useNameResolver } from '../../services/nameResolver';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 const toImageUrl = (v) => (!v ? DEFAULT_AVATAR : /^(https?:|file:|data:)/.test(v) ? v : `${Config.MEDIA_URL}${v}`);
@@ -32,6 +33,7 @@ const END_REASON_LABEL = {
 };
 
 export default function InCallScreen({ route, navigation }) {
+    const resolveName = useNameResolver();
     const { callId, type, isIncoming, remoteUser, autoAccept } = route.params || {};
     const isVideo = type === 'video';
 
@@ -70,7 +72,8 @@ export default function InCallScreen({ route, navigation }) {
     const timerRef = useRef(null);
 
     const avatarUrl = toImageUrl(remoteUser?.profilePicture);
-    const name = remoteUser?.name || 'Unknown';
+    const resolvedRemote = remoteUser?.mobile ? resolveName(remoteUser) : null;
+    const name = resolvedRemote?.title || remoteUser?.name || 'Unknown';
 
     // Call khud ko saaf karna — end/leave/release/setCallActive(false)/lock
     // screen flag off, kabhi bhi (end button, back, call:ended, unmount) do
@@ -152,6 +155,13 @@ export default function InCallScreen({ route, navigation }) {
         playRingtone();
         return () => stopRingtone();
     }, [phase]);
+
+    // ── Outgoing call: samne wala uthane tak caller ko ringback tone sunao ──
+    useEffect(() => {
+        if (isIncoming || phase !== 'ringing') return undefined;
+        playRingback();
+        return () => stopRingback();
+    }, [phase, isIncoming]);
 
     // ── autoAccept (notification ka "Accept" button) → seedha accept+join ──
     useEffect(() => {

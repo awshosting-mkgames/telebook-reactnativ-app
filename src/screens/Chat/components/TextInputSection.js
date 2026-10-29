@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import Config from '../../../services/config';
 import { APP_BUILD_HEADERS } from '../../../services/appBuild';
+import { useNameResolver } from '../../../services/nameResolver';
 
 const EMOJIS = ['😀', '😂', '😍', '🥰', '😎', '👍', '❤️', '🔥', '🎉', '🙏', '✅', '🫡',
     '😅', '🤣', '😊', '😇', '🤩', '🤗', '😏', '😒', '😞', '😔', '😢', '😭',
@@ -148,6 +149,7 @@ const TextInputSection = ({
     setShowAttach, theme, openCamera, getFullUrl, bottomInset = 0,
     editMsg, onCancelEdit,
 }) => {
+    const resolveName = useNameResolver();
     const { t } = useTranslation();
 
     const isDark = theme?.text === '#FFFFFF';
@@ -244,7 +246,7 @@ const TextInputSection = ({
                         <View style={styles.replyAccent} />
                         <View style={{ flex: 1 }}>
                             <Text style={[styles.replyName, { color: replyNameC }]}>
-                                Replying to {replyMsg.sender?.name ?? 'You'}
+                                Replying to {replyMsg.sender ? resolveName(replyMsg.sender).title : 'You'}
                             </Text>
                             <Text style={[styles.replyText, { color: replyTextC }]} numberOfLines={1}>
                                 {replyMsg.messageType !== 'text' ? `📎 ${replyMsg.messageType}` : replyMsg.content}

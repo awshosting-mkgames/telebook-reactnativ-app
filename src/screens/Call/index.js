@@ -12,6 +12,7 @@ import apiService from '../../services/apiService';
 import Config from '../../services/config';
 import { fetchCallsConfig, getCachedCallsConfig } from '../../services/callConfigStore';
 import { startCall } from '../../services/callHelpers';
+import { useNameResolver } from '../../services/nameResolver';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 const toImageUrl = (v) => (!v ? DEFAULT_AVATAR : /^(https?:|file:|data:)/.test(v) ? v : `${Config.MEDIA_URL}${v}`);
@@ -30,6 +31,7 @@ const fmtWhen = (iso) => {
 const HEADER_CONTENT_HEIGHT = 62;
 
 export default function Call({ navigation }) {
+    const resolveName = useNameResolver();
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
@@ -83,7 +85,7 @@ export default function Call({ navigation }) {
             navigation,
             calleeId: item.user._id,
             type: item.type,
-            remoteUser: { _id: item.user._id, name: item.user.name, profilePicture: item.user.profilePicture },
+            remoteUser: { _id: item.user._id, name: resolveName(item.user).title, mobile: item.user.mobile, profilePicture: item.user.profilePicture },
         });
     };
 
@@ -97,8 +99,11 @@ export default function Call({ navigation }) {
                 <Image source={{ uri: toImageUrl(item.user?.profilePicture) }} style={styles.avatar} />
                 <View style={{ flex: 1 }}>
                     <Text style={[styles.name, { color: theme.text }, isMissed && styles.missed]} numberOfLines={1}>
-                        {item.user?.name || 'Unknown'}
+                        {resolveName(item.user).title}
                     </Text>
+                    {!resolveName(item.user).isSaved && !!resolveName(item.user).subtitle && (
+                        <Text style={[styles.time, { fontSize: 11 }]} numberOfLines={1}>{resolveName(item.user).subtitle}</Text>
+                    )}
                     <View style={styles.timeRow}>
                         {/* Point 8: incoming = green arrow, outgoing = red arrow, missed = red cross */}
                         <MaterialIcons

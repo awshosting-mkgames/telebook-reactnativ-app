@@ -70,9 +70,11 @@ export const loadPhoneNameCache = async () => {
 const resolveOneToOneName = (other, fallbackName) => {
     const key = last10(other?.mobile);
     const saved = key ? phoneNameCache.get(key) : null;
-    if (saved) return { displayName: saved, isSaved: true };
+    if (saved) return { displayName: saved, isSaved: true, displaySub: null };
     const num = formatMobile(other?.mobile, other?.countryCode);
-    return { displayName: num || fallbackName || 'User', isSaved: false };
+    // Unsaved: number title, profile naam (ya "Unknown") chhote text me neeche
+    const profile = (other?.name || '').trim();
+    return { displayName: num || profile || fallbackName || 'User', isSaved: false, displaySub: num ? (profile || 'Unknown') : null };
 };
 
 // Maujooda chats ke naam naye cache se dobara nikalo (contacts badalne par / SQL se load par)
@@ -82,7 +84,7 @@ const relabelTabs = (tabs) => {
         out[tab] = (tabs[tab] || []).map((c) => {
             if (!c || c.isGroupChat || !c.displayUser) return c;
             const r = resolveOneToOneName(c.displayUser, c.displayName);
-            return c.displayName === r.displayName && c.isSaved === r.isSaved ? c : { ...c, ...r };
+            return c.displayName === r.displayName && c.isSaved === r.isSaved && c.displaySub === r.displaySub ? c : { ...c, ...r };
         });
     });
     return out;

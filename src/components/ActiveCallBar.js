@@ -11,6 +11,7 @@ import {
     clearActiveCall, clearHeldCall, getActiveCall, getHeldCall, isSwitching, patchActiveCall, setRemoteHold, subscribeActiveCall,
 } from '../services/activeCallStore';
 import { endCall, resumeHeld } from '../services/callHelpers';
+import { useNameResolver } from '../services/nameResolver';
 
 const fmt = (secs) => `${Math.floor(secs / 60).toString().padStart(2, '0')}:${Math.floor(secs % 60).toString().padStart(2, '0')}`;
 const LIVE_PHASES = ['ringing', 'connecting', 'ongoing'];
@@ -21,6 +22,7 @@ const onCallScreen = () => navigationRef.isReady() && navigationRef.getCurrentRo
 //  2. Call screen band hone par bhi call ke socket events (accepted/ended) sambhalna, taaki
 //     minimize hone par call na toote aur dusre side ke hangup par sahi se saaf ho.
 export default function ActiveCallBar() {
+    const resolveName = useNameResolver();
     const insets = useSafeAreaInsets();
     const [call, setCall] = useState(getActiveCall());
     const [routeName, setRouteName] = useState(null);
@@ -90,7 +92,7 @@ export default function ActiveCallBar() {
     if (!live || routeName === 'InCall') return null;
 
     const secs = call.startedAt ? Math.max(0, Math.floor((now - call.startedAt) / 1000)) : 0;
-    const name = call.remoteUser?.name || 'Unknown';
+    const name = call.remoteUser?.mobile ? resolveName(call.remoteUser).title : (call.remoteUser?.name || 'Unknown');
     const label = call.connected ? fmt(secs) : call.phase === 'ringing' ? 'Ringing…' : 'Connecting…';
 
     const openCall = () => rootNavigate('InCall', {

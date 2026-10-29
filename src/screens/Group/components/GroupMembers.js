@@ -9,6 +9,7 @@ import {
     View
 } from 'react-native';
 import { getImageUrl } from './helpers';
+import { useNameResolver } from '../../../services/nameResolver';
 
 
 const GroupMembers = ({
@@ -22,6 +23,7 @@ const GroupMembers = ({
     onAddAdmin,
     onRemoveAdmin,
 }) => {
+    const resolveName = useNameResolver();
    
     const { t } = useTranslation();
     const ManinAdmin = groupDetails?.isAdmin ?? false;
@@ -50,7 +52,7 @@ const GroupMembers = ({
         if(checkUserRole(member._id) === 1) return;
         const isMemberAdmin = checkUserRole(member._id) === 2;
         Alert.alert(
-            member.name || member.mobile || 'User',
+            resolveName(member).title,
             'Member ke liye action choose karein',
             [
                 { text: 'Cancel', style: 'cancel' },
@@ -106,8 +108,8 @@ const GroupMembers = ({
                             style={styles.avatar}
                         />
                         <View style={{ flex: 1 }}>
-                            <Text style={[styles.name, { color: theme.text }]}>{member.name || member.mobile || 'User'}</Text>
-                            <Text style={styles.about} numberOfLines={1}>{member.mobile}</Text>
+                            <Text style={[styles.name, { color: theme.text }]}>{resolveName(member).title}</Text>
+                            <Text style={styles.about} numberOfLines={1}>{resolveName(member).isSaved ? member.mobile : resolveName(member).subtitle}</Text>
                         </View>
 
                         <View style={styles.badges}>

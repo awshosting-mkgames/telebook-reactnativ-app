@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Config from '../../services/config';
+import { useNameResolver } from '../../services/nameResolver';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 const toImageUrl = (v) => (!v ? DEFAULT_AVATAR : /^(https?:|file:|data:)/.test(v) ? v : `${Config.MEDIA_URL}${v}`);
@@ -9,6 +10,7 @@ const toImageUrl = (v) => (!v ? DEFAULT_AVATAR : /^(https?:|file:|data:)/.test(v
 // Pure presentational — IncomingCallManager isko ek global overlay View ke
 // andar render karta hai. Koi socket/navigation logic yahan nahi.
 export default function IncomingCallOverlay({ caller, type, onAccept, onReject }) {
+    const resolveName = useNameResolver();
     const pulse = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
@@ -27,7 +29,8 @@ export default function IncomingCallOverlay({ caller, type, onAccept, onReject }
             <View style={styles.center}>
                 <Animated.View style={[styles.avatarRing, { transform: [{ scale: pulse }] }]} />
                 <Image source={{ uri: toImageUrl(caller?.profilePicture) }} style={styles.avatar} />
-                <Text style={styles.name} numberOfLines={1}>{caller?.name || 'Unknown'}</Text>
+                <Text style={styles.name} numberOfLines={1}>{caller?.mobile ? resolveName(caller).title : (caller?.name || 'Unknown')}</Text>
+                {!!caller?.mobile && !resolveName(caller).isSaved && <Text style={styles.sub}>{resolveName(caller).subtitle}</Text>}
                 <Text style={styles.sub}>{type === 'video' ? 'Incoming video call' : 'Incoming voice call'}</Text>
             </View>
             <View style={styles.actions}>
