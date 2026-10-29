@@ -59,6 +59,11 @@ const Freechat = ({ navigation }) => {
 
 
     const changeFilter = (f) => {
+        // Calls filter chat list nahi, seedha Call History page kholta hai (Point 2)
+        if (f === 'Calls') {
+            navigation.navigate('Calls');
+            return;
+        }
         if (f === activeFilter) return;
         setActiveFilter(f);
     };
@@ -320,7 +325,7 @@ const Freechat = ({ navigation }) => {
             />
             <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
                 <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.profileBtn} activeOpacity={0.8}>
-                    <Image source={{ uri: avatarUri }} style={styles.profileAvatar} />
+                    <Image source={{ uri: avatarUri }} style={[styles.profileAvatar, isDark && styles.profileAvatarDark]} />
                     {totalUnread > 0 && <View style={styles.headerBadge} />}
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>
@@ -414,6 +419,7 @@ const styles = StyleSheet.create({
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 14, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 10, gap: 8 },
     profileBtn: { position: 'relative' },
     profileAvatar: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: 'rgba(255,255,255,0.6)', backgroundColor: '#cce5ff' },
+    profileAvatarDark: { borderWidth: 0 },
     headerBadge: { position: 'absolute', top: 0, right: 0, width: 10, height: 10, borderRadius: 5, backgroundColor: '#25D366', borderWidth: 1.5, borderColor: '#1199ff' },
     headerCenter: { flex: 1 },
     headerTitle: { color: '#fff', fontSize: 20, fontWeight: '700' },

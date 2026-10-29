@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useContext } from 'react';
 import {
     View, Text, TextInput, FlatList, TouchableOpacity,
     StyleSheet, ActivityIndicator, Image, Modal,
@@ -7,6 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import Config from '../../../services/config';
+import { ThemeContext } from '../../../components/ThemeContext';
 const BASE_URL = Config.Main_url;
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
@@ -27,6 +28,22 @@ const previewOf = (m) => {
 };
 
 const ForwardContactModal = ({ visible, onClose, onForward }) => {
+    const { theme } = useContext(ThemeContext);
+    const dark = theme?.mode === 'dark';
+    // Point 4: popup current theme (dark/light) ke hisaab se
+    const c = {
+        sheet: dark ? '#1b1b1b' : '#fff',
+        text: dark ? '#f2f2f2' : '#111',
+        sub: dark ? '#9a9a9a' : '#888',
+        icon: dark ? '#ddd' : '#444',
+        line: dark ? '#2e2e2e' : '#f0f0f0',
+        input: dark ? '#2a2a2a' : '#f5f5f5',
+        inputText: dark ? '#f2f2f2' : '#222',
+        placeholder: dark ? '#777' : '#bbb',
+        selectedRow: dark ? '#23323f' : '#f0f6ff',
+        handle: dark ? '#444' : '#e0e0e0',
+        checkBorder: dark ? '#666' : '#ccc',
+    };
     const chats = useSelector((state) => state.chatList?.tabs?.All ?? []);
     const loading = useSelector((state) => state.chatList?.loading ?? false);
 
@@ -70,7 +87,7 @@ const ForwardContactModal = ({ visible, onClose, onForward }) => {
         const selected = isSelected(item._id);
         return (
             <TouchableOpacity
-                style={[s.chatItem, selected && s.chatItemSelected]}
+                style={[s.chatItem, { borderBottomColor: c.line }, selected && { backgroundColor: c.selectedRow }]}
                 onPress={() => toggleSelect(item)}
                 activeOpacity={0.7}
             >
@@ -79,14 +96,14 @@ const ForwardContactModal = ({ visible, onClose, onForward }) => {
                     style={s.avatar}
                 />
                 <View style={s.chatInfo}>
-                    <Text style={s.chatName} numberOfLines={1}>{item.displayName}</Text>
+                    <Text style={[s.chatName, { color: c.text }]} numberOfLines={1}>{item.displayName}</Text>
                     {previewOf(item.latestMessage) ? (
-                        <Text style={s.chatLastMsg} numberOfLines={1}>
+                        <Text style={[s.chatLastMsg, { color: c.sub }]} numberOfLines={1}>
                             {previewOf(item.latestMessage)}
                         </Text>
                     ) : null}
                 </View>
-                <View style={[s.checkbox, selected && s.checkboxSelected]}>
+                <View style={[s.checkbox, { borderColor: c.checkBorder }, selected && s.checkboxSelected]}>
                     {selected && <Ionicons name="checkmark" size={16} color="#fff" />}
                 </View>
             </TouchableOpacity>
@@ -97,25 +114,25 @@ const ForwardContactModal = ({ visible, onClose, onForward }) => {
         <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
             <Pressable style={s.overlay} onPress={onClose} />
 
-            <View style={s.sheet}>
-                <View style={s.handle} />
+            <View style={[s.sheet, { backgroundColor: c.sheet }]}>
+                <View style={[s.handle, { backgroundColor: c.handle }]} />
 
-                <View style={s.header}>
+                <View style={[s.header, { borderBottomColor: c.line }]}>
                     <TouchableOpacity onPress={onClose}>
-                        <Ionicons name="close" size={22} color="#444" />
+                        <Ionicons name="close" size={22} color={c.icon} />
                     </TouchableOpacity>
-                    <Text style={s.headerTitle}>
+                    <Text style={[s.headerTitle, { color: c.text }]}>
                         Forward to{selectedChats.length > 0 ? ` (${selectedChats.length})` : ''}
                     </Text>
                     <View style={{ width: 22 }} />
                 </View>
 
-                <View style={s.searchBar}>
+                <View style={[s.searchBar, { backgroundColor: c.input }]}>
                     <Ionicons name="search" size={16} color="#999" />
                     <TextInput
-                        style={s.searchInput}
+                        style={[s.searchInput, { color: c.inputText }]}
                         placeholder="Search chats..."
-                        placeholderTextColor="#bbb"
+                        placeholderTextColor={c.placeholder}
                         value={searchText}
                         onChangeText={setSearchText}
                     />
@@ -127,7 +144,7 @@ const ForwardContactModal = ({ visible, onClose, onForward }) => {
                 </View>
 
                 {selectedChats.length > 0 && (
-                    <View style={s.chipsRow}>
+                    <View style={[s.chipsRow, { borderBottomColor: c.line }]}>
                         {selectedChats.map((c) => (
                             <TouchableOpacity
                                 key={c._id}
@@ -160,7 +177,7 @@ const ForwardContactModal = ({ visible, onClose, onForward }) => {
                         contentContainerStyle={{ paddingBottom: 100 }}
                         ListEmptyComponent={
                             <View style={s.emptyBox}>
-                                <Ionicons name="chatbubbles-outline" size={48} color="#ddd" />
+                                <Ionicons name="chatbubbles-outline" size={48} color={c.checkBorder} />
                                 <Text style={s.emptyText}>No chats found</Text>
                             </View>
                         }

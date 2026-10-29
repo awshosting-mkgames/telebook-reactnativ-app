@@ -1,5 +1,6 @@
 import React, { createContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SystemUI from 'expo-system-ui';
 import { LightTheme, DarkTheme } from '../utils/theme';
 
 export const ThemeContext = createContext();
@@ -49,6 +50,12 @@ export const ThemeProvider = ({ children }) => {
         if (theme.mode === 'light') next.header = brandColor;
         return next;
     }, [theme, brandColor]);
+
+    // Point 3: native window ka background bhi theme ke saath badlo, warna screen slide ke
+    // dauran right side se safed jhalak (system day/night theme ka window colour) dikhti hai.
+    useEffect(() => {
+        SystemUI.setBackgroundColorAsync(themed.background).catch(() => {});
+    }, [themed.background]);
 
     if (loading) return null;
 

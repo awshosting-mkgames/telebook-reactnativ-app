@@ -32,3 +32,15 @@ export function goBack() {
         navigationRef.goBack();
     }
 }
+
+
+// InCall screen pehle se khuli ho to usi ko naye call se REPLACE karo (purani instance unmount),
+// warna normal navigate. Call waiting switch me do InCall screens ek saath nahi chahiye.
+export function openInCall(params) {
+    if (!navigationRef.isReady()) { navigate('InCall', params); return; }
+    if (navigationRef.getCurrentRoute()?.name === 'InCall') {
+        navigationRef.dispatch(StackActions.replace('InCall', params));
+    } else {
+        navigationRef.navigate('InCall', params);
+    }
+}

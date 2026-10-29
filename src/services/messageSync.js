@@ -1,4 +1,4 @@
-import { getAllCachedMessages, setMessagesSyncedAt, upsertMessages } from './messagesDb';
+import { deleteCachedMessage, getAllCachedMessages, setMessagesSyncedAt, upsertMessages } from './messagesDb';
 
 // Thin layer, chatSync.js jaisa — par ek chat ke messages tak scoped
 // (4 chat-list tabs ke jagah). Koi "smart merge/diff" logic yahan nahi —
@@ -49,5 +49,17 @@ export const cacheMessages = async (chatId, messages = []) => {
         await setMessagesSyncedAt(chatId, Date.now());
     } catch (error) {
         console.log('⚠️ cacheMessages error:', error);
+    }
+};
+
+/** Temp/failed row ko SQL + memory se hatao (asli message aa jaane ya user delete karne par). */
+export const uncacheMessage = async (chatId, messageId) => {
+    try {
+        const key = String(chatId);
+        const list = memCache.get(key);
+        if (list) memCache.set(key, list.filter((m) => m._id !== messageId));
+        await deleteCachedMessage(chatId, messageId);
+    } catch (error) {
+        console.log('⚠️ uncacheMessage error:', error);
     }
 };

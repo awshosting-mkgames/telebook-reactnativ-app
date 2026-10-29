@@ -10,6 +10,7 @@ import {
     Modal,
     Platform,
     Pressable,
+    Share,
     SafeAreaView,
     ScrollView,
     StatusBar,
@@ -20,6 +21,9 @@ import {
     View,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
+import Clipboard from '@react-native-clipboard/clipboard';
+import apiService from '../../services/apiService';
+import { APP_LINK_HOST } from '../../navigation/deepLinks';
 import { useDispatch, useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
 import Config from '../../services/config';
@@ -137,6 +141,27 @@ const ProfileScreen = ({ navigation }) => {
     useEffect(() => { dispatch(fetchMyPlan()); }, [dispatch]);
     const [previewUri, setPreviewUri] = useState(null); // upload ke dauran nayi photo turant dikhao
     const [photoBusy, setPhotoBusy] = useState(false);
+
+    // Point 11: apni profile ka link (doosre users ki profile jaisa Copy Link / Share) — GET /users/invite-code
+    const [inviteLink, setInviteLink] = useState('');
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            const res = await apiService({ method: 'GET', endpoint: 'users/invite-code' });
+            const code = res?.data?.inviteCode;
+            if (alive && res?.success && code) setInviteLink(res.data.inviteLink || `https://${APP_LINK_HOST}/u/${code}`);
+        })();
+        return () => { alive = false; };
+    }, []);
+    const copyMyLink = () => {
+        if (!inviteLink) return;
+        Clipboard.setString(inviteLink);
+        Toast.show({ type: 'success', text1: 'Link copied' });
+    };
+    const shareMyLink = async () => {
+        if (!inviteLink) return;
+        try { await Share.share({ message: `Chat with me on Telebook: ${inviteLink}` }); } catch (e) { /* user cancelled */ }
+    };
 
     const saveField = async (value) => {
         const res = await updateMyProfile(dispatch, { [editing]: value });
@@ -264,6 +289,25 @@ const ProfileScreen = ({ navigation }) => {
                     <Row icon="chatbubble-ellipses-outline" iconBg="#fff0e8" iconColor="#e67e22" label={t('About')} value={user.about} field="about" placeholder="Add a few words about you" last />
                 </View>
 
+                {!!inviteLink && (
+                    <>
+                        <Text style={[styles.sectionLabel, { color: sub }]}>PROFILE LINK</Text>
+                        <View style={[styles.card, { backgroundColor: card }]}>
+                            <Text style={[styles.linkText, { color: txt }]} numberOfLines={1}>{inviteLink}</Text>
+                            <View style={[styles.linkActions, { borderTopColor: divider }]}>
+                                <TouchableOpacity style={styles.linkBtn} onPress={copyMyLink} activeOpacity={0.7}>
+                                    <Ionicons name="link-outline" size={20} color="#0084ff" />
+                                    <Text style={styles.linkBtnText}>Copy Link</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.linkBtn} onPress={shareMyLink} activeOpacity={0.7}>
+                                    <Ionicons name="share-social-outline" size={20} color="#0084ff" />
+                                    <Text style={styles.linkBtnText}>Share Profile</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </>
+                )}
+
                 <Text style={[styles.sectionLabel, { color: sub }]}>LOCATION</Text>
                 <View style={[styles.card, { backgroundColor: card }]}>
                     <Row icon="business-outline" iconBg="#f3e8ff" iconColor="#8e44ad" label="City" value={user.city} field="city" placeholder="Add city" />
@@ -323,6 +367,10 @@ const styles = StyleSheet.create({
     rowBody: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingRight: 16, gap: 10 },
     rowLabel: { fontSize: 12, marginBottom: 3 },
     rowValue: { fontSize: 15, fontWeight: '500' },
+    linkText: { fontSize: 14, fontWeight: '500', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 },
+    linkActions: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
+    linkBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13 },
+    linkBtnText: { color: '#0084ff', fontSize: 14, fontWeight: '600' },
     footNote: { fontSize: 12, marginTop: 8, marginHorizontal: 20 },
 
     sheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },

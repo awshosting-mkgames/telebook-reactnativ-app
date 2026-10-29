@@ -11,6 +11,11 @@ import Toast from 'react-native-toast-message';
 import apiService from './apiService';
 import socketService from './socketService';
 import { apiErrorMessage } from './chatActions';
+import callService from './callService';
+import {
+    clearActiveCall, clearHeldCall, getActiveCall, getHeldCall, markSwitching, setActiveCall, setHeldCall,
+} from './activeCallStore';
+import { openInCall } from '../navigation/RootNavigation';
 
 const isOk = (res) => !!res?.success && res?.data?.success !== false;
 
@@ -85,6 +90,107 @@ export function rejectCall(callId) {
 
 export function endCall(callId, reason = 'hangup') {
     return apiService({ method: 'POST', endpoint: `calls/${callId}/end`, data: { reason } });
+}
+
+// ── Call waiting (Point 13.3) ────────────────────────────────────────────────
+export function holdCallApi(callId) {
+    return apiService({ method: 'POST', endpoint: `calls/${callId}/hold`, data: {} });
+}
+export function resumeCallApi(callId) {
+    return apiService({ method: 'POST', endpoint: `calls/${callId}/resume`, data: {} });
+}
+
+const callParams = (c) => ({
+    callId: c.callId, type: c.type, isIncoming: c.isIncoming, remoteUser: c.remoteUser, agora: c.agora,
+});
+
+// Naya (waiting) call accept karke uski screen kholo
+async function acceptAndOpen(incoming) {
+    const res = await acceptCall(incoming.callId);
+    if (!res.ok) {
+        Toast.show({ type: 'error', text1: 'Could not answer', text2: ERROR_MESSAGES[res.code] || res.message });
+        return false;
+    }
+    socketService.setCallActive(true);
+    openInCall({
+        callId: incoming.callId, type: incoming.type, isIncoming: true,
+        agora: res.agora, billing: res.billing, remoteUser: incoming.caller,
+    });
+    return true;
+}
+
+// Chal rahi call HOLD par rakho, naya call uthao. Ek hi Agora engine/channel hota hai, isliye
+// hold = purane channel se bahar; server par call 'ongoing' rehti hai (billing chalti rehti hai).
+export async function holdAndAccept(incoming) {
+    const cur = getActiveCall();
+    if (!cur) return acceptAndOpen(incoming);
+    const h = await holdCallApi(cur.callId);
+    if (!isOk(h)) {
+        Toast.show({ type: 'error', text1: 'Could not hold the call', text2: apiErrorMessage(h, 'Try again') });
+        return false;
+    }
+    callService.leaveChannel();
+    setHeldCall({ ...cur });
+    clearActiveCall();
+    const ok = await acceptAndOpen(incoming);
+    if (!ok) await resumeHeld(); // naya fail hua to purani wapas
+    return ok;
+}
+
+// Chal rahi call kaato, naya call uthao
+export async function endAndAccept(incoming) {
+    const cur = getActiveCall();
+    if (cur) {
+        markSwitching(cur.callId);   // is call ka call:ended screen/bar ko "naya call mat todo" bata de
+        callService.leaveChannel();
+        clearActiveCall();
+        endCall(cur.callId, 'hangup');
+    }
+    return acceptAndOpen(incoming);
+}
+
+// Hold wali call wapas lo (naya call khatam hone par ya Swap par)
+export async function resumeHeld() {
+    const h = getHeldCall();
+    if (!h) return false;
+    const r = await resumeCallApi(h.callId);
+    clearHeldCall();
+    if (!isOk(r)) {
+        // Dusri taraf ne is dauran call kaat di
+        socketService.setCallActive(false);
+        Toast.show({ type: 'info', text1: 'Call ended', text2: `${h.remoteUser?.name || 'The other person'} ended the call on hold` });
+        return false;
+    }
+    const restored = { ...h, muted: false, remoteUid: null };
+    setActiveCall(restored);
+    socketService.setCallActive(true);
+    openInCall(callParams(restored));
+    return true;
+}
+
+// Active aur hold wali call aapas me badlo
+export async function swapCalls() {
+    const cur = getActiveCall();
+    const target = getHeldCall();
+    if (!cur || !target) return false;
+    const h = await holdCallApi(cur.callId);
+    if (!isOk(h)) {
+        Toast.show({ type: 'error', text1: 'Could not switch calls', text2: apiErrorMessage(h, 'Try again') });
+        return false;
+    }
+    callService.leaveChannel();
+    setHeldCall({ ...cur });
+    clearActiveCall();
+    // resumeHeld() ab 'held' (= cur) ko resume karega, isliye target ko pehle pakad kar active banao
+    const r = await resumeCallApi(target.callId);
+    if (!isOk(r)) {
+        Toast.show({ type: 'info', text1: 'Call ended', text2: `${target.remoteUser?.name || 'The other person'} ended the call on hold` });
+        return resumeHeld();
+    }
+    const restored = { ...target, muted: false, remoteUid: null };
+    setActiveCall(restored);
+    openInCall(callParams(restored));
+    return true;
 }
 
 export { ERROR_MESSAGES };

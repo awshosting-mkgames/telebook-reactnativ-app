@@ -168,6 +168,13 @@ export const markMessageDeletedLocally = (chatId, messageId, patch) => serialize
     );
 });
 
+/** Ek message row hatao (temp/failed row ko jab asli sent message mil jaye, taaki duplicate na bane). */
+export const deleteCachedMessage = (chatId, messageId) => serializeDbWrite(async () => {
+    if (!chatId || !messageId) return;
+    const db = await getDb();
+    await db.runAsync('DELETE FROM messages WHERE chat_id = ? AND message_id = ?', [String(chatId), String(messageId)]);
+});
+
 /** Ek chat ke saare cached messages hata do (abhi kahin use nahi, symmetry/future ke liye). */
 export const deleteMessagesForChat = (chatId) => serializeDbWrite(async () => {
     if (!chatId) return 0;

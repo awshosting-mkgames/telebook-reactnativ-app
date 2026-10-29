@@ -12,6 +12,7 @@ import AppNavigator from './navigation';
 import { persistor, store } from './redex/store';
 import socketService from './services/socketService';
 import IncomingCallManager from './components/IncomingCallManager';
+import ActiveCallBar from './components/ActiveCallBar';
 import CallConfigLoader from './components/CallConfigLoader';
 import { contactSync, loadContactsFromDb } from './services/contactSync';
 import { getLastSyncedAt } from './services/contactsDb';
@@ -229,6 +230,7 @@ export default function App() {
                         <CallConfigLoader />
                         <IncomingCallManager />
                         <AppNavigator />
+                        <ActiveCallBar />
                         <Toast />
                     </SafeAreaProvider>
                 </PersistGate>

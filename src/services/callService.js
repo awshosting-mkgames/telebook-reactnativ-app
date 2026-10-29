@@ -27,6 +27,7 @@ class CallService {
         this._appId = null;
         this._handler = null;
         this._isVideo = false;
+        this._joinedChannel = null; // abhi kis channel me hain (screen dobara khulne par re-join na ho)
         this._listeners = {}; // event → Set of callbacks
     }
 
@@ -70,6 +71,7 @@ class CallService {
     joinChannel({ token, channel, uid, isVideo }) {
         if (!this._engine) return;
         this._isVideo = !!isVideo;
+        this._joinedChannel = channel;
         if (isVideo) {
             this._engine.enableVideo();
             // Agora ka SDK-default encoder config set nahi tha, isliye poor
@@ -92,7 +94,10 @@ class CallService {
         });
     }
 
+    isJoined(channel) { return !!this._engine && this._joinedChannel === channel; }
+
     leaveChannel() {
+        this._joinedChannel = null;
         if (!this._engine) return;
         try {
             this._engine.leaveChannel();
@@ -116,6 +121,7 @@ class CallService {
         this._appId = null;
         this._handler = null;
         this._isVideo = false;
+        this._joinedChannel = null;
     }
 
     toggleMute(muted) { this._engine?.muteLocalAudioStream(muted); }

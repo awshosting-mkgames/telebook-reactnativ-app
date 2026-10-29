@@ -114,7 +114,8 @@
       "expo-audio",
       "expo-sqlite",
       "./plugins/withAdiRegistration",
-      "./plugins/withRemoveForegroundPermissions"
+      "./plugins/withRemoveForegroundPermissions",
+      "./plugins/withRingtoneModule"
     ],
     "owner": "ambujexpo25",
     "scheme": "telebook",

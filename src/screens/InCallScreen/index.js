@@ -5,8 +5,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { RenderModeType, RtcSurfaceView } from 'react-native-agora';
 import callService from '../../services/callService';
+import {
+    clearActiveCall, getActiveCall, getHeldCall, isRemoteHeld, isSwitching, patchActiveCall, setActiveCall, subscribeActiveCall,
+} from '../../services/activeCallStore';
 import socketService from '../../services/socketService';
-import { acceptCall, endCall, rejectCall } from '../../services/callHelpers';
+import { acceptCall, endCall, rejectCall, resumeHeld, swapCalls } from '../../services/callHelpers';
 import { cancelIncomingCallNotification } from '../../components/notification';
 import { showOverLockScreen } from '../../services/lockScreenModule';
 import { playRingtone, stopRingtone } from '../../services/ringtoneModule';
@@ -37,21 +40,32 @@ export default function InCallScreen({ route, navigation }) {
     // karke lena padega. `autoAccept` sirf tab true hai jab user ne notification
     // ke "Accept" quick-action button se khola ho — tab ring UI dikhane ki
     // zarurat nahi, seedha connect ho jaana chahiye.
-    const [agora, setAgora] = useState(route.params?.agora ?? null);
+    // Mini bar se wapas aane par (Point 13) call pehle se chal rahi hoti hai — uski state restore karo,
+    // dobara join/ring mat karo.
+    const resumed = useRef(getActiveCall()?.callId === callId ? getActiveCall() : null).current;
+    const [agora, setAgora] = useState(route.params?.agora ?? resumed?.agora ?? null);
     const [phase, setPhase] = useState(() => {
+        if (resumed) return resumed.phase;
         if (agora) return isIncoming ? 'connecting' : 'ringing';
         if (isIncoming) return autoAccept ? 'resolving' : 'incoming';
         return 'resolving';
     });
     // incoming | resolving | ringing | connecting | ongoing | ended | missed
-    const [connected, setConnected] = useState(false);
-    const [duration, setDuration] = useState(0);
-    const [muted, setMuted] = useState(false);
-    const [speakerOn, setSpeakerOn] = useState(isVideo); // video calls default speaker on
-    const [cameraOn, setCameraOn] = useState(isVideo);
-    const [remoteUid, setRemoteUid] = useState(null);
+    const [connected, setConnected] = useState(resumed?.connected ?? false);
+    const [duration, setDuration] = useState(resumed?.startedAt ? Math.floor((Date.now() - resumed.startedAt) / 1000) : 0);
+    const [muted, setMuted] = useState(resumed?.muted ?? false);
+    const [speakerOn, setSpeakerOn] = useState(resumed?.speakerOn ?? isVideo); // video calls default speaker on
+    const [cameraOn, setCameraOn] = useState(resumed?.cameraOn ?? isVideo);
+    const [remoteUid, setRemoteUid] = useState(resumed?.remoteUid ?? null);
     const [lowBalance, setLowBalance] = useState(null); // {remainingSeconds}
     const [endedInfo, setEndedInfo] = useState(null); // {endReason}
+    // Call waiting: doosri call hold par hai? / samne wale ne hume hold par rakha hai?
+    const [heldCall, setHeldCallState] = useState(getHeldCall());
+    const [remoteHeld, setRemoteHeld] = useState(isRemoteHeld(callId));
+    useEffect(() => subscribeActiveCall(() => {
+        setHeldCallState(getHeldCall());
+        setRemoteHeld(isRemoteHeld(callId));
+    }), [callId]);
     const endingRef = useRef(false);
     const timerRef = useRef(null);
 
@@ -69,7 +83,11 @@ export default function InCallScreen({ route, navigation }) {
         callService.release();
         socketService.setCallActive(false);
         showOverLockScreen(false);
+        clearActiveCall();
     };
+
+    // Call chalti rahe, sirf screen band (mini bar se wapas aa sakte hain)
+    const minimize = () => goBack();
 
     const goBack = () => {
         if (navigation.canGoBack()) navigation.goBack();
@@ -78,7 +96,9 @@ export default function InCallScreen({ route, navigation }) {
 
     const startTimer = () => {
         if (timerRef.current) return;
-        const startedAt = Date.now();
+        let startedAt = getActiveCall()?.startedAt;
+        if (!startedAt) { startedAt = Date.now(); patchActiveCall({ startedAt }); }
+        setDuration(Math.floor((Date.now() - startedAt) / 1000));
         timerRef.current = setInterval(() => {
             setDuration(Math.floor((Date.now() - startedAt) / 1000));
         }, 1000);
@@ -91,6 +111,7 @@ export default function InCallScreen({ route, navigation }) {
             setAgora(res.agora);
             setPhase('connecting');
         } else {
+            clearActiveCall();
             setPhase('missed');
             setTimeout(goBack, 1600);
         }
@@ -105,6 +126,24 @@ export default function InCallScreen({ route, navigation }) {
         }
         return () => showOverLockScreen(false);
     }, [isIncoming, callId]);
+
+    // ── Call ko global store me register karo + UI state sync (mini bar / wapas aane ke liye) ──
+    useEffect(() => {
+        if (resumed || getActiveCall()?.callId === callId) return;
+        setActiveCall({
+            callId, type, isIncoming: !!isIncoming, remoteUser, agora, phase, connected: false,
+            startedAt: null, muted: false, speakerOn: isVideo, cameraOn: isVideo, remoteUid: null,
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    useEffect(() => {
+        patchActiveCall({ phase, connected, muted, speakerOn, cameraOn, agora });
+    }, [phase, connected, muted, speakerOn, cameraOn, agora]);
+    // Timer wapas aane par (resumed) turant chalu
+    useEffect(() => {
+        if (resumed?.connected) startTimer();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // ── Ring UI dikh rahi ho tab tak device ka default ringtone bajao,
     // phase kahin bhi badle (accept/reject/ended/unmount) khud band ho jaata hai ──
@@ -127,6 +166,8 @@ export default function InCallScreen({ route, navigation }) {
         let cancelled = false;
 
         (async () => {
+            // Pehle se is channel me hain (screen dobara khuli) → dobara join nahi
+            if (callService.isJoined(agora.channel)) return;
             await callService.requestCallPermissions(isVideo);
             if (cancelled) return;
             // Server har call ke response mein apna appId bhejta hai — Config
@@ -134,6 +175,9 @@ export default function InCallScreen({ route, navigation }) {
             // set na ho (doc ke hisaab se tabhi calls/config.available true hota hai).
             callService.init({ appId: agora.appId || Config.AGORA_APP_ID });
             callService.joinChannel({ token: agora.token, channel: agora.channel, uid: agora.uid, isVideo });
+            // Hold/resume ke baad naya join: mute aur speaker ka pichla state engine par dobara lagao
+            callService.toggleMute(muted);
+            callService.toggleSpeaker(speakerOn);
             socketService.setCallActive(true);
             if (isIncoming) {
                 setConnected(true);
@@ -142,8 +186,8 @@ export default function InCallScreen({ route, navigation }) {
             }
         })();
 
-        const onUserJoined = (uid) => setRemoteUid(uid);
-        const onUserOffline = () => setRemoteUid(null);
+        const onUserJoined = (uid) => { setRemoteUid(uid); patchActiveCall({ remoteUid: uid }); };
+        const onUserOffline = () => { setRemoteUid(null); patchActiveCall({ remoteUid: null }); };
         callService.on('userJoined', onUserJoined);
         callService.on('userOffline', onUserOffline);
 
@@ -169,7 +213,10 @@ export default function InCallScreen({ route, navigation }) {
         };
         const onEnded = (payload) => {
             if (payload?.callId !== callId) return;
+            if (isSwitching(callId)) return; // End & Accept: naya call chal raha hai, ise mat todo
             teardown();
+            // Call waiting: ye call khatam, hold wali call wapas uthao (ended screen nahi)
+            if (getHeldCall()) { resumeHeld(); return; }
             setEndedInfo(payload);
             setPhase('ended');
             setTimeout(goBack, 1600);
@@ -183,7 +230,9 @@ export default function InCallScreen({ route, navigation }) {
             socketService.off('call:accepted', onAccepted);
             socketService.off('call:balance-warning', onBalanceWarning);
             socketService.off('call:ended', onEnded);
-            teardown();
+            // Yahan teardown NAHI: screen band hone par call chalti rehni chahiye (Point 13).
+            // Call sirf End button / call:ended par khatam hoti hai.
+            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [callId]);
@@ -191,6 +240,7 @@ export default function InCallScreen({ route, navigation }) {
     const handleEnd = async () => {
         teardown();
         endCall(callId, 'hangup'); // fire-and-forget — local teardown already happened above
+        if (getHeldCall()) { resumeHeld(); return; } // hold wali call wapas
         goBack();
     };
 
@@ -204,7 +254,7 @@ export default function InCallScreen({ route, navigation }) {
     useEffect(() => {
         const onBack = () => {
             if (phase === 'incoming') handleRejectIncoming();
-            else handleEnd();
+            else minimize(); // pehle back dabane par call cut ho jaati thi; ab sirf minimize
             return true;
         };
         const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
@@ -212,9 +262,10 @@ export default function InCallScreen({ route, navigation }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [phase]);
 
-    const toggleMute = () => { setMuted((m) => { callService.toggleMute(!m); return !m; }); };
-    const toggleSpeaker = () => { setSpeakerOn((s) => { callService.toggleSpeaker(!s); return !s; }); };
-    const toggleCamera = () => { setCameraOn((c) => { callService.toggleCamera(!c); return !c; }); };
+    // State updater ke andar side-effect nahi: naya value pehle nikalo, phir engine + state
+    const toggleMute = () => { const next = !muted; callService.toggleMute(next); setMuted(next); };
+    const toggleSpeaker = () => { const next = !speakerOn; callService.toggleSpeaker(next); setSpeakerOn(next); };
+    const toggleCamera = () => { const next = !cameraOn; callService.toggleCamera(next); setCameraOn(next); };
 
     // ── Rendering ────────────────────────────────────────────────────────────
     if (phase === 'incoming') {
@@ -297,19 +348,32 @@ export default function InCallScreen({ route, navigation }) {
                 </View>
             )}
 
+            {!!heldCall && (
+                <TouchableOpacity style={styles.heldStrip} onPress={swapCalls} activeOpacity={0.85}>
+                    <Ionicons name="pause-circle" size={18} color="#fff" />
+                    <Text style={styles.heldText} numberOfLines={1}>{heldCall.remoteUser?.name || 'Unknown'} · on hold</Text>
+                    <Text style={styles.heldSwap}>Swap</Text>
+                </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.minimizeBtn} onPress={minimize} activeOpacity={0.8} hitSlop={10}>
+                <Ionicons name="chevron-down" size={28} color="#fff" />
+            </TouchableOpacity>
+
             <View style={styles.infoWrap}>
                 <Text style={styles.name} numberOfLines={1}>{name}</Text>
                 <Text style={styles.statusLine}>
-                    {phase === 'ringing' ? 'Ringing…' : connected ? fmtDuration(duration) : 'Connecting…'}
+                    {remoteHeld ? 'On hold…' : phase === 'ringing' ? 'Ringing…' : connected ? fmtDuration(duration) : 'Connecting…'}
                 </Text>
             </View>
 
             <View style={styles.controls}>
-                <TouchableOpacity style={styles.ctrlBtn} onPress={toggleMute} activeOpacity={0.8}>
-                    <Ionicons name={muted ? 'mic-off' : 'mic'} size={24} color="#fff" />
+                {/* Point 13.4: active state saaf dikhe — on hone par safed background + gehra icon */}
+                <TouchableOpacity style={[styles.ctrlBtn, muted && styles.ctrlBtnActive]} onPress={toggleMute} activeOpacity={0.8}>
+                    <Ionicons name={muted ? 'mic-off' : 'mic'} size={24} color={muted ? '#101418' : '#fff'} />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.ctrlBtn} onPress={toggleSpeaker} activeOpacity={0.8}>
-                    <Ionicons name={speakerOn ? 'volume-high' : 'volume-mute'} size={24} color="#fff" />
+                <TouchableOpacity style={[styles.ctrlBtn, speakerOn && styles.ctrlBtnActive]} onPress={toggleSpeaker} activeOpacity={0.8}>
+                    <Ionicons name={speakerOn ? 'volume-high' : 'volume-mute'} size={24} color={speakerOn ? '#101418' : '#fff'} />
                 </TouchableOpacity>
                 {isVideo && (
                     <>
@@ -364,5 +428,13 @@ const styles = StyleSheet.create({
         width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(255,255,255,0.15)',
         alignItems: 'center', justifyContent: 'center',
     },
+    ctrlBtnActive: { backgroundColor: '#ffffff' },
     endBtn: { backgroundColor: '#e53935' },
+    heldStrip: {
+        position: 'absolute', top: 36, left: 56, right: 16, flexDirection: 'row', alignItems: 'center', gap: 8,
+        backgroundColor: 'rgba(230,126,34,0.95)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7,
+    },
+    heldText: { flex: 1, color: '#fff', fontSize: 13, fontWeight: '600' },
+    heldSwap: { color: '#fff', fontSize: 13, fontWeight: '800', textDecorationLine: 'underline' },
+    minimizeBtn: { position: 'absolute', top: 40, left: 14, padding: 6 },
 });

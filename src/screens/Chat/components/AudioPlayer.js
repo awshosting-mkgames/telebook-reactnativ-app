@@ -9,11 +9,14 @@ import {
     Text, TouchableOpacity,
     View,
 } from 'react-native';
+import { useMediaUri } from '../../../utils/mediaCache';
 import { claimPlayback, useExclusivePlayback } from '../../../utils/playbackManager';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-const AudioPlayer = ({ url }) => {
+const AudioPlayer = ({ url: remoteUrl }) => {
+    // Offline: pehle sun chuka audio local file se chalta hai (Point 5)
+    const url = useMediaUri(remoteUrl);
     // expo-audio ka player. Source badalne par hook khud naya player bana deta hai
     // aur purana unload ho jata hai — manual cleanup ki zarurat nahi.
     const player = useAudioPlayer(url ? { uri: url } : null);

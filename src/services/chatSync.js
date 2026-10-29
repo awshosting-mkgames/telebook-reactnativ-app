@@ -133,19 +133,34 @@ const TAB_SOURCES = {
 const errorDetail = (error) =>
     typeof error === 'string' ? error : JSON.stringify(error ?? {});
 
+// Server /chats aur /chats/groups default 50 chats ka ek page dete hain. Pehle sirf page 1 aata
+// tha, isliye 50 se zyada chats wale user ko baaki chats/purani history kabhi dikhti hi nahi thi
+// (Point 14). Ab saare pages mangte hain (safety cap ke saath).
+const PAGE_SIZE = 100;
+const MAX_PAGES = 50;
+
 const fetchTab = async (tab, myUserId) => {
     const source = TAB_SOURCES[tab];
-    const res = await apiService({ method: 'GET', endpoint: source.endpoint });
+    let raw = [];
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
+        const res = await apiService({ method: 'GET', endpoint: source.endpoint, params: { page, limit: PAGE_SIZE } });
 
-    // apiService HTTP error par throw nahi karta, { success: false } deta hai
-    if (!res?.success) {
-        throw new Error(`GET ${source.endpoint} failed: ${errorDetail(res?.error)}`);
+        // apiService HTTP error par throw nahi karta, { success: false } deta hai
+        if (!res?.success) {
+            // Pehla page fail = poora sync fail; baad ka page fail ho to jo mil chuka wahi rakho
+            if (page === 1) throw new Error(`GET ${source.endpoint} failed: ${errorDetail(res?.error)}`);
+            break;
+        }
+
+        const picked = source.pick(res?.data);
+        const rows = Array.isArray(picked)
+            ? picked
+            : Array.isArray(res?.data) ? res.data : [];
+        const seen = new Set(raw.map((c) => c?._id));
+        raw = raw.concat(rows.filter((c) => !seen.has(c?._id)));
+
+        if (!res?.data?.pagination?.hasMore || rows.length === 0) break;
     }
-
-    const picked = source.pick(res?.data);
-    const raw = Array.isArray(picked)
-        ? picked
-        : Array.isArray(res?.data) ? res.data : [];
 
     const processed = raw.map((item) => processChat(item, myUserId));
     return source.filter ? processed.filter(source.filter) : processed;

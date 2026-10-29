@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useContext, useEffect, useMemo } from 'react';
 import { navigationRef, flushPendingNavigation } from './RootNavigation';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme as NavDarkTheme } from '@react-navigation/native';
+import { ThemeContext } from '../components/ThemeContext';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AuthNavigator from './auth';
 import MainNavigator from './main';
@@ -12,6 +13,16 @@ const Stack = createNativeStackNavigator();
 const AppNavigator = () => {
     const maniAllData = useSelector((state) => state.totalappData);
     const IsloginSection = maniAllData?.isLogin;
+    const { theme } = useContext(ThemeContext);
+    const isDark = theme?.mode === 'dark';
+    const bg = theme?.background || (isDark ? '#000000' : '#ffffff');
+
+    // Point 3: page transition ke beech safed flash isliye aata tha ki navigator/scene ka
+    // background hard-coded white tha. Ab navigation theme + scene dono current theme se.
+    const navTheme = useMemo(() => {
+        const base = isDark ? NavDarkTheme : DefaultTheme;
+        return { ...base, colors: { ...base.colors, background: bg, card: bg } };
+    }, [isDark, bg]);
 
     // Login se pehle aaya deep link ab kholo
     useEffect(() => {
@@ -22,9 +33,10 @@ const AppNavigator = () => {
         <NavigationContainer
             ref={navigationRef}
             linking={linking}
+            theme={navTheme}
             onReady={flushPendingNavigation}
         >
-            <Stack.Navigator screenOptions={{ headerShown: false, animation: 'none', contentStyle: { backgroundColor: '#ffffff' } }}>
+            <Stack.Navigator screenOptions={{ headerShown: false, animation: 'none', contentStyle: { backgroundColor: bg } }}>
                 {IsloginSection ? (
                     <Stack.Screen name="main" component={MainNavigator} />
                 ) : (

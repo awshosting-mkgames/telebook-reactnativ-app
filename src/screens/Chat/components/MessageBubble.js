@@ -12,6 +12,7 @@ import AudioPlayer from './AudioPlayer';
 import SwipeableMessage from './SwipeableMessage';
 import Ticks from './Ticks';
 import moment from 'moment';
+import { useMediaUri } from '../../../utils/mediaCache';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -31,6 +32,12 @@ const VideoThumb = memo(({ uri, style }) => {
     return thumb
         ? <Image source={{ uri: thumb }} style={style} resizeMode="cover" />
         : <View style={[style, { backgroundColor: '#1b1b1b' }]} />;
+});
+
+// Chat image: pehle dekhi hui photo local cache se (offline bhi), size chat width ke hisaab se
+const ChatImage = memo(({ uri, style }) => {
+    const src = useMediaUri(uri);
+    return <Image source={{ uri: src }} style={style} resizeMode="cover" />;
 });
 
 // Document ka icon file type ke hisaab se (har file PDF nahi hoti)
@@ -198,7 +205,7 @@ const MessageBubble = ({
                                         onLongPress={handleLongPress}
                                         delayLongPress={200}
                                     >
-                                        <Image source={{ uri: getFullUrl(att.url) }} style={styles.msgMedia} resizeMode="cover" />
+                                        <ChatImage uri={getFullUrl(att.url)} style={styles.msgImage} />
                                         {isPendingUpload ? (
                                             <UploadOverlay progress={item.uploadProgress ?? 0} onCancel={() => onCancelUpload?.(item._id)} />
                                         ) : null}
@@ -214,8 +221,8 @@ const MessageBubble = ({
                                         delayLongPress={200}
                                     >
                                         {/* Native video view touch kha leta hai — overlay upar rahe isliye pointerEvents none */}
-                                        <View pointerEvents="none" style={styles.msgMedia}>
-                                            <VideoThumb uri={getFullUrl(att.url)} style={styles.msgMedia} />
+                                        <View pointerEvents="none" style={styles.msgImage}>
+                                            <VideoThumb uri={getFullUrl(att.url)} style={styles.msgImage} />
                                         </View>
                                         {isPendingUpload ? (
                                             <UploadOverlay progress={item.uploadProgress ?? 0} onCancel={() => onCancelUpload?.(item._id)} />
@@ -289,9 +296,16 @@ const MessageBubble = ({
                             />
                         </View>
                         {isFailed && (
-                            <Text style={styles.failedText}>
-                                {item.offlineQueued ? 'Waiting for network — will send automatically' : 'Not sent · tap to retry'}
-                            </Text>
+                            <View style={styles.failedRow}>
+                                <Text style={styles.failedText}>
+                                    {item.offlineQueued ? 'Failed · waiting for network' : 'Failed to send'}
+                                </Text>
+                                {/* Point 15: failed media ke saath seedha Retry button */}
+                                <TouchableOpacity style={styles.retryBtn} onPress={() => retryMessage?.(item)} hitSlop={8}>
+                                    <Ionicons name="refresh" size={12} color="#fff" />
+                                    <Text style={styles.retryText}>Retry</Text>
+                                </TouchableOpacity>
+                            </View>
                         )}
                     </View>
                     {reactionGroups.length > 0 && !item.isDeleted && (
@@ -332,9 +346,11 @@ const styles = StyleSheet.create({
     contentContainer: { overflow: 'hidden' },
     mediaWrap: { position: 'relative' },
     msgText: { fontSize: 15, lineHeight: 20 },
+    // Point 6: photo/video bubble ki puri available width (bubble maxWidth 80% - padding) tak
+    msgImage: { width: SCREEN_W * 0.8 - 12, height: (SCREEN_W * 0.8 - 12) * 1.1, borderRadius: 8, backgroundColor: '#eee' },
     msgMedia: { width: SCREEN_W * 0.65, height: SCREEN_W * 0.65, borderRadius: 8, backgroundColor: '#eee' },
     audioWrapper: { width: SCREEN_W * 0.65 },
-    videoThumbWrap: { width: SCREEN_W * 0.65, height: SCREEN_W * 0.65, justifyContent: 'center', alignItems: 'center', borderRadius: 8, overflow: 'hidden' },
+    videoThumbWrap: { width: SCREEN_W * 0.8 - 12, height: (SCREEN_W * 0.8 - 12) * 1.1, justifyContent: 'center', alignItems: 'center', borderRadius: 8, overflow: 'hidden' },
     videoOverlay: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 30, padding: 10 },
     docRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, backgroundColor: '#1296f3', borderRadius: 8, width: SCREEN_W * 0.65 },
     docName: { color: '#fff', fontSize: 13, flex: 1 },
@@ -357,7 +373,10 @@ const styles = StyleSheet.create({
     deletedText: { fontSize: 13, fontStyle: 'italic', padding: 4 },
     forwardedRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3, paddingHorizontal: 2 },
     forwardedText: { fontSize: 11, fontStyle: 'italic' },
-    failedText: { color: '#e74c3c', fontSize: 11, marginTop: 2, textAlign: 'right' },
+    failedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 2 },
+    retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#e74c3c', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+    retryText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+    failedText: { color: '#e74c3c', fontSize: 11 },
     reactionRow: { flexDirection: 'row', gap: 4, marginTop: -6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
     reactionText: { fontSize: 14 },
     reactionCount: { fontSize: 11 },

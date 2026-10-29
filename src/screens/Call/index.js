@@ -6,7 +6,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
 import apiService from '../../services/apiService';
 import Config from '../../services/config';
@@ -100,11 +100,15 @@ export default function Call({ navigation }) {
                         {item.user?.name || 'Unknown'}
                     </Text>
                     <View style={styles.timeRow}>
-                        <Ionicons
-                            name={isOutgoing ? 'arrow-up' : 'arrow-down'}
-                            size={14}
-                            color={isMissed ? '#e53935' : '#2e7d32'}
+                        {/* Point 8: incoming = green arrow, outgoing = red arrow, missed = red cross */}
+                        <MaterialIcons
+                            name={isMissed ? 'call-missed' : isOutgoing ? 'call-made' : 'call-received'}
+                            size={16}
+                            color={isMissed || isOutgoing ? '#e53935' : '#2e7d32'}
                         />
+                        <Text style={[styles.time, { color: isMissed || isOutgoing ? '#e53935' : '#2e7d32' }]}>
+                            {' '}{isMissed ? 'Missed' : isOutgoing ? 'Outgoing' : 'Incoming'} ·
+                        </Text>
                         <Text style={styles.time}> {fmtWhen(item.startedAt)}</Text>
                         {!isMissed && !!item.durationSeconds && (
                             <Text style={styles.time}> · {Math.floor(item.durationSeconds / 60)}:{(item.durationSeconds % 60).toString().padStart(2, '0')}</Text>

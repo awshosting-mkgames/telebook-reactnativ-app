@@ -42,10 +42,12 @@ export default function BottomTabNavigator() {
     const { theme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
 
-    const isDark = theme.mode === 'light';
+    // Pehle yeh flag ulta tha (light mode = "isDark"), jis se dark theme me footer ke upar
+    // safed border aa rahi thi. Ab dark me border hata di gayi hai (Point 1).
+    const isDark = theme.mode === 'dark';
     const activeColor = theme.main || '#1199ff';
-    const inactiveColor = isDark ? '#0f0f0f' : '#dedddd';
-    const borderColor = isDark ? '#222' : '#ececec';
+    const inactiveColor = isDark ? '#dedddd' : '#0f0f0f';
+    const borderColor = '#ececec';
 
     return (
         <Tab.Navigator
@@ -88,12 +90,12 @@ export default function BottomTabNavigator() {
                         height: TAB_BAR_HEIGHT + insets.bottom,
                         paddingTop: 8,
                         paddingBottom: TAB_BAR_PADDING_BOTTOM + insets.bottom,
-                        borderTopWidth: 0.5,
+                        borderTopWidth: isDark ? 0 : 0.5,
                         borderTopColor: borderColor,
-                        elevation: 8,
+                        elevation: isDark ? 0 : 8,
                         shadowColor: '#000',
                         shadowOffset: { width: 0, height: -2 },
-                        shadowOpacity: isDark ? 0.3 : 0.06,
+                        shadowOpacity: isDark ? 0 : 0.06,
                         shadowRadius: 8,
                     },
 

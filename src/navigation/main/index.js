@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { ThemeContext } from '../../components/ThemeContext';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BottomTabNavigator from '../bottomtab';
 import AuthNavigator from '../auth'
@@ -9,10 +10,14 @@ const Stack = createNativeStackNavigator();
 
 
 const MainNavigator = ({ navigation }) => {
-    console.log("sdasdasd")
+    const { theme } = useContext(ThemeContext);
 
+    // Point 3: slide transition me peeche/side se safed jhalak na aaye isliye scene background theme ka
     return (
-        <Stack.Navigator initialRouteName="tab">
+        <Stack.Navigator
+            initialRouteName="tab"
+            screenOptions={{ contentStyle: { backgroundColor: theme.background } }}
+        >
             <Stack.Screen name="tab" options={{ headerShown: false, statusBarTranslucent: true }} component={BottomTabNavigator} />
             <Stack.Screen name="Call" options={{ headerShown: false, statusBarTranslucent: true }} component={Call} />
             <Stack.Screen name="Chat" options={{ headerShown: false, statusBarTranslucent: true }} component={Chat} />

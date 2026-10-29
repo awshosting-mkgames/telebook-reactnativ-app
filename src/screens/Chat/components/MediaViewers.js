@@ -15,6 +15,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { useMediaUri } from '../../../utils/mediaCache';
 import { claimPlayback, useExclusivePlayback } from '../../../utils/playbackManager';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -78,6 +79,7 @@ const shareFile = async (uri, fallbackExt = 'jpg') => {
 // ───────────────── IMAGE VIEWER ─────────────────
 export const ImageViewer = ({ visible, uri, onClose }) => {
     const [downloading, setDownloading] = useState(false);
+    const shownUri = useMediaUri(visible ? uri : null); // offline: local cached file
 
     return (
         <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
@@ -98,7 +100,7 @@ export const ImageViewer = ({ visible, uri, onClose }) => {
                         </TouchableOpacity>
                     </View>
                 </View>
-                {uri ? <Image source={{ uri }} style={styles.img} resizeMode="contain" /> : null}
+                {shownUri ? <Image source={{ uri: shownUri }} style={styles.img} resizeMode="contain" /> : null}
             </View>
         </Modal>
     );
@@ -108,8 +110,9 @@ export const ImageViewer = ({ visible, uri, onClose }) => {
 export const VideoModal = ({ visible, uri, onClose }) => {
     const [downloading, setDownloading] = useState(false);
 
+    const playUri = useMediaUri(visible ? uri : null); // offline: local cached file
     const player = useVideoPlayer(
-        uri ? { uri } : null,
+        playUri ? { uri: playUri } : null,
         (player) => {
             player.loop = false;
             claimPlayback(player);

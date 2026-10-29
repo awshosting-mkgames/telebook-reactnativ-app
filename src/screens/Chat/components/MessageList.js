@@ -294,6 +294,14 @@ const MessageList = ({
                 </View>
             );
         }
+        if (hasMore) {
+            // Scroll se auto-load na ho paye (ya user chahe) to button se purane messages (Point 14)
+            return (
+                <TouchableOpacity style={styles.loadMoreWrap} onPress={() => onLoadMore?.()} activeOpacity={0.7}>
+                    <Text style={[styles.allLoadedText, { color: "#1296f3" }]}>Load older messages</Text>
+                </TouchableOpacity>
+            );
+        }
         if (!hasMore) {
             return (
                 <View style={styles.allLoadedWrap}>
