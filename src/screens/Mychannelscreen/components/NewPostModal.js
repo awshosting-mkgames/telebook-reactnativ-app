@@ -23,6 +23,7 @@ import {
     TextInput,
     TouchableOpacity,
     View,
+    useWindowDimensions,
 } from 'react-native';
 import apiService from '../../../services/apiService';
 import { ThemeContext } from '../../../components/ThemeContext';
@@ -33,6 +34,7 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
     const { theme } = useContext(ThemeContext);
     const isLight = theme?.mode === 'light';
     const styles = getStyles(isLight);
+    const { height: winH } = useWindowDimensions();
     const sheetStyles = getSheetStyles(isLight);
 
     const [content, setContent] = useState('');
@@ -331,7 +333,7 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
                     behavior="padding"
                     style={styles.container}
                 >
-                    <View style={styles.sheet}>
+                    <View style={[styles.sheet, { maxHeight: winH - 40 }]}>
 
                         {/* ── Header ── */}
                         <View style={styles.header}>
@@ -351,9 +353,18 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
                             </TouchableOpacity>
                         </View>
 
+                        {/* Body scroll hota hai: image select + keyboard me sheet screen se bada ho jaye to bhi
+                            layout stable rahe (pehle sheet height badalte hi text box upar-neeche hota tha) */}
+                        <ScrollView
+                            style={{ flexGrow: 0 }}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={false}
+                            bounces={false}
+                            nestedScrollEnabled
+                        >
                         {/* ── Text input ── */}
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, media.length > 0 && { minHeight: 90 }]}
                             placeholder="Kuch share karein..."
                             placeholderTextColor={isLight ? '#bbb' : '#666'}
                             value={content}
@@ -470,6 +481,7 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
                                 </TouchableOpacity>
                             </View>
                         )}
+                        </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
             </View>

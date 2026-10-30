@@ -12,7 +12,6 @@ import socketService from '../../services/socketService';
 import { acceptCall, endCall, rejectCall, resumeHeld, swapCalls } from '../../services/callHelpers';
 import { cancelIncomingCallNotification } from '../../components/notification';
 import { showOverLockScreen } from '../../services/lockScreenModule';
-import { playRingback, stopRingback } from '../../services/ringtoneModule';
 import Config from '../../services/config';
 import IncomingCallOverlay from '../Call/IncomingCallOverlay';
 import { useNameResolver } from '../../services/nameResolver';
@@ -155,13 +154,6 @@ export default function InCallScreen({ route, navigation }) {
     // Incoming ringtone + vibration ab ActiveCallBar (always-mounted) chalata hai jab tak phase 'incoming'
     // hai — taaki is screen se back karne par bhi ghanti chalti rahe (call tab tak zinda jab tak
     // user khud Accept/Reject na kare ya server ring timeout na ho).
-
-    // ── Outgoing call: samne wala uthane tak caller ko ringback tone sunao ──
-    useEffect(() => {
-        if (isIncoming || phase !== 'ringing') return undefined;
-        playRingback();
-        return () => stopRingback();
-    }, [phase, isIncoming]);
 
     // ── autoAccept (notification ka "Accept" button) → seedha accept+join ──
     useEffect(() => {

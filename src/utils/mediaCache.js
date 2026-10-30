@@ -139,3 +139,18 @@ export const clearMediaCache = async () => {
     dirReady = null;
     try { await FileSystem.deleteAsync(DIR, { idempotent: true }); } catch (e) { /* already gone */ }
 };
+
+// Apni bheji hui media: upload ke baad bubble ka url local file:// se server url ban jata hai.
+// Bina seed ke wahi file dobara download hoti (placeholder flash + data waste). Local file ko
+// server url ke naam se cache me daal do, taaki bubble bina badlaav ke wahi image dikhaye.
+export const seedMediaCache = async (remoteUrl, localUri) => {
+    if (!isRemote(remoteUrl) || !localUri || isRemote(localUri)) return;
+    known.set(remoteUrl, localUri); // turant — render ke beech flash na ho
+    try {
+        await ensureDir();
+        const path = localPathFor(remoteUrl);
+        const info = await FileSystem.getInfoAsync(path);
+        if (!info.exists) await FileSystem.copyAsync({ from: localUri, to: path });
+        known.set(remoteUrl, path); // picker/cache ki temp file gayab ho sakti hai, copy permanent hai
+    } catch (e) { /* known me original local uri bana rehta hai */ }
+};

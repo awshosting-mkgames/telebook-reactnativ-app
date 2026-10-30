@@ -157,6 +157,9 @@ export async function displayIncomingCallNotification(data = {}) {
         ? (/^(https?:|file:|content:)/.test(data.callerPhoto) ? data.callerPhoto : `${Config.MEDIA_URL}${data.callerPhoto}`)
         : null;
     try {
+        // Killed/background headless run: app start wala setupCallChannel() chala hi nahi hota —
+        // channel ke bina notification default tune par aati hai. Idempotent, isliye yahan bhi.
+        await setupCallChannel();
         await notifee.displayNotification({
             id: `call_${callId}`,
             title: data.callerName || 'Incoming call',
@@ -170,6 +173,9 @@ export async function displayIncomingCallNotification(data = {}) {
                 ongoing: true,
                 autoCancel: false,
                 loopSound: true,
+                // Channel ke sound/vibration ke saath hi (pre-Oreo par channel nahi hota)
+                sound: 'ringtone',
+                vibrationPattern: [1, 800, 1200, 800, 1200, 800, 1200],
                 lightUpScreen: true,
                 smallIcon: 'ic_launcher',
                 ...(photoUrl ? { largeIcon: photoUrl } : {}),

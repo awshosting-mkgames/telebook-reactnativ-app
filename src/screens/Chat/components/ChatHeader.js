@@ -14,7 +14,7 @@ const ChatHeader = ({
     isSelectMode, selectedCount, onCancelSelect, onForwardSelected,
     onDeleteSelected, onCopySelected, onStarSelected, onReplySelected, onMoreSelected, onSelectAll, MY_USER_ID, fmtTime,
     isSearchMode, searchText, onSearchChange, onOpenSearch, onCloseSearch,
-    onClearChat, onOpenStarred, getFullUrl, isBlocked, onToggleBlock,
+    onClearChat, onOpenStarred, onSaveContact, getFullUrl, isBlocked, onToggleBlock,
     onVoiceCall, onVideoCall, callsAvailable,
 }) => {
     const [menuVisible, setMenuVisible] = useState(false);
@@ -199,6 +199,19 @@ const ChatHeader = ({
                             <Ionicons name="trash-outline" size={18} color="#e74c3c" />
                             <Text style={[styles.menuText, { color: '#e74c3c' }]}>Clear chat</Text>
                         </TouchableOpacity>
+                        {!!onSaveContact && !!profileSub && (
+                            <>
+                                <View style={[styles.menuDivider, { backgroundColor: dividerC }]} />
+                                <TouchableOpacity
+                                    style={styles.menuItem}
+                                    onPress={() => { setMenuVisible(false); onSaveContact(); }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Ionicons name="person-add-outline" size={18} color="#1296f3" />
+                                    <Text style={[styles.menuText, { color: menuText }]}>Save contact</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
                         {!!onToggleBlock && (
                             <>
                                 <View style={[styles.menuDivider, { backgroundColor: dividerC }]} />

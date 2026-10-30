@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
 import apiService from '../../services/apiService';
+import { useNameResolver } from '../../services/nameResolver';
 
 // ── Components ────────────────────────────────────────────────────────────────
 import AddMemberModal from './components/AddMemberModal';
@@ -26,6 +27,7 @@ import MediaSlider from './components/MediaSlider';
 import { appendFile } from '../../utils/uploadFile';
 
 export default function GroupScreen({ navigation, route }) {
+    const resolveName = useNameResolver();
     const { chatId } = route.params;
     const { theme }  = useContext(ThemeContext);
 
@@ -130,7 +132,7 @@ export default function GroupScreen({ navigation, route }) {
     const handleRemoveMember = (member) => {
         Alert.alert(
             'Remove Member',
-            `${member.name || member.mobile || 'User'} ko group se remove karein?`,
+            `${resolveName(member).title} ko group se remove karein?`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -220,7 +222,7 @@ export default function GroupScreen({ navigation, route }) {
     const handleAddAdmin = (member) => {
         Alert.alert(
             'Make Admin',
-            `${member.name || member.mobile || 'User'} ko admin banana chahte hain?`,
+            `${resolveName(member).title} ko admin banana chahte hain?`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -238,7 +240,7 @@ export default function GroupScreen({ navigation, route }) {
                                     ...prev,
                                     admins: [...(prev.admins || []), { _id: member._id, name: member.name }],
                                 }));
-                                Alert.alert('Done', `${member.name || member.mobile || 'User'} ab admin hai!`);
+                                Alert.alert('Done', `${resolveName(member).title} ab admin hai!`);
                             } else {
                                 Alert.alert('Error', res?.message || 'Admin nahi ban saka');
                             }
@@ -253,7 +255,7 @@ export default function GroupScreen({ navigation, route }) {
     const handleRemoveAdmin = (member) => {
         Alert.alert(
             'Remove Admin',
-            `${member.name || member.mobile || 'User'} ki admin rights hatana chahte hain?`,
+            `${resolveName(member).title} ki admin rights hatana chahte hain?`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -272,7 +274,7 @@ export default function GroupScreen({ navigation, route }) {
                                     ...prev,
                                     admins: (prev.admins || []).filter(a => a._id !== member._id),
                                 }));
-                                Alert.alert('Done', `${member.name || member.mobile || 'User'} ab admin nahi hai`);
+                                Alert.alert('Done', `${resolveName(member).title} ab admin nahi hai`);
                             } else {
                                 Alert.alert('Error', res?.message || 'Admin remove nahi hua');
                             }

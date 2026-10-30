@@ -13,7 +13,7 @@ import {
     setRemoteHold, showRechargePrompt, subscribeActiveCall, subscribeRechargePrompt,
 } from '../services/activeCallStore';
 import { acceptCall, endCall, rejectCall, resumeHeld } from '../services/callHelpers';
-import { playRingtone, stopRingtone } from '../services/ringtoneModule';
+import { playRingback, playRingtone, stopRingback, stopRingtone } from '../services/ringtoneModule';
 import { cancelIncomingCallNotification } from './notification';
 import { useNameResolver } from '../services/nameResolver';
 import { setPipEnabled, usePipMode } from '../services/pip';
@@ -102,6 +102,15 @@ export default function ActiveCallBar() {
         playRingtone();
         return () => stopRingtone();
     }, [incomingRinging, call?.callId]);
+
+    // Outgoing call ki ringback tone yahin se (always-mounted): call screen minimize hone par bhi
+    // jab tak samne wala utha nahi leta tone bajti rahe
+    const outgoingRinging = call?.phase === 'ringing' && !call?.isIncoming;
+    useEffect(() => {
+        if (!outgoingRinging) return undefined;
+        playRingback();
+        return () => stopRingback();
+    }, [outgoingRinging, call?.callId]);
 
     // Current route track karo (bar InCall screen par chhupa rehta hai)
     useEffect(() => {

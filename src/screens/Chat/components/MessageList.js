@@ -109,6 +109,27 @@ const MessageList = ({
     const pendingScrollIdRef = useRef(null);     // ✅ reply-scroll ke liye (agar msg abhi load nahi hua)
 
 
+    // Chat ke parent ke har render par function props (getFullUrl, openPopup, ...) naye ban jate hain —
+    // isse MessageBubble ka memo kabhi kaam nahi karta tha aur poori list har state change par
+    // (typing, online, keyboard, reconnect refresh) dobara render/layout hoti thi = unlock ke baad jhatke.
+    // Yahan stable proxies hain jo hamesha latest function ko bulate hain.
+    const messagesRef = useRef(messages);
+    messagesRef.current = messages;
+    const fnRef = useRef({});
+    fnRef.current = {
+        getFullUrl, openPopup, openDocInBrowser, openLocalDoc, retryMessage, onCancelUpload, setReplyMsg,
+        setShowEmoji, fmtTime, onSelectMsg, onReactionPress, setImageModalUri, setVideoModalUri,
+        scrollToOriginalMessage: (m) => scrollToOriginalMessageRef.current?.(m),
+    };
+    const scrollToOriginalMessageRef = useRef(null);
+    const stable = useMemo(() => {
+        const o = {};
+        ['getFullUrl', 'openPopup', 'openDocInBrowser', 'openLocalDoc', 'retryMessage', 'onCancelUpload', 'setReplyMsg',
+            'setShowEmoji', 'fmtTime', 'onSelectMsg', 'onReactionPress', 'setImageModalUri', 'setVideoModalUri',
+            'scrollToOriginalMessage'].forEach((k) => { o[k] = (...a) => fnRef.current[k]?.(...a); });
+        return o;
+    }, []);
+
     const handleScroll = (event) => {
         const offsetY = event.nativeEvent.contentOffset.y;
         const atBottom = offsetY <= 30;
@@ -217,6 +238,8 @@ const MessageList = ({
         }
     };
 
+    scrollToOriginalMessageRef.current = scrollToOriginalMessage;
+
     const onScrollToIndexFailed = useCallback((info) => {
         flatRef.current?.scrollToOffset({
             offset: info.averageItemLength * info.index,
@@ -243,12 +266,13 @@ const MessageList = ({
     }, [hasMore, loadingMore, onLoadMore]);
 
     // ─────────────────────────────────────────────
+    const msgCount = messages.length;
     const renderItem = useCallback(
         ({ item, index }) => {
             // inverted list → messages[index + 1] PURANA (older) message hota hai.
             // Agar older message ki date alag hai (ya ye sabse purana msg hai),
             // matlab ye message naye din ka PEHLA message hai → uske upar date chip.
-            const olderMsg = messages[index + 1];
+            const olderMsg = messagesRef.current[index + 1];
             const showDateSep =
                 !olderMsg || !isSameDay(item.createdAt, olderMsg.createdAt);
             const isDark = theme?.mode ? theme.mode === "dark" : theme?.background === "#000";
@@ -267,29 +291,35 @@ const MessageList = ({
                         isGroup={isGroup}
                         isBroadcast={isBroadcast}
                         theme={theme}
-                        getFullUrl={getFullUrl}
-                        setImageModalUri={setImageModalUri}
-                        setVideoModalUri={setVideoModalUri}
-                        openPopup={openPopup}
-                        openDocInBrowser={openDocInBrowser}
-                        openLocalDoc={openLocalDoc}
-                        retryMessage={retryMessage}
-                        onCancelUpload={onCancelUpload}
-                        setReplyMsg={setReplyMsg}
-                        setShowEmoji={setShowEmoji}
-                        fmtTime={fmtTime}
+                        getFullUrl={stable.getFullUrl}
+                        setImageModalUri={stable.setImageModalUri}
+                        setVideoModalUri={stable.setVideoModalUri}
+                        openPopup={stable.openPopup}
+                        openDocInBrowser={stable.openDocInBrowser}
+                        openLocalDoc={stable.openLocalDoc}
+                        retryMessage={stable.retryMessage}
+                        onCancelUpload={stable.onCancelUpload}
+                        setReplyMsg={stable.setReplyMsg}
+                        setShowEmoji={stable.setShowEmoji}
+                        fmtTime={stable.fmtTime}
                         isSelectMode={isSelectMode}
                         isSelected={selectedMsgIds?.has(item._id)}
-                        onSelect={onSelectMsg}
-                        onReactionPress={onReactionPress}
-                        onReplyPress={scrollToOriginalMessage}
+                        onSelect={stable.onSelectMsg}
+                        onReactionPress={stable.onReactionPress}
+                        onReplyPress={stable.scrollToOriginalMessage}
                         isHighlighted={highlightedMsgId === item._id}
                         isMatch={matchIdSet?.has(item._id)}
                     />
                 </View>
             );
         },
-        [highlightedMsgId, isSelectMode, selectedMsgIds, theme, messages, matchIdSet, onSelectMsg, onReactionPress, openPopup, retryMessage, onCancelUpload, MY_USER_ID, isGroup],
+        [highlightedMsgId, isSelectMode, selectedMsgIds, theme, matchIdSet, MY_USER_ID, isGroup, isBroadcast, stable, msgCount],
+    );
+
+    // extraData har render naya array tha => FlatList har parent render par saari rows dobara render karti thi
+    const listExtra = useMemo(
+        () => [selectedMsgIds, isSelectMode, highlightedMsgId, matchIdSet, theme, msgCount],
+        [selectedMsgIds, isSelectMode, highlightedMsgId, matchIdSet, theme, msgCount],
     );
 
     // Inline component har render naya type banata tha -> footer remount + layout jhatka (flicker).
@@ -347,7 +377,7 @@ const MessageList = ({
                 ref={flatRef}
                 data={messages}
                 // Selection/highlight badalne par rows re-render hon (warna bubble purani state dikhata)
-                extraData={[selectedMsgIds, isSelectMode, highlightedMsgId, matchIdSet, theme]}
+                extraData={listExtra}
                 keyExtractor={(item, i) => item._id ?? i.toString()}
                 renderItem={renderItem}
                 inverted

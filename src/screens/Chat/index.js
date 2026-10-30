@@ -4,6 +4,9 @@ import {
     setAudioModeAsync,
     useAudioRecorder,
 } from "expo-audio";
+import { useNameResolver } from "../../services/nameResolver";
+import { saveUnknownContact } from "../../services/saveContactFlow";
+import { seedMediaCache } from "../../utils/mediaCache";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "@react-navigation/native";
@@ -68,6 +71,26 @@ const DEFAULT_GRP_AVT = 'https://cdn-icons-png.flaticon.com/512/681/681494.png';
 const idOf = (v) => v?._id ?? v;
 const byNewest = (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
 
+// Server refresh (cache -> fetch -> reconnect -> foreground) har baar sab messages ke NAYE objects deta hai,
+// jisse poori list dobara render/layout hoti thi (unlock ke baad chat ka upar-neeche jhatka). Jo message
+// asal me nahi badla uska purana object rakho => sirf badle hue rows render hote hain.
+const sameJson = (a, b) => { try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; } };
+const sameMsg = (a, b) => a === b || (
+    a._id === b._id && a.status === b.status && a.content === b.content && a.isEdited === b.isEdited
+    && a.isDeleted === b.isDeleted && a.updatedAt === b.updatedAt
+    && (a.reactions?.length ?? 0) === (b.reactions?.length ?? 0)
+    && (a.starredBy?.length ?? 0) === (b.starredBy?.length ?? 0)
+    && (a.readBy?.length ?? 0) === (b.readBy?.length ?? 0)
+    && (a.deliveredTo?.length ?? 0) === (b.deliveredTo?.length ?? 0)
+    && a.attachments?.[0]?.url === b.attachments?.[0]?.url
+    && a.uploadProgress === b.uploadProgress
+);
+const stabilizeList = (prev, next) => {
+    const old = new Map(prev.map((m) => [m._id, m]));
+    const out = next.map((m) => { const o = old.get(m._id); return o && sameMsg(o, m) ? o : m; });
+    return out.length === prev.length && out.every((m, i) => m === prev[i]) ? prev : out;
+};
+
 // Contact screen raw key (uploads/...) bhejti hai, list poora URL — dono sambhalo
 const toImageUrl = (v, fallback) => {
     if (!v) return fallback;
@@ -103,6 +126,10 @@ export default function ChatScreen({ route, navigation }) {
 
     // Chat list se aaya naam/photo turant dikhao — API ka intezar mat karo
     const [chatName, setchatName] = useState(route.params?.chatName ?? "");
+    // Header/list naam hamesha phonebook rule se (saved naam > number); server ka profile naam kabhi title nahi
+    const resolveName = useNameResolver();
+    const resolveNameRef = useRef(resolveName);
+    resolveNameRef.current = resolveName;
     const [chatImage, setchatImage] = useState(toImageUrl(route.params?.chatImage, route.params?.isGroup ? DEFAULT_GRP_AVT : DEFAULT_AVATAR));
     const [isGroup, setIsGroup] = useState(!!route.params?.isGroup);
     const [isBroadcast, setIsBroadcast] = useState(false);
@@ -432,7 +459,7 @@ export default function ChatScreen({ route, navigation }) {
                 const otherUser = chatData?.otherUser;
                 if (otherUser?._id && otherUser?._id !== MY_USER_ID) {
                     setOtherUserId(otherUser?._id);
-                    setchatName(otherUser?.name || "TeleBook User");
+                    setchatName(otherUser?.mobile ? resolveNameRef.current(otherUser).title : (route.params?.chatName || otherUser?.name || "TeleBook User"));
                     setchatImage(isEmpty(otherUser?.profilePicture) ? getFullUrl(otherUser?.profilePicture) : DEFAULT_AVATAR);
                 }
             }
@@ -473,7 +500,7 @@ export default function ChatScreen({ route, navigation }) {
                 return;
             }
             const details = res?.data?.chatDetails;
-            setchatDaetils(details);
+            setchatDaetils((prev) => (sameJson(prev, details) ? prev : details));
             if (details?.isGroupChat) setIsGroup(true);
             if (!details?.isGroupChat && !otherUserIdRef.current) {
                 const other = details?.users?.find((u) => (u?._id ?? u) !== MY_USER_ID);
@@ -486,7 +513,7 @@ export default function ChatScreen({ route, navigation }) {
             setMessages((prev) => {
                 const freshIds = new Set(msgs.map((m) => m._id));
                 const pending = prev.filter((m) => m.isOptimistic && !freshIds.has(m._id));
-                return [...pending, ...keepMyMissingMedia(prev, msgs), ...msgs].sort(byNewest);
+                return stabilizeList(prev, [...pending, ...keepMyMissingMedia(prev, msgs), ...msgs].sort(byNewest));
             });
             setCurrentPage(1);
             setHasMore(res?.data?.pagination?.hasMore ?? false);
@@ -498,18 +525,31 @@ export default function ChatScreen({ route, navigation }) {
 
     // Page 1 dobara laao aur jo list me hai usme mila do (naye messages + taaza ticks).
     // GET chat ko read bhi mark karta hai, isliye sirf tab chalao jab chat dikh rahi ho.
-    const refreshLatest = async () => {
+    // Unlock/foreground par AppState + socket "connect" + focus teeno ek saath refresh maangte hain —
+    // ek hi request chale (in-flight share) aur 2s ke andar dobara nahi.
+    const refreshInflight = useRef(null);
+    const refreshLastAt = useRef(0);
+    const refreshLatest = () => {
+        if (refreshInflight.current) return refreshInflight.current;
+        if (Date.now() - refreshLastAt.current < 2000) return Promise.resolve();
+        refreshInflight.current = refreshLatestNow().finally(() => {
+            refreshInflight.current = null;
+            refreshLastAt.current = Date.now();
+        });
+        return refreshInflight.current;
+    };
+    const refreshLatestNow = async () => {
         const res = await apiService({ method: "GET", endpoint: `messages/${chatId}?page=1&limit=${LIMIT}` });
         if (!res?.success) return;
         const fresh = (res?.data?.messages ?? []).map((m) => ({ ...m, status: determineStatus(m) }));
         cacheMessages(chatId, fresh);
-        if (res?.data?.chatDetails) setchatDaetils(res.data.chatDetails);
+        if (res?.data?.chatDetails) setchatDaetils((prev) => (sameJson(prev, res.data.chatDetails) ? prev : res.data.chatDetails));
         setMessages((prev) => {
             const freshIds = new Set(fresh.map((m) => m._id));
             const oldest = fresh.length ? new Date(fresh[fresh.length - 1].createdAt).getTime() : Infinity;
             const pending = prev.filter((m) => m.isOptimistic);
             const older = prev.filter((m) => !m.isOptimistic && !freshIds.has(m._id) && new Date(m.createdAt).getTime() < oldest);
-            return [...pending, ...keepMyMissingMedia(prev, fresh), ...fresh, ...older].sort(byNewest);
+            return stabilizeList(prev, [...pending, ...keepMyMissingMedia(prev, fresh), ...fresh, ...older].sort(byNewest));
         });
         dispatch(clearUnread(chatId));
         // Successful fetch khud proof hai ki connectivity hai — queued messages try karo.
@@ -781,7 +821,7 @@ export default function ChatScreen({ route, navigation }) {
                             isGroupChat: isGroup,
                             displayName: chatName || "TeleBook User",
                             displayAvatar: chatImage || DEFAULT_AVATAR,
-                            displayUser: isGroup ? null : { _id: otherUserId, name: chatName },
+                            displayUser: isGroup ? null : { _id: otherUserId, name: otherChatUser?.name, mobile: otherChatUser?.mobile },
                             users: [],
                         },
                     }));
@@ -928,6 +968,8 @@ export default function ChatScreen({ route, navigation }) {
                     return;
                 }
                 const realAttachment = { url: up.url, filename: up.filename, fileType: up.fileType, fileSize: up.fileSize };
+                // Apni image dobara download na ho / placeholder flash na aaye: local file ko server url ke naam se cache karo
+                if (!uploaded && ["image", "video", "audio", "document"].includes(messageType)) seedMediaCache(getFullUrl(up.url), localUri);
                 patchPending(chatId, tempId, { attachments: [realAttachment], uploadProgress: 100 });
 
                 const payload = {
@@ -964,7 +1006,7 @@ export default function ChatScreen({ route, navigation }) {
                             _id: chatId, isGroupChat: isGroup,
                             displayName: chatName || "TeleBook User",
                             displayAvatar: chatImage || DEFAULT_AVATAR,
-                            displayUser: isGroup ? null : { _id: otherUserId, name: chatName },
+                            displayUser: isGroup ? null : { _id: otherUserId, name: otherChatUser?.name, mobile: otherChatUser?.mobile },
                             users: [],
                         },
                     }));
@@ -1407,6 +1449,16 @@ export default function ChatScreen({ route, navigation }) {
         });
     };
 
+    const handleSaveContact = async () => {
+        const mobile = otherChatUser?.mobile;
+        if (!mobile) return;
+        const r = await saveUnknownContact({ mobile, dispatch });
+        if (r === "denied") Toast.show({ type: "error", text1: "Contacts permission is needed" });
+        else if (r === "saved") Toast.show({ type: "success", text1: "Contact saved" });
+        else if (r === "exists") Toast.show({ type: "info", text1: "Contact already saved" });
+        else if (r === "error") Toast.show({ type: "error", text1: "Could not save contact" });
+    };
+
     const cancelSelectMode = () => { setIsSelectMode(false); setSelectedMsgIds(new Set()); };
 
     const isSelectable = (m) => !!m?._id && !m.isDeleted && !m.isOptimistic && !String(m._id).startsWith("temp_");
@@ -1556,6 +1608,7 @@ export default function ChatScreen({ route, navigation }) {
                 onClearChat={clearChat}
                 getFullUrl={getFullUrl}
                 isBlocked={isBlocked}
+                onSaveContact={!isGroup && !isBroadcast && otherChatUser?.mobile ? handleSaveContact : null}
                 onToggleBlock={!isGroup && otherUserId ? () => confirmBlock(otherUserId, chatName) : null}
                 onVoiceCall={handleVoiceCall}
                 onVideoCall={handleVideoCall}

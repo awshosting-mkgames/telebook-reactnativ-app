@@ -500,4 +500,4 @@ const styles = StyleSheet.create({
     reactionCount: { fontSize: 11 },
 });
 
-export default MessageBubble;
+export default memo(MessageBubble);

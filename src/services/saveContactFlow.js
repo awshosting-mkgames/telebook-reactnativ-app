@@ -19,7 +19,11 @@ export const saveUnknownContact = async ({ mobile, dispatch }) => {
         const target = last10(mobile);
         const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] });
         const exists = (data || []).some((c) => (c.phoneNumbers || []).some((p) => last10(p.number) === target));
-        if (exists) return 'exists';
+        if (exists) {
+            // Number phonebook me hai par app ko naam shayad abhi nahi mila — sync karke global naam laga do
+            if (dispatch) await contactSync(dispatch, { silent: true }).catch(() => {});
+            return 'exists';
+        }
 
         const before = (data || []).length;
         // Form resolve hota hai jab user save / cancel karke wapas aata hai

@@ -88,7 +88,10 @@ export const mergePosts = (existing, incoming) => {
         if (id) seen.add(id);
         out.push(p);
     });
-    return out;
+    // Hamesha newest-first (inverted list me newest neeche): live/refresh/pagination kisi bhi order me aaye
+    // to bhi admin aur followers ko ek hi sequence mile.
+    const t = (p) => new Date(p?.createdAt || 0).getTime();
+    return out.every((p) => p?.createdAt) ? out.sort((a, b) => t(b) - t(a)) : out;
 };
 
 export const forwardChannelPost = async (channelId, postId, chatIds) => {
