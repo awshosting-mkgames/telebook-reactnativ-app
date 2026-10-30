@@ -82,7 +82,7 @@ class PipModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun setEnabled(value: Boolean) {
         enabled = value
-        val act = currentActivity ?: return
+        val act = reactApplicationContext.currentActivity ?: return
         act.runOnUiThread {
             attachListener(act)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -93,7 +93,7 @@ class PipModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun enter() {
-        val act = currentActivity ?: return
+        val act = reactApplicationContext.currentActivity ?: return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         act.runOnUiThread {
             attachListener(act)
