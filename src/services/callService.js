@@ -83,6 +83,9 @@ class CallService {
                 frameRate: 15,
                 degradationPreference: DegradationPreference.MaintainQuality,
             });
+            // Camera default ON (dono side) — user baad me khud band kar sakta hai
+            this._engine.enableLocalVideo(true);
+            this._engine.muteLocalVideoStream(false);
             this._engine.startPreview();
         }
         this._engine.joinChannel(token, channel, uid, {
@@ -126,7 +129,11 @@ class CallService {
 
     toggleMute(muted) { this._engine?.muteLocalAudioStream(muted); }
     toggleSpeaker(on) { this._engine?.setEnableSpeakerphone(on); }
-    toggleCamera(on) { this._engine?.enableLocalVideo(on); }
+    toggleCamera(on) {
+        if (!this._engine) return;
+        this._engine.enableLocalVideo(on);
+        this._engine.muteLocalVideoStream(!on);
+    }
     switchCamera() { this._engine?.switchCamera(); }
 
     on(event, callback) {

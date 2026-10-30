@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
 import apiService from '../../services/apiService';
+import { useNameResolver } from '../../services/nameResolver';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -24,6 +25,7 @@ export default function BroadcastStats({ route, navigation }) {
     const { messageId, content } = route.params;
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const resolveName = useNameResolver();
 
     const [stats,   setStats]   = useState(null);
     const [loading, setLoading] = useState(true);
@@ -121,7 +123,7 @@ export default function BroadcastStats({ route, navigation }) {
                 {/* Name + Status */}
                 <View style={{ flex: 1 }}>
                     <Text style={[styles.recipientName, { color: theme.text }]}>
-                        {item.user?.name ?? 'Unknown'}
+                        {resolveName(item.user).title}
                     </Text>
                     <View style={styles.statusRow}>
                         <Ionicons name={statusIcon} size={13} color={statusColor} />

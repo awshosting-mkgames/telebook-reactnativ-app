@@ -2,6 +2,9 @@ import React, { createContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SystemUI from 'expo-system-ui';
 import { LightTheme, DarkTheme } from '../utils/theme';
+import { FONT_SIZES, patchTextFontScale, setGlobalFontScale } from '../utils/fontScale';
+
+patchTextFontScale();
 
 export const ThemeContext = createContext();
 
@@ -13,6 +16,7 @@ export const ThemeProvider = ({ children }) => {
     const [theme, setTheme] = useState(LightTheme);
     const [loading, setLoading] = useState(true);
     const [brandColor, setBrandColor] = useState(null);
+    const [fontSize, setFontSizeState] = useState('medium'); // small | medium | large
 
     // Load theme from async
     useEffect(() => {
@@ -21,6 +25,11 @@ export const ThemeProvider = ({ children }) => {
 
     const loadTheme = async () => {
         try {
+            const savedFont = await AsyncStorage.getItem('APP_FONT_SIZE');
+            if (savedFont && FONT_SIZES[savedFont]) {
+                setGlobalFontScale(savedFont);
+                setFontSizeState(savedFont);
+            }
             const savedTheme = await AsyncStorage.getItem('APP_THEME');
             if (savedTheme === 'dark') {
                 setTheme(DarkTheme);
@@ -32,6 +41,13 @@ export const ThemeProvider = ({ children }) => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const setFontSize = async (key) => {
+        if (!FONT_SIZES[key]) return;
+        setGlobalFontScale(key);
+        setFontSizeState(key);
+        try { await AsyncStorage.setItem('APP_FONT_SIZE', key); } catch (e) { /* ignore */ }
     };
 
     const toggleTheme = async () => {
@@ -60,7 +76,7 @@ export const ThemeProvider = ({ children }) => {
     if (loading) return null;
 
     return (
-        <ThemeContext.Provider value={{ theme: themed, toggleTheme, setBrandColor }}>
+        <ThemeContext.Provider value={{ theme: themed, toggleTheme, setBrandColor, fontSize, setFontSize, fontScale: FONT_SIZES[fontSize] }}>
             {children}
         </ThemeContext.Provider>
     );

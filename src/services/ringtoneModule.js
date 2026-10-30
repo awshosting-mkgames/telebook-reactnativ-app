@@ -13,7 +13,8 @@ import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 const { RingtoneModule } = NativeModules;
 const RING_ASSET = require('../../assets/sounds/ringtone.wav');
-const VIBE_PATTERN = [0, 800, 1200]; // 0.8s buzz, 1.2s pause — repeat
+export const CALL_VIBE_PATTERN = [0, 800, 1200]; // 0.8s buzz, 1.2s pause — repeat (notification channel bhi yahi)
+const VIBE_PATTERN = CALL_VIBE_PATTERN;
 
 let jsPlayer = null;
 let ringing = false;
@@ -43,14 +44,8 @@ const playJs = async () => {
 export function playRingtone() {
     ringing = true;
     stopJs();
-    if (Platform.OS === 'android' && RingtoneModule) {
-        try {
-            RingtoneModule.playRingtone();
-            return;
-        } catch (e) {
-            console.warn('[ringtoneModule] native play error:', e?.message);
-        }
-    }
+    // Hamesha bundled ringtone.wav (notification wali channel sound bhi wahi hai) —
+    // system ringtone alag bajne se "do alag tune" ka issue tha. Native module sirf stop ke liye bacha hai.
     playJs();
 }
 

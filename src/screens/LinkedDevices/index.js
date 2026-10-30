@@ -9,7 +9,9 @@ import { useTranslation } from 'react-i18next';
 import Toast from 'react-native-toast-message';
 import { ThemeContext } from '../../components/ThemeContext';
 import apiService from '../../services/apiService';
-import { getDeviceId } from '../../services/deviceId';
+import { useDispatch } from 'react-redux';
+import { getDeviceId, getDeviceInfo } from '../../services/deviceId';
+import { logoutUser } from '../../services/Logoutcall';
 
 const fmtLastActive = (iso) => {
     if (!iso) return '';
@@ -20,6 +22,7 @@ const fmtLastActive = (iso) => {
 export default function LinkedDevices({ navigation }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const dispatch = useDispatch();
 
     const [devices, setDevices] = useState([]);
     const [meta, setMeta] = useState(null); // { limit, used, enforced }
@@ -43,6 +46,8 @@ export default function LinkedDevices({ navigation }) {
 
     const load = useCallback(async () => {
         setError(null);
+        // Is phone ka asli naam server ko bata do (pehle 'Unknown' tha) — fail ho to chalega
+        getDeviceId().then((id) => apiService({ method: 'PUT', endpoint: 'devices/current', data: { deviceId: id, ...getDeviceInfo() } })).catch(() => {});
         const [res, id] = await Promise.all([
             apiService({ method: 'GET', endpoint: 'devices' }),
             getDeviceId().catch(() => null),
@@ -77,7 +82,8 @@ export default function LinkedDevices({ navigation }) {
                     setBusyId(null);
                     if (res?.success) {
                         Toast.show({ type: 'success', text1: t('ld_logged_out') });
-                        // Current device ko revoke kiya to agli request par axios DEVICE_LOGGED_OUT handler logout kara dega
+                        // Apna hi device logout kiya: turant logout (OTP se dobara login)
+                        if (isCurrent(dev)) { logoutUser(null, dispatch); return; }
                         load();
                     } else {
                         Toast.show({ type: 'error', text1: t('ld_action_error'), text2: res?.error?.message });
@@ -95,7 +101,7 @@ export default function LinkedDevices({ navigation }) {
                 style: 'destructive',
                 onPress: async () => {
                     setBusyId('__others__');
-                    const res = await apiService({ method: 'POST', endpoint: 'devices/revoke-others' });
+                    const res = await apiService({ method: 'POST', endpoint: 'devices/revoke-others', data: { deviceId: localId } });
                     setBusyId(null);
                     if (res?.success) {
                         Toast.show({ type: 'success', text1: res.data?.message || t('ld_logged_out') });

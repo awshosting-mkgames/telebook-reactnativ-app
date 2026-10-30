@@ -48,6 +48,8 @@ import { markMessageDeletedLocally } from "../../services/messagesDb";
 import Images from "../../utils/images";
 
 import AttachSheet from "./components/AttachSheet";
+import ReactionBar from "./components/ReactionBar";
+import StarredMessagesModal from "./components/StarredMessagesModal";
 import ChatHeader from "./components/ChatHeader";
 import ForwardContactModal from "./components/ForwardContactModal";
 import { ImageViewer, VideoModal } from "./components/MediaViewers";
@@ -687,6 +689,30 @@ export default function ChatScreen({ route, navigation }) {
         return { url: json.data.url, filename: json.data.filename, fileType: json.data.fileType, fileSize: json.data.fileSize };
     };
 
+    // Ek hi saath 10+ photos par kuch upload timeout/5xx/429 se fail ho jaate the. Transient error par
+    // backoff ke saath 3 baar try karo, aur ek upload ko 100s se zyada atakne mat do (queue slot na ruke).
+    const isTransientUploadError = (e) => e?.isNetworkFailure
+        || /too many|slow down|timeout|timed out|temporar|unavailable|gateway|network|try again/i.test(String(e?.message ?? ""));
+    const uploadWithRetry = async (localUri, mimeType, messageType, fileName, onProgress) => {
+        let lastErr;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            try {
+                let timer;
+                const timeout = new Promise((_, rej) => {
+                    timer = setTimeout(() => { const err = new Error("Upload timed out"); err.isNetworkFailure = true; rej(err); }, 100000);
+                });
+                try {
+                    return await Promise.race([uploadMedia(localUri, mimeType, messageType, fileName, { onProgress }), timeout]);
+                } finally { clearTimeout(timer); }
+            } catch (e) {
+                lastErr = e;
+                if (!isTransientUploadError(e) || attempt === 2) break;
+                await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+            }
+        }
+        throw lastErr;
+    };
+
     // Client-side unique id — backend `clientMessageId` (partial unique index per
     // sender) retry ko idempotent/duplicate-safe banata hai: same id dobara
     // bhejo to naya message nahi banta, jo pehle bana tha wahi wapas aata hai.
@@ -887,8 +913,11 @@ export default function ChatScreen({ route, navigation }) {
 
         enqueueUpload(async () => {
             try {
-                const up = uploaded ?? await uploadMedia(localUri, mimeType, messageType, fileName, {
-                    onProgress: (pct) => patchPending(chatId, tempId, { uploadProgress: pct }),
+                // Progress har tick par patch karne se poori list re-render hoti thi (10 images = flicker).
+                // Sirf 10% ke step par patch karo.
+                let lastPct = -10;
+                const up = uploaded ?? await uploadWithRetry(localUri, mimeType, messageType, fileName, (pct) => {
+                    if (pct >= 100 || pct - lastPct >= 10) { lastPct = pct; patchPending(chatId, tempId, { uploadProgress: pct }); }
                 });
                 // Upload complete hone ke BAAD check karo — cancel mid-flight nahi roka
                 // (RN par axios abort signal upload hi tod deta tha), par agar user ne
@@ -949,7 +978,7 @@ export default function ChatScreen({ route, navigation }) {
             } catch (e) {
                 // uploadMedia khud fail hua (ya koi aur anjaan error) — attachment abhi
                 // bhi local file hai, isliye optimisticMsg (_pendingUpload:true) hi cache ho.
-                failPendingMedia(tempId, optimisticMsg, !!e?.isNetworkFailure, e?.message);
+                failPendingMedia(tempId, optimisticMsg, isTransientUploadError(e), e?.message);
             } finally {
                 delete cancelledUploadsRef.current[tempId];
             }
@@ -1041,8 +1070,12 @@ export default function ChatScreen({ route, navigation }) {
     const retryQueuedRef = useRef(null);
     retryQueuedRef.current = retryQueuedMessages;
 
-    const openCamera = async () => {
-        setShowAttach(false);
+    // Apna in-app camera (neeche daayen Gallery button ke saath). expo-camera native module
+    // build me na ho (purana APK / OTA) to purane system camera par wapas.
+    const [showStarred, setShowStarred] = useState(false);
+    const [CameraComp, setCameraComp] = useState(null);
+    const [showCamera, setShowCamera] = useState(false);
+    const openSystemCamera = async () => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== "granted") return Alert.alert("Permission chahiye", "Camera allow karo");
         const res = await ImagePicker.launchCameraAsync({ mediaTypes: ["images", "videos"], quality: 0.8 });
@@ -1051,6 +1084,20 @@ export default function ChatScreen({ route, navigation }) {
             sendMediaAsset(a, isVid ? "video" : "image", replyMsg);
             setReplyMsg(null);
         }
+    };
+    const openCamera = async () => {
+        setShowAttach(false);
+        let Comp = CameraComp;
+        if (!Comp) {
+            try { Comp = require("./components/InAppCamera").default; setCameraComp(() => Comp); }
+            catch (e) { console.log("expo-camera unavailable, system camera:", e?.message); return openSystemCamera(); }
+        }
+        setShowCamera(true);
+    };
+    const onCameraCaptured = (a) => {
+        setShowCamera(false);
+        sendMediaAsset(a, a.type === "video" ? "video" : "image", replyMsg);
+        setReplyMsg(null);
     };
 
     const openGallery = async () => {
@@ -1198,6 +1245,8 @@ export default function ChatScreen({ route, navigation }) {
         }
         const starred = !!res.data?.isStarred;
         setMessages((prev) => prev.map((m) => (m._id === msgId ? withStar(m, MY_USER_ID, starred) : m)));
+        // SQL cache me bhi — warna offline reopen par star gayab dikhta hai
+        markMessageDeletedLocally(chatId, msgId, { starredBy: withStar(msg, MY_USER_ID, starred).starredBy }).catch(() => {});
         return { ok: true };
     };
     const handleStar = async () => {
@@ -1252,7 +1301,13 @@ export default function ChatScreen({ route, navigation }) {
                     return [...fresh, ...prev];
                 });
             }
-            // Target chats ka last message list me aa jaye
+            // Target chats turant list ke top par (recent position) — server sync ka wait nahi.
+            // Messages chat-by-chat order me aate hain, isliye aakhri target sabse upar rehta hai.
+            (res.data?.messages ?? []).forEach((m) => {
+                dispatch(updateChatLastMessage({ msg: { ...m, chat: idOf(m.chat) }, myUserId: MY_USER_ID }));
+            });
+            dispatch(persistChatTabs());
+            // Baaki details (aur jo chat list me nahi thi) server se
             syncAllTabData(dispatch, MY_USER_ID, { background: true });
             // Blocking Alert ki jagah non-blocking toast (bahut items forward karne par popup nahi atkenge)
             Toast.show({ type: "success", text1: "Forwarded", text2: `${messageIds.length > 1 ? messageIds.length + " messages" : "Message"} sent to ${chatIds.length} chat${chatIds.length > 1 ? "s" : ""}`, visibilityTime: 1800 });
@@ -1487,6 +1542,7 @@ export default function ChatScreen({ route, navigation }) {
                 onDeleteSelected={deleteSelectedMessages}
                 onCopySelected={handleCopySelected}
                 onStarSelected={handleStarSelected}
+                onOpenStarred={() => setShowStarred(true)}
                 onReplySelected={handleReplySelected}
                 onMoreSelected={handleMoreSelected}
                 onSelectAll={handleSelectAll}
@@ -1505,6 +1561,19 @@ export default function ChatScreen({ route, navigation }) {
                 onVideoCall={handleVideoCall}
                 callsAvailable={getCachedCallsConfig()?.available === true}
             />
+
+            {isSelectMode && selectedMsgIds.size === 1 && (() => {
+                const only = messages.find((m) => selectedMsgIds.has(m._id));
+                if (!only || only.isDeleted) return null;
+                const mineEmoji = (only.reactions ?? []).find((r) => idOf(r?.user ?? r?.userId) === MY_USER_ID)?.emoji;
+                return (
+                    <ReactionBar
+                        isDark={isDark}
+                        mine={mineEmoji}
+                        onReact={(emoji) => { cancelSelectMode(); reactToMessage(only, emoji); }}
+                    />
+                );
+            })()}
 
             {/* 🔎 Search match navigation bar (VS Code jaisa "X of Y" + up/down) */}
             {isSearchMode && searchText.trim().length >= 2 && (
@@ -1612,6 +1681,17 @@ export default function ChatScreen({ route, navigation }) {
                         openCamera={openCamera}
                     />
                 )}
+
+                {!!CameraComp && (
+                    <CameraComp
+                        visible={showCamera}
+                        onClose={() => setShowCamera(false)}
+                        onCaptured={onCameraCaptured}
+                        onOpenGallery={() => { setShowCamera(false); setTimeout(openGallery, 350); }}
+                    />
+                )}
+
+                <StarredMessagesModal visible={showStarred} chatId={chatId} myUserId={MY_USER_ID} onClose={() => setShowStarred(false)} />
 
                 <AttachSheet
                     visible={showAttach}

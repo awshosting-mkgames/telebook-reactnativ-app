@@ -34,6 +34,7 @@ import ContextMenuPopup from './ContextMenuPopup';
 import HeaderMenu from './HeaderMenu';
 import SwipeableChatItem from './SwipeableChatItem';
 import Config from '../../services/config';
+import { useNameResolver } from '../../services/nameResolver';
 const BASE_URL = Config.MEDIA_URL;
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
@@ -43,6 +44,7 @@ const resolveAvatar = (path, fallback) => (!path ? fallback : BASE_URL + path);
 
 const Freechat = ({ navigation }) => {
     const { theme } = useContext(ThemeContext);
+    const resolveName = useNameResolver();
     const dispatch = useDispatch();
 
     const isDark = theme.text === '#FFFFFF';
@@ -167,7 +169,7 @@ const Freechat = ({ navigation }) => {
         const other = (chat.users || []).find((u) => u?._id !== MY_USER_ID) || user;
         navigation.navigate('Chat', {
             chatId: chat._id,
-            chatName: user.name || user.mobile || other?.mobile || 'User',
+            chatName: resolveName(user).title,
             chatImage: other?.profilePicture,
             isGroup: false,
             otherUserId: user._id,
@@ -270,11 +272,13 @@ const Freechat = ({ navigation }) => {
                                 />
                                 <View style={{ flex: 1, minWidth: 0 }}>
                                     <Text style={[styles.remoteName, { color: theme.text || '#111' }]} numberOfLines={1}>
-                                        {u.name || u.mobile || 'User'}
+                                        {resolveName(u).title}
                                     </Text>
-                                    {!!u.mobile && (
-                                        <Text style={[styles.remoteSub, { color: mutedColor }]} numberOfLines={1}>{u.mobile}</Text>
-                                    )}
+                                    {(() => {
+                                        const r = resolveName(u);
+                                        const sub = r.isSaved ? u.mobile : r.subtitle;
+                                        return sub ? <Text style={[styles.remoteSub, { color: mutedColor }]} numberOfLines={1}>{sub}</Text> : null;
+                                    })()}
                                 </View>
                             </TouchableOpacity>
                         ))}

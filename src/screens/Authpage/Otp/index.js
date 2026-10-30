@@ -20,7 +20,7 @@ import { ThemeContext } from '../../../components/ThemeContext';
 import { settotalappData } from '../../../redex/slices/totalappDataSlice';
 import apiService from '../../../services/apiService';
 import { contactSync } from '../../../services/contactSync';
-import { getDeviceId } from '../../../services/deviceId';
+import { getDeviceId, getDeviceInfo } from '../../../services/deviceId';
 import { saveData } from '../../../services/staticStorage';
 import { getUiColors } from '../../../utils/uiColors';
 import AuthHeader from '../AuthHeader';
@@ -92,6 +92,7 @@ const OtpScreen = ({ setPageSection, renderSection, logindataPage, setlogindataP
                     fcmToken: fcmTokensend,
                     deviceType: 'android',
                     deviceId,
+                    ...getDeviceInfo(),
                     otp: str,
                     language: lang || 'en',
                 }

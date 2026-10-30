@@ -6,16 +6,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { RenderModeType, RtcSurfaceView } from 'react-native-agora';
 import callService from '../../services/callService';
 import {
-    clearActiveCall, getActiveCall, getHeldCall, isRemoteHeld, isSwitching, patchActiveCall, setActiveCall, subscribeActiveCall,
+    clearActiveCall, getActiveCall, getHeldCall, isRemoteHeld, isSwitching, patchActiveCall, setActiveCall, showRechargePrompt, subscribeActiveCall,
 } from '../../services/activeCallStore';
 import socketService from '../../services/socketService';
 import { acceptCall, endCall, rejectCall, resumeHeld, swapCalls } from '../../services/callHelpers';
 import { cancelIncomingCallNotification } from '../../components/notification';
 import { showOverLockScreen } from '../../services/lockScreenModule';
-import { playRingback, playRingtone, stopRingback, stopRingtone } from '../../services/ringtoneModule';
+import { playRingback, stopRingback } from '../../services/ringtoneModule';
 import Config from '../../services/config';
 import IncomingCallOverlay from '../Call/IncomingCallOverlay';
 import { useNameResolver } from '../../services/nameResolver';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePipMode } from '../../services/pip';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 const toImageUrl = (v) => (!v ? DEFAULT_AVATAR : /^(https?:|file:|data:)/.test(v) ? v : `${Config.MEDIA_URL}${v}`);
@@ -34,6 +36,8 @@ const END_REASON_LABEL = {
 
 export default function InCallScreen({ route, navigation }) {
     const resolveName = useNameResolver();
+    const insets = useSafeAreaInsets();
+    const inPip = usePipMode();
     const { callId, type, isIncoming, remoteUser, autoAccept } = route.params || {};
     const isVideo = type === 'video';
 
@@ -148,13 +152,9 @@ export default function InCallScreen({ route, navigation }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // ── Ring UI dikh rahi ho tab tak device ka default ringtone bajao,
-    // phase kahin bhi badle (accept/reject/ended/unmount) khud band ho jaata hai ──
-    useEffect(() => {
-        if (phase !== 'incoming') return undefined;
-        playRingtone();
-        return () => stopRingtone();
-    }, [phase]);
+    // Incoming ringtone + vibration ab ActiveCallBar (always-mounted) chalata hai jab tak phase 'incoming'
+    // hai — taaki is screen se back karne par bhi ghanti chalti rahe (call tab tak zinda jab tak
+    // user khud Accept/Reject na kare ya server ring timeout na ho).
 
     // ── Outgoing call: samne wala uthane tak caller ko ringback tone sunao ──
     useEffect(() => {
@@ -229,6 +229,8 @@ export default function InCallScreen({ route, navigation }) {
             if (getHeldCall()) { resumeHeld(); return; }
             setEndedInfo(payload);
             setPhase('ended');
+            // Coins khatam: caller (jo bill bharta hai) ko turant Recharge popup
+            if (payload?.endReason === 'insufficient_coins' && !isIncoming) showRechargePrompt();
             setTimeout(goBack, 1600);
         };
 
@@ -256,6 +258,8 @@ export default function InCallScreen({ route, navigation }) {
 
     const handleRejectIncoming = () => {
         rejectCall(callId); // fire-and-forget
+        clearActiveCall(); // ActiveCallBar ki ghanti isi se band hoti hai
+        socketService.setCallActive(false);
         showOverLockScreen(false);
         goBack();
     };
@@ -263,8 +267,9 @@ export default function InCallScreen({ route, navigation }) {
     // ── Hardware back → ring UI me reject, warna call cleanly end ──────────
     useEffect(() => {
         const onBack = () => {
-            if (phase === 'incoming') handleRejectIncoming();
-            else minimize(); // pehle back dabane par call cut ho jaati thi; ab sirf minimize
+            // Incoming ring par bhi back = sirf screen hatao (reject nahi). Ghanti + Accept/Reject
+            // ActiveCallBar ke banner me bani rehti hai.
+            minimize();
             return true;
         };
         const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
@@ -322,6 +327,20 @@ export default function InCallScreen({ route, navigation }) {
     }
 
     const showRemoteVideo = isVideo && remoteUid != null;
+    // Video call: jab tak samne wala video nahi bhejta apna camera full screen dikhao (audio jaisa avatar nahi)
+    const showLocalFull = isVideo && cameraOn && !showRemoteVideo;
+
+    // System PiP window: sirf video (buttons/labels nahi)
+    if (inPip && isVideo) {
+        return (
+            <View style={{ flex: 1, backgroundColor: '#000' }}>
+                <RtcSurfaceView
+                    style={styles.remoteVideo}
+                    canvas={{ uid: showRemoteVideo ? remoteUid : 0, renderMode: RenderModeType.RenderModeHidden }}
+                />
+            </View>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -332,14 +351,19 @@ export default function InCallScreen({ route, navigation }) {
                     style={styles.remoteVideo}
                     canvas={{ uid: remoteUid, renderMode: RenderModeType.RenderModeHidden }}
                 />
+            ) : showLocalFull ? (
+                <RtcSurfaceView
+                    style={styles.remoteVideo}
+                    canvas={{ uid: 0, renderMode: RenderModeType.RenderModeHidden }}
+                />
             ) : (
                 <View style={styles.avatarWrap}>
                     <Image source={{ uri: avatarUrl }} style={styles.avatar} />
                 </View>
             )}
 
-            {isVideo && cameraOn && (
-                <View style={styles.localVideoWrap}>
+            {isVideo && cameraOn && showRemoteVideo && (
+                <View style={[styles.localVideoWrap, { top: 50 + insets.top }]}>
                     <RtcSurfaceView
                         style={styles.localVideo}
                         canvas={{ uid: 0, renderMode: RenderModeType.RenderModeHidden }}
@@ -349,8 +373,13 @@ export default function InCallScreen({ route, navigation }) {
                 </View>
             )}
 
+            <View style={[styles.typeLabel, { top: 16 + insets.top }]} pointerEvents="none">
+                <Ionicons name={isVideo ? 'videocam' : 'call'} size={14} color="#fff" />
+                <Text style={styles.typeLabelText}>{isVideo ? 'Video call' : 'Voice call'}</Text>
+            </View>
+
             {!!lowBalance && (
-                <View style={styles.lowBalanceBanner}>
+                <View style={[styles.lowBalanceBanner, { paddingTop: 8 + insets.top }]}>
                     <Ionicons name="warning" size={16} color="#fff" />
                     <Text style={styles.lowBalanceText}>
                         Low balance — call may end in ~{lowBalance.remainingSeconds ?? '--'}s
@@ -359,14 +388,14 @@ export default function InCallScreen({ route, navigation }) {
             )}
 
             {!!heldCall && (
-                <TouchableOpacity style={styles.heldStrip} onPress={swapCalls} activeOpacity={0.85}>
+                <TouchableOpacity style={[styles.heldStrip, { top: 36 + insets.top }]} onPress={swapCalls} activeOpacity={0.85}>
                     <Ionicons name="pause-circle" size={18} color="#fff" />
                     <Text style={styles.heldText} numberOfLines={1}>{heldCall.remoteUser?.name || 'Unknown'} · on hold</Text>
                     <Text style={styles.heldSwap}>Swap</Text>
                 </TouchableOpacity>
             )}
 
-            <TouchableOpacity style={styles.minimizeBtn} onPress={minimize} activeOpacity={0.8} hitSlop={10}>
+            <TouchableOpacity style={[styles.minimizeBtn, { top: 40 + insets.top }]} onPress={minimize} activeOpacity={0.8} hitSlop={10}>
                 <Ionicons name="chevron-down" size={28} color="#fff" />
             </TouchableOpacity>
 
@@ -377,7 +406,7 @@ export default function InCallScreen({ route, navigation }) {
                 </Text>
             </View>
 
-            <View style={styles.controls}>
+            <View style={[styles.controls, { bottom: 40 + insets.bottom }]}>
                 {/* Point 13.4: active state saaf dikhe — on hone par safed background + gehra icon */}
                 <TouchableOpacity style={[styles.ctrlBtn, muted && styles.ctrlBtnActive]} onPress={toggleMute} activeOpacity={0.8}>
                     <Ionicons name={muted ? 'mic-off' : 'mic'} size={24} color={muted ? '#101418' : '#fff'} />
@@ -413,6 +442,11 @@ const styles = StyleSheet.create({
     avatar: { width: 140, height: 140, borderRadius: 70, backgroundColor: '#333' },
 
     remoteVideo: { flex: 1 },
+    typeLabel: {
+        position: 'absolute', top: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6,
+        paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.45)',
+    },
+    typeLabelText: { color: '#fff', fontSize: 13, fontWeight: '600' },
     localVideoWrap: {
         position: 'absolute', top: 50, right: 16, width: 110, height: 150,
         borderRadius: 14, overflow: 'hidden', backgroundColor: '#1a1f24', elevation: 6,

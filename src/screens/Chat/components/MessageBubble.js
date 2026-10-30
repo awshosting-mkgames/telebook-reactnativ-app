@@ -16,6 +16,9 @@ import { useMediaDownload } from '../../../utils/mediaCache';
 import { useNameResolver } from '../../../services/nameResolver';
 
 const { width: SCREEN_W } = Dimensions.get('window');
+// Bubble ki asli max width (list padding 10+10, container 82%, bubble padding 6+6). Media isse bada na ho —
+// forwarded/normal dono images ek hi width me poori fit hon.
+const MEDIA_W = Math.min(SCREEN_W * 0.8, (SCREEN_W - 20) * 0.82) - 12;
 
 // Video ka thumbnail ek baar bana kar cache — pehle har video message ke liye poora
 // video player banta tha (memory + network bhari, lambi chat me list atak jati thi).
@@ -221,10 +224,19 @@ const MessageBubble = ({
     const openMedia = (open) => () => (isSelectMode ? (canSelect ? onSelect(item) : undefined) : open());
 
 
+    // Failed media par image tap = Retry (pehle viewer khul jata tha aur retry nahi hota tha)
     const pendingProps = isPendingUpload ? {
         onPress: () => onCancelUpload?.(item._id),
         overlay: <UploadOverlay progress={item.uploadProgress ?? 0} onCancel={() => onCancelUpload?.(item._id)} />,
-    } : null;
+    } : (isFailed && item.attachments?.[0]?._pendingUpload ? {
+        onPress: () => (isSelectMode ? undefined : retryMessage?.(item)),
+        overlay: (
+            <View pointerEvents="none" style={styles.dlBadge}>
+                <Ionicons name="refresh" size={22} color="#fff" />
+                <Text style={styles.dlText}>Tap to retry</Text>
+            </View>
+        ),
+    } : null);
 
     const Shawtime = moment(item.createdAt).format('hh:mm A');
 
@@ -300,7 +312,7 @@ const MessageBubble = ({
                                         key={i}
                                         uri={getFullUrl(att.url)}
                                         size={fmtSize(att.fileSize)}
-                                        auto={isMine}
+                                        auto
                                         style={styles.msgImage}
                                         wrapStyle={styles.mediaWrap}
                                         pending={pendingProps}
@@ -336,7 +348,7 @@ const MessageBubble = ({
                                             <AudioAtt
                                                 uri={getFullUrl(att.url)}
                                                 size={fmtSize(att.fileSize)}
-                                                auto={isMine}
+                                                auto={isMine || (Number(att.fileSize) > 0 && Number(att.fileSize) < 2 * 1024 * 1024)}
                                                 isMine={isMine}
                                                 isDark={isDark}
                                                 guard={openMedia}
@@ -386,7 +398,7 @@ const MessageBubble = ({
 
                         {/* Time + Ticks */}
                         <View style={styles.timeRow}>
-                            {isStarred && <Ionicons name="star" size={10} color={timeColor} />}
+                            {isStarred && <Ionicons name="star" size={12} color="#f0a500" />}
                             {item.isEdited && !item.isDeleted && (
                                 <Text style={[styles.timeText, { color: timeColor }]}>edited</Text>
                             )}
@@ -451,10 +463,10 @@ const styles = StyleSheet.create({
     mediaWrap: { position: 'relative' },
     msgText: { fontSize: 15, lineHeight: 20 },
     // Point 6: photo/video bubble ki puri available width (bubble maxWidth 80% - padding) tak
-    msgImage: { width: SCREEN_W * 0.8 - 12, height: (SCREEN_W * 0.8 - 12) * 1.1, borderRadius: 8, backgroundColor: '#eee' },
+    msgImage: { width: MEDIA_W, height: MEDIA_W * 1.1, borderRadius: 8, backgroundColor: '#eee' },
     msgMedia: { width: SCREEN_W * 0.65, height: SCREEN_W * 0.65, borderRadius: 8, backgroundColor: '#eee' },
     audioWrapper: { width: SCREEN_W * 0.65 },
-    videoThumbWrap: { width: SCREEN_W * 0.8 - 12, height: (SCREEN_W * 0.8 - 12) * 1.1, justifyContent: 'center', alignItems: 'center', borderRadius: 8, overflow: 'hidden' },
+    videoThumbWrap: { width: MEDIA_W, height: MEDIA_W * 1.1, justifyContent: 'center', alignItems: 'center', borderRadius: 8, overflow: 'hidden' },
     dlBadge: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.3)' },
     dlText: { color: '#fff', fontSize: 11, fontWeight: '600' },
     videoOverlay: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 30, padding: 10 },

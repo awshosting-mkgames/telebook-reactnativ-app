@@ -14,7 +14,7 @@ const ChatHeader = ({
     isSelectMode, selectedCount, onCancelSelect, onForwardSelected,
     onDeleteSelected, onCopySelected, onStarSelected, onReplySelected, onMoreSelected, onSelectAll, MY_USER_ID, fmtTime,
     isSearchMode, searchText, onSearchChange, onOpenSearch, onCloseSearch,
-    onClearChat, getFullUrl, isBlocked, onToggleBlock,
+    onClearChat, onOpenStarred, getFullUrl, isBlocked, onToggleBlock,
     onVoiceCall, onVideoCall, callsAvailable,
 }) => {
     const [menuVisible, setMenuVisible] = useState(false);
@@ -65,23 +65,24 @@ const ChatHeader = ({
                     <Ionicons name="close" size={22} color="#fff" />
                 </TouchableOpacity>
                 <Text style={[styles.name, { flex: 1 }]}>{selectedCount}</Text>
+                {/* Order: Delete(1) · Star(2) · Copy(3) · Forward(4) · Reply (sirf 1 select) */}
+                <TouchableOpacity onPress={onDeleteSelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
+                    <Ionicons name="trash-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onStarSelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
+                    <Ionicons name="star-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onCopySelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
+                    <Ionicons name="copy-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onForwardSelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
+                    <Ionicons name="share-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
+                </TouchableOpacity>
                 {selectedCount === 1 && !!onReplySelected && (
                     <TouchableOpacity onPress={onReplySelected} style={styles.headerActionBtn}>
                         <Ionicons name="arrow-undo-outline" size={22} color="#fff" />
                     </TouchableOpacity>
                 )}
-                <TouchableOpacity onPress={onCopySelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
-                    <Ionicons name="copy-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={onStarSelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
-                    <Ionicons name="star-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={onForwardSelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
-                    <Ionicons name="share-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={onDeleteSelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
-                    <Ionicons name="trash-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
-                </TouchableOpacity>
                 <TouchableOpacity onPress={() => setSelMenuVisible(true)} style={styles.headerActionBtn}>
                     <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
                 </TouchableOpacity>
@@ -176,6 +177,19 @@ const ChatHeader = ({
                             <Ionicons name="search" size={18} color="#1296f3" />
                             <Text style={[styles.menuText, { color: menuText }]}>Search</Text>
                         </TouchableOpacity>
+                        {!!onOpenStarred && (
+                            <>
+                                <View style={[styles.menuDivider, { backgroundColor: dividerC }]} />
+                                <TouchableOpacity
+                                    style={styles.menuItem}
+                                    onPress={() => { setMenuVisible(false); onOpenStarred(); }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Ionicons name="star" size={18} color="#f0a500" />
+                                    <Text style={[styles.menuText, { color: menuText }]}>Starred messages</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
                         <View style={[styles.menuDivider, { backgroundColor: dividerC }]} />
                         <TouchableOpacity
                             style={styles.menuItem}

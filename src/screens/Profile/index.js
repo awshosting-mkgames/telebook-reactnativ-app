@@ -28,7 +28,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
 import Config from '../../services/config';
 import { fetchMyPlan } from '../../redex/slices/plansSlice';
-import { badgeTextColor, useBadgePlacements } from '../../services/badgeConfig';
+import { useBadgePlacements } from '../../services/badgeConfig';
+import PlanBadge from '../../components/PlanBadge';
 import { updateMyProfile, uploadProfilePhoto } from '../../services/profileSync';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
@@ -267,17 +268,7 @@ const ProfileScreen = ({ navigation }) => {
                     </TouchableOpacity>
                     <Text style={[styles.bigName, { color: txt }]} numberOfLines={1}>{user.name || 'Your name'}</Text>
                     {!!phone && <Text style={[styles.bigPhone, { color: sub }]}>{phone}</Text>}
-                    {!!myBadge?.profileLabel && placements.profile && (
-                        <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => navigation.navigate('Plans')}
-                            style={[styles.planPill, { backgroundColor: myBadge.color || '#0084ff' }]}
-                        >
-                            <Text style={[styles.planPillText, { color: badgeTextColor(myBadge.color || '#0084ff') }]} numberOfLines={1}>
-                                {myBadge.profileLabel}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
+                    {placements.profile && <PlanBadge badge={myBadge} onPress={() => navigation.navigate('Plans')} />}
                     <TouchableOpacity onPress={choosePhoto} disabled={photoBusy}>
                         <Text style={styles.changePhoto}>{photoBusy ? 'Uploading…' : 'Change photo'}</Text>
                     </TouchableOpacity>

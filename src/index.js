@@ -1,3 +1,5 @@
+// Sabse pehle: StatusBar.currentHeight ko asli inset se sahi karta hai (screens ke styles isse padhte hain)
+import './utils/statusBarInset';
 import { useContext, useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';

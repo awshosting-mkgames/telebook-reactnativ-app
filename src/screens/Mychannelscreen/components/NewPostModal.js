@@ -323,8 +323,12 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
                     onPress={() => { reset(); onClose(); }}
                 />
 
+                {/* Android par behavior='height' + centered sheet keyboard ke saath upar-neeche
+                    oscillate karta tha (image select hone par sheet lamba hota hai). Sheet ab
+                    screen ke upar anchor hai, isliye Android par avoid-view ki zarurat nahi. */}
                 <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    enabled={Platform.OS === 'ios'}
+                    behavior="padding"
                     style={styles.container}
                 >
                     <View style={styles.sheet}>
@@ -548,9 +552,10 @@ const getStyles = (isLight) => StyleSheet.create({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.6)',
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
         alignItems: 'center',
-        padding: 20,
+        paddingHorizontal: 20,
+        paddingTop: 60,
     },
     container: { width: '100%', alignItems: 'center' },
     sheet: {
@@ -579,6 +584,7 @@ const getStyles = (isLight) => StyleSheet.create({
         fontSize: 16,
         color: isLight ? '#111' : '#f5f5f5',
         minHeight: 120,
+        maxHeight: 180,
         backgroundColor: isLight ? '#fafafa' : '#22252b',
         textAlignVertical: 'top',
     },

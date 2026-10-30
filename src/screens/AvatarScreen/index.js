@@ -1,9 +1,10 @@
 import React, { useState, useContext } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, Image,
-    SafeAreaView, StatusBar, ScrollView, Alert,
+    StatusBar, ScrollView, Alert,
     ActivityIndicator, Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; // RN ka SafeAreaView Android par padding nahi deta
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';

@@ -131,3 +131,11 @@ export const useMediaDownload = (url, { auto = false } = {}) => {
 
     return { localUri, ready: !!localUri, checked, downloading, progress, failed, start };
 };
+
+// Clear All Data / logout par device me download ki hui chat media bhi hata do
+export const clearMediaCache = async () => {
+    known.clear();
+    inflight.clear();
+    dirReady = null;
+    try { await FileSystem.deleteAsync(DIR, { idempotent: true }); } catch (e) { /* already gone */ }
+};

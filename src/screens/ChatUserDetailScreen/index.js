@@ -15,7 +15,10 @@ import { apiErrorMessage, fetchBlockedUsers, setBlocked as setBlockedApi } from 
 import { syncAllTabData } from '../../services/chatSync';
 import Config from '../../services/config';
 import { contactSync } from '../../services/contactSync';
-import { useBadgePlacements, badgeTextColor } from '../../services/badgeConfig';
+import { saveUnknownContact } from '../../services/saveContactFlow';
+import { useBadgePlacements } from '../../services/badgeConfig';
+import PlanBadge from '../../components/PlanBadge';
+import { useNameResolver } from '../../services/nameResolver';
 import { APP_LINK_HOST } from '../../navigation/deepLinks';
 const BASE_URL = Config.Main_url;
 
@@ -236,12 +239,15 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
         }
     };
 
+    const resolveName = useNameResolver();
     // ── Derived Data ──────────────────────────────────────────────────────────
     const otherUser = chatInfo?.otherUser;
     const avatarUri = getImageUrl(otherUser?.profilePicture) || DEFAULT_AVATAR;
     const phone = formatPhone(otherUser?.mobile ?? '');
     // Null-name safety: name || mobile || 'User'
-    const displayName = otherUser?.name || phone || otherUser?.mobile || 'User';
+    // Saved contact naam title; unsaved => number title + profile naam chhote text me
+    const resolved = resolveName(otherUser);
+    const displayName = resolved.title;
     const planBadge = otherUser?.planBadge ?? fetchedBadge;
     const inviteCode = otherUser?.inviteCode || '';
     const inviteLink = inviteCode ? `https://${APP_LINK_HOST}/u/${inviteCode}` : '';
@@ -359,36 +365,18 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
         } catch (e) { /* user cancelled */ }
     };
 
-    // Phonebook me save: permission -> duplicate check (number se) -> addContactAsync
+    // Phonebook me save: device contact form number prefilled khulta hai, user naam bharta hai;
+    // save ke baad contactSync se naam poori app me badal jata hai (saveContactFlow.js)
     const handleSaveContact = async () => {
         const mobile = otherUser?.mobile;
         if (!mobile || savingContact) return;
         setSavingContact(true);
         try {
-            const { status } = await Contacts.requestPermissionsAsync();
-            if (status !== 'granted') {
-                showToast('Contacts permission is needed');
-                return;
-            }
-            const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] });
-            const target = last10(mobile);
-            const exists = (data || []).some((c) => (c.phoneNumbers || []).some((p) => last10(p.number) === target));
-            if (exists) {
-                showToast('Contact already saved');
-                return;
-            }
-            const nm = otherUser?.name || String(mobile);
-            await Contacts.addContactAsync({
-                contactType: Contacts.ContactTypes.Person,
-                name: nm,
-                firstName: nm,
-                phoneNumbers: [{ label: 'mobile', number: String(mobile) }],
-            });
-            showToast('Contact saved');
-            // Chat list title naye saved naam se badle — background me, UI block nahi
-            contactSync(dispatch, { silent: true }).catch(() => {});
-        } catch (e) {
-            showToast('Could not save contact');
+            const r = await saveUnknownContact({ mobile, dispatch });
+            if (r === 'denied') showToast('Contacts permission is needed');
+            else if (r === 'exists') showToast('Contact already saved');
+            else if (r === 'saved') showToast('Contact saved');
+            else if (r === 'error') showToast('Could not save contact');
         } finally {
             setSavingContact(false);
         }
@@ -444,17 +432,10 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                         <Ionicons name="call-outline" size={13} color="#0084ff" />
                         <Text style={[styles.phoneText, { color: sub }]}>{phone || 'No number'}</Text>
                     </View>
-                    {!!planBadge?.profileLabel && placements.profile && (
-                        <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => navigation.navigate('Plans')}
-                            style={[styles.planPill, { backgroundColor: planBadge.color || accent }]}
-                        >
-                            <Text style={[styles.planPillText, { color: badgeTextColor(planBadge.color || accent) }]} numberOfLines={1}>
-                                {planBadge.profileLabel}
-                            </Text>
-                        </TouchableOpacity>
+                    {!resolved.isSaved && !!resolved.subtitle && (
+                        <Text style={{ color: sub, fontSize: 12, textAlign: 'center', marginTop: 2 }}>{resolved.subtitle}</Text>
                     )}
+                    {placements.profile && <PlanBadge badge={planBadge} fallbackColor={accent} onPress={() => navigation.navigate('Plans')} />}
                     {otherUser?.isOnline ? (
                         <View style={styles.onlineBadge}>
                             <View style={styles.onlinePulse} />
@@ -693,7 +674,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                                                     </View>
                                                     {!!item?.sender?.name && (
                                                         <Text style={[styles.docSender, { color: '#0084ff' }]} numberOfLines={1}>
-                                                            {item.sender.name}
+                                                            {resolveName(item.sender).title}
                                                         </Text>
                                                     )}
                                                 </View>
@@ -736,7 +717,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                                                     </View>
                                                     {!!item?.sender?.name && (
                                                         <Text style={[styles.docSender, { color: '#27ae60' }]} numberOfLines={1}>
-                                                            {item.sender.name}
+                                                            {resolveName(item.sender).title}
                                                         </Text>
                                                     )}
                                                 </View>
@@ -881,7 +862,7 @@ const styles = StyleSheet.create({
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     loadingText: { marginTop: 12, fontSize: 15 },
 
-    header: { height: 90, backgroundColor: '#0084ff', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 22 },
+    header: { minHeight: 90, backgroundColor: '#0084ff', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 22 },
     backBtn: { marginRight: 12, padding: 2 },
     headerTitle: { flex: 1, color: '#fff', fontSize: 20, fontWeight: '700' },
     moreBtn: { padding: 4 },

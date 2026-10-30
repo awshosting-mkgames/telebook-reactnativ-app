@@ -6,9 +6,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
+import { handlePlanLimit } from '../../../services/planLimit';
+import { useNavigation } from '@react-navigation/native';
 import apiService from '../../../services/apiService';
 
 const AddMemberModal = ({ visible, onClose, chatId, existingMemberIds, onAdded }) => {
+    const navigation = useNavigation();
     const allContacts = useSelector((state) => state.contacts?.contacts ?? []);
 
     const [searchText,       setSearchText]       = useState('');
@@ -50,8 +53,10 @@ const AddMemberModal = ({ visible, onClose, chatId, existingMemberIds, onAdded }
                 setSearchText('');
                 onAdded?.();
                 onClose();
+            } else if (handlePlanLimit(res, navigation)) {
+                // Upgrade alert dikha diya
             } else {
-                Alert.alert('Error', res?.message || 'Member add nahi hua');
+                Alert.alert('Error', res?.error?.message || res?.message || 'Member add nahi hua');
             }
         } catch (e) {
             Alert.alert('Error', e.message);

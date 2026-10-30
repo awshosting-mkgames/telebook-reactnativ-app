@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
@@ -104,6 +104,8 @@ const MessageList = ({
     const isLoadingMoreRef = useRef(false);
     const prevFirstIdRef = useRef(messages[0]?._id);  // ✅ newest msg id se detect karo, length se nahi
     const didInitialScroll = useRef(false);
+    const scrollTimerRef = useRef(null);
+    useEffect(() => () => clearTimeout(scrollTimerRef.current), []);
     const pendingScrollIdRef = useRef(null);     // ✅ reply-scroll ke liye (agar msg abhi load nahi hua)
 
 
@@ -111,8 +113,8 @@ const MessageList = ({
         const offsetY = event.nativeEvent.contentOffset.y;
         const atBottom = offsetY <= 30;
         isAtBottomRef.current = atBottom;
-        setShowScrollDown(!atBottom);
-        if (atBottom) setNewMsgCount(0);
+        setShowScrollDown((v) => (v === !atBottom ? v : !atBottom));
+        if (atBottom) setNewMsgCount((c) => (c === 0 ? c : 0));
     };
 
     const scrollToBottom = (animated = true) => {
@@ -136,8 +138,10 @@ const MessageList = ({
             newest?.sender?._id === MY_USER_ID || newest?.sender === MY_USER_ID;
 
         if (isMine || isAtBottomRef.current) {
-            // requestAnimationFrame → web pe bhi reliably chalega
-            requestAnimationFrame(() => scrollToBottom(true));
+            // 10 images ek saath bhejne par har bubble par alag animated scroll chalta tha
+            // (ooper-neeche jhatke). Burst ko ek hi (bina animation) scroll me coalesce karo.
+            clearTimeout(scrollTimerRef.current);
+            scrollTimerRef.current = setTimeout(() => scrollToBottom(false), 60);
         } else {
             // user upar padh raha hai → scroll mat karo, badge dikhao
             setNewMsgCount((c) => c + 1);
@@ -288,7 +292,9 @@ const MessageList = ({
         [highlightedMsgId, isSelectMode, selectedMsgIds, theme, messages, matchIdSet, onSelectMsg, onReactionPress, openPopup, retryMessage, onCancelUpload, MY_USER_ID, isGroup],
     );
 
-    const ListFooterComponent = () => {
+    // Inline component har render naya type banata tha -> footer remount + layout jhatka (flicker).
+    // Ab memoized element hai.
+    const listFooter = useMemo(() => {
         if (loadingMore) {
             return (
                 <View style={styles.loadMoreWrap}>
@@ -312,7 +318,7 @@ const MessageList = ({
             );
         }
         return null;
-    };
+    }, [loadingMore, hasMore, onLoadMore]);
 
     // Full-screen blocking spinner sirf tab jab dikhane ke liye kuch bhi nahi
     // hai (asli pehli load). Agar cache/pehle se fetched messages maujood
@@ -350,7 +356,11 @@ const MessageList = ({
                 onScrollToIndexFailed={onScrollToIndexFailed}
                 onEndReached={handleEndReached}
                 onEndReachedThreshold={0.2}
-                ListFooterComponent={ListFooterComponent}
+                ListFooterComponent={listFooter}
+                maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 10 }}
+                initialNumToRender={15}
+                windowSize={9}
+                maxToRenderPerBatch={8}
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={

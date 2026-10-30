@@ -13,8 +13,6 @@ import { WebView } from 'react-native-webview';
 import { getUiColors, PRIMARY } from '../utils/uiColors';
 import { ThemeContext } from './ThemeContext';
 
-// About us / Privacy Policy / Terms — teeno same layout: blue header + WebView.
-// Screen statusBarTranslucent hai, isliye header ko status bar ki height khud deni padti hai.
 export default function WebPageScreen({ navigation, title, url }) {
     const { theme } = useContext(ThemeContext);
     const c = getUiColors(theme);

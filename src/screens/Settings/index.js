@@ -29,6 +29,7 @@ import { settotalappData } from '../../redex/slices/totalappDataSlice';
 import apiService from '../../services/apiService';
 import { syncAllTabData } from '../../services/chatSync';
 import { clearChatsDb } from '../../services/chatsDb';
+import { clearMediaCache } from '../../utils/mediaCache';
 import Config from '../../services/config';
 import { logoutUser } from '../../services/Logoutcall';
 import { clearMessagesDb } from '../../services/messagesDb';
@@ -117,7 +118,7 @@ const Section = ({ label, children, colors }) => (
 // ── Screen ───────────────────────────────────────────────────────────────────
 export default function Settings({ navigation }) {
     const { t } = useTranslation();
-    const { theme, toggleTheme } = useContext(ThemeContext);
+    const { theme, toggleTheme, fontSize, setFontSize } = useContext(ThemeContext);
     const dispatch = useDispatch();
     const maniAllData = useSelector((state) => state.totalappData);
     const user = maniAllData?.user || {};
@@ -199,6 +200,7 @@ export default function Settings({ navigation }) {
             if (CLEAR_ALL_SCOPE !== 'calls') {
                 await clearChatsDb();
                 await clearMessagesDb();
+                await clearMediaCache();
                 dispatch(clearChatList());
                 if (user?._id) await syncAllTabData(dispatch, user._id);
             }
@@ -261,6 +263,7 @@ export default function Settings({ navigation }) {
 
                 <Section label="APP" colors={colors}>
                     <Item icon={isDark ? 'moon-outline' : 'sunny-outline'} color="#e67e22" title="Theme" subtitle={isDark ? 'Dark' : 'Light'} onPress={() => setSheet('theme')} colors={colors} />
+                    <Item icon="text-outline" color="#2c3e50" title="Font size" subtitle={({ small: 'Small', medium: 'Medium', large: 'Large' })[fontSize] || 'Medium'} onPress={() => setSheet('font')} colors={colors} />
                     <Item icon="globe-outline" color="#1abc9c" title={t('Language')} subtitle={currentLangLabel} onPress={() => setSheet('lang')} colors={colors} />
                     <Item icon="megaphone-outline" color="#27ae60" title="Broadcast Lists" subtitle="Send one message to many" onPress={() => navigation.navigate('MyBroadcastList')} colors={colors} />
                     <Item icon="card-outline" color="#9b59b6" title="Plans / Subscription" subtitle="View your plan and usage" onPress={() => navigation.navigate('Plans')} colors={colors} />
@@ -311,6 +314,22 @@ export default function Settings({ navigation }) {
                         );
                     })}
                 </View>
+            </Sheet>
+
+            {/* Font size */}
+            <Sheet visible={sheet === 'font'} onClose={close} title="Font size" colors={colors}>
+                {[['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']].map(([key, label]) => (
+                    <TouchableOpacity
+                        key={key}
+                        style={[styles.optionRow, fontSize === key && { backgroundColor: colors.selected }]}
+                        onPress={() => { setFontSize(key); close(); }}
+                    >
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.optionLabel, { color: colors.txt }]}>{label}</Text>
+                        </View>
+                        {fontSize === key && <Ionicons name="checkmark-circle" size={22} color="#0084ff" />}
+                    </TouchableOpacity>
+                ))}
             </Sheet>
 
             {/* Language */}

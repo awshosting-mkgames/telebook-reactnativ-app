@@ -3,6 +3,7 @@ import { useContext, useState } from 'react';
 import {
     ActivityIndicator,
     SafeAreaView,
+    Platform,
     StatusBar,
     StyleSheet,
     Text,
@@ -58,6 +59,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#1296f3',
         paddingHorizontal: 12,
         paddingVertical: 14,
+        paddingTop: (Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0) + 14,
         gap: 14,
     },
     backBtn: { padding: 4 },

@@ -21,7 +21,9 @@ const ANDROID_CHANNEL_ID = 'default_channel';
 // Alag channel — regular message notifications se importance/sound/vibration
 // alag honi chahiye (ringtone jaisa), aur channel settings pehli baar banne
 // ke baad badal nahi sakti isliye shuru se hi apna id.
-const CALL_CHANNEL_ID = 'incoming_calls';
+// v2: purane 'incoming_calls' channel ki sound (default notification tune) badal nahi sakti — naya id.
+const CALL_CHANNEL_ID = 'incoming_calls_v2';
+const OLD_CALL_CHANNEL_ID = 'incoming_calls';
 
 // Part1 #16 — sound/vibration user setting ke hisaab se alag channels. Android
 // mein channel ki sound/vibration banne ke baad badal nahi sakti, isliye har
@@ -117,16 +119,19 @@ export async function setupAndroidChannel() {
 export async function setupCallChannel() {
     if (Platform.OS !== 'android') return;
     try {
+        try { await notifee.deleteChannel(OLD_CALL_CHANNEL_ID); } catch (e) { /* pehle se nahi hai */ }
         await notifee.createChannel({
             id: CALL_CHANNEL_ID,
             name: 'Incoming calls',
             importance: AndroidImportance.HIGH,
-            sound: 'default',
+            // res/raw/ringtone.wav (expo-notifications plugin `sounds` se copy hota hai) — in-app
+            // ringtone (assets/sounds/ringtone.wav) jaisi hi, taaki dono jagah ek hi tune baje.
+            sound: 'ringtone',
             vibration: true,
-            // notifee reject karta hai agar pattern ka pehla value 0/non-positive
-            // ho ('channel.vibrationPattern' validation) — isliye [0,...] nahi,
-            // saare values > 0 hone chahiye.
-            vibrationPattern: [1000, 500, 1000, 500],
+            // notifee reject karta hai agar pattern ka pehla value 0/non-positive ho;
+            // in-app vibration (ringtoneModule CALL_VIBE_PATTERN: 0.8s buzz / 1.2s pause) jaisa hi
+            // pattern, bas shuru me 1ms.
+            vibrationPattern: [1, 800, 1200, 800, 1200, 800, 1200, 800, 1200, 800, 1200, 800, 1200],
             visibility: AndroidVisibility.PUBLIC,
         });
     } catch (e) {

@@ -24,10 +24,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
+import { handlePlanLimit } from '../../services/planLimit';
 import apiService from '../../services/apiService';
 import Config from '../../services/config';
 import Images from '../../utils/images';
 import { appendFile } from '../../utils/uploadFile';
+import { useNameResolver } from '../../services/nameResolver';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -65,6 +67,7 @@ export default function BroadcastDetails({ route, navigation }) {
     const { broadcastId } = route.params;
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const resolveName = useNameResolver();
     const isDark = theme.mode !== 'light';
     const insets = useSafeAreaInsets();
 
@@ -106,7 +109,10 @@ export default function BroadcastDetails({ route, navigation }) {
                 apiService({ method: 'GET', endpoint: `broadcasts/${broadcastId}/messages` }),
             ]);
             setBroadcast(bcRes?.data?.broadcast ?? null);
-            setMessages(msgRes?.data?.messages ?? []);
+            // Server newest-first deta hai; chat jaisa: purane upar, naye neeche
+            const list = [...(msgRes?.data?.messages ?? [])];
+            list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+            setMessages(list);
         } catch (e) {
             console.error('fetchDetails:', e);
         } finally {
@@ -233,14 +239,8 @@ export default function BroadcastDetails({ route, navigation }) {
             setShowAddMember(false);
             setSelectedNew([]);
             fetchDetails();
-        } else if (res?.error?.code === 'PLAN_LIMIT') {
-            // Part 3 §3.4e: per-broadcast users ki limit — Upgrade ka rasta do
-            Alert.alert('Plan Limit Reached', ['Plan Limit Reached – Upgrade your plan to continue.', res.error.message].filter(Boolean).join('\n'), [
-                { text: 'Upgrade Plan', onPress: () => navigation.navigate('Plans') },
-                { text: 'Cancel', style: 'cancel' },
-            ]);
-        } else if (res && res.success === false) {
-            Alert.alert('Error', res?.error?.message || 'Could not add recipients');
+        } else if (handlePlanLimit(res, navigation)) {
+            // Upgrade alert dikha diya
         }
     };
 
@@ -345,9 +345,9 @@ export default function BroadcastDetails({ route, navigation }) {
         <View style={[styles.memberRow, { borderBottomColor: colors.border }]}>
             <Avatar uri={appUserAvatar(item)} name={item.name ?? ''} size={44} />
             <View style={styles.memberInfo}>
-                <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+                <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>{resolveName(item).title}</Text>
                 <Text style={[styles.memberPhone, { color: colors.subText }]} numberOfLines={1}>
-                    {item.mobile ? `+91 ${item.mobile}` : ''}
+                    {resolveName(item).isSaved ? (item.mobile ? `+91 ${item.mobile}` : '') : resolveName(item).subtitle}
                 </Text>
             </View>
             <TouchableOpacity
@@ -454,6 +454,7 @@ export default function BroadcastDetails({ route, navigation }) {
                             data={messages}
                             keyExtractor={(item) => item._id}
                             renderItem={renderMessage}
+                            onContentSizeChange={() => flatRef.current?.scrollToEnd({ animated: false })}
                             contentContainerStyle={styles.msgListContent}
                             keyboardShouldPersistTaps="handled"
                             keyboardDismissMode="on-drag"

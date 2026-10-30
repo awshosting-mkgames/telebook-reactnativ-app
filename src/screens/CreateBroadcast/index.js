@@ -19,6 +19,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { handlePlanLimit } from '../../services/planLimit';
 import apiService from '../../services/apiService';
 import { ThemeContext } from '../../components/ThemeContext';
 import Config from '../../services/config';
@@ -117,11 +118,7 @@ const CreateBroadcast = ({ navigation, route }) => {
             console.log("response________", response)
             if (response.success === true) {
                 navigation.navigate('MyBroadcastList')
-            } else if (response?.error?.code === 'PLAN_LIMIT') {
-                Alert.alert('Plan Limit Reached', ['Plan Limit Reached – Upgrade your plan to continue.', response.error.message].filter(Boolean).join('\n'), [
-                    { text: 'Upgrade Plan', onPress: () => navigation.navigate('Plans') },
-                    { text: 'Cancel', style: 'cancel' },
-                ]);
+            } else if (handlePlanLimit(response, navigation)) {
             } else {
                 Alert.alert('Error', response?.error?.message || 'Something went wrong! try again');
             }

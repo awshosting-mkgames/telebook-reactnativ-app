@@ -39,3 +39,13 @@ export const isSwitching = (callId) => switching.has(String(callId));
 let remoteHold = {}; // callId -> bool
 export const setRemoteHold = (callId, v) => { remoteHold = { ...remoteHold, [callId]: !!v }; emit(); };
 export const isRemoteHeld = (callId) => !!remoteHold[callId];
+
+// ── Recharge popup (coins khatam hone par call kat'ti hai) ──────────────────────
+// Call screen kisi bhi page par ho sakti hai (ya band), isliye popup ek global listener
+// (ActiveCallBar) dikhata hai; InCallScreen / ActiveCallBar dono yahi trigger karte hain.
+let rechargeVisible = false;
+const rechargeSubs = new Set();
+export const isRechargePromptVisible = () => rechargeVisible;
+export const showRechargePrompt = () => { rechargeVisible = true; rechargeSubs.forEach((fn) => fn(true)); };
+export const hideRechargePrompt = () => { rechargeVisible = false; rechargeSubs.forEach((fn) => fn(false)); };
+export const subscribeRechargePrompt = (fn) => { rechargeSubs.add(fn); return () => rechargeSubs.delete(fn); };

@@ -63,6 +63,22 @@
           "action": "VIEW",
           "data": [
             {
+              "scheme": "https",
+              "host": "api.telebookservices.com",
+              "pathPrefix": "/u/"
+            },
+            {
+              "scheme": "https",
+              "host": "api.telebookservices.com",
+              "pathPrefix": "/c/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
               "scheme": "telebook",
               "host": "u"
             },
@@ -106,7 +122,15 @@
           "isAccessMediaLocationEnabled": true
         }
       ],
-      "expo-notifications",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Telebook to use the camera to take photos and videos.",
+          "microphonePermission": "Allow Telebook to record audio with videos.",
+          "recordAudioAndroid": true
+        }
+      ],
+      ["expo-notifications", { "sounds": ["./assets/sounds/ringtone.wav"] }],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "@react-native-firebase/messaging",
@@ -115,7 +139,8 @@
       "expo-sqlite",
       "./plugins/withAdiRegistration",
       "./plugins/withRemoveForegroundPermissions",
-      "./plugins/withRingtoneModule"
+      "./plugins/withRingtoneModule",
+      "./plugins/withPictureInPicture"
     ],
     "owner": "ambujexpo25",
     "scheme": "telebook",
