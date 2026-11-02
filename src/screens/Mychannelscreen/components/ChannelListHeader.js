@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { ThemeContext } from '../../../components/ThemeContext';
+import GradientFill from '../../../components/GradientFill';
 import Config from '../../../services/config';
 
 const getImg = (path) => {
@@ -30,7 +31,8 @@ export default function ChannelListHeader({
     const { theme } = useContext(ThemeContext);
     const isLight = theme?.mode === 'light';
     const hdr = theme?.header || '#1199ff';
-    const styles = getStyles(isLight, hdr);
+    const accent = theme?.main || '#1296f3';
+    const styles = getStyles(isLight, hdr, accent);
 
     const channelName = channel?.channelName || channel?.name || 'My Channel';
     const iconUrl = getImg(channel?.channelIcon || channel?.avatar);
@@ -42,7 +44,8 @@ export default function ChannelListHeader({
         <View style={styles.headerBlock}>
 
             {/* Blue Banner */}
-            <View style={[styles.banner, { backgroundColor: hdr }]}>
+            <View style={[styles.banner, { backgroundColor: hdr, overflow: 'hidden' }]}>
+                <GradientFill />
                 <TouchableOpacity style={styles.backBtn} onPress={onBack}>
                     <Ionicons name="arrow-back" size={20} color="#fff" />
                 </TouchableOpacity>
@@ -75,7 +78,7 @@ export default function ChannelListHeader({
                     {iconUrl
                         ? <Image source={{ uri: iconUrl }} style={styles.channelIcon} />
                         : <View style={[styles.channelIcon, styles.iconFb]}>
-                            <Ionicons name="megaphone" size={32} color="#1296f3" />
+                            <Ionicons name="megaphone" size={32} color={accent} />
                         </View>
                     }
                     <TouchableOpacity style={styles.camBadge} onPress={onEdit}>
@@ -104,7 +107,7 @@ export default function ChannelListHeader({
                     style={[styles.tab, activeTab === 'posts' && styles.tabActive]}
                     onPress={() => setActiveTab('posts')}
                 >
-                    <Ionicons name="albums-outline" size={16} color={activeTab === 'posts' ? '#1296f3' : (isLight ? '#aaa' : '#6b6f76')} />
+                    <Ionicons name="albums-outline" size={16} color={activeTab === 'posts' ? accent : (isLight ? '#aaa' : '#6b6f76')} />
                     <Text style={[styles.tabTxt, activeTab === 'posts' && styles.tabTxtActive]}>
                         Posts ({postCount})
                     </Text>
@@ -114,7 +117,7 @@ export default function ChannelListHeader({
                     style={[styles.tab, activeTab === 'subscribers' && styles.tabActive]}
                     onPress={() => setActiveTab('subscribers')}
                 >
-                    <Ionicons name="people-outline" size={16} color={activeTab === 'subscribers' ? '#1296f3' : (isLight ? '#aaa' : '#6b6f76')} />
+                    <Ionicons name="people-outline" size={16} color={activeTab === 'subscribers' ? accent : (isLight ? '#aaa' : '#6b6f76')} />
                     <Text style={[styles.tabTxt, activeTab === 'subscribers' && styles.tabTxtActive]}>
                         Subscribers ({fmtCount(subCount)})
                     </Text>
@@ -129,7 +132,7 @@ export default function ChannelListHeader({
     );
 }
 
-const getStyles = (isLight, hdr = '#1199ff') => StyleSheet.create({
+const getStyles = (isLight, hdr = '#1199ff', accent = '#1296f3') => StyleSheet.create({
     headerBlock: { backgroundColor: isLight ? '#fff' : '#1a1d23', marginBottom: 10 },
 
     banner: { height: 170, backgroundColor: hdr, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 44 },
@@ -155,7 +158,7 @@ const getStyles = (isLight, hdr = '#1199ff') => StyleSheet.create({
     iconOuter: { position: 'absolute', bottom: -36 },
     channelIcon: { width: 80, height: 80, borderRadius: 40, borderWidth: 4, borderColor: isLight ? '#fff' : '#1a1d23', backgroundColor: '#e8f4fd' },
     iconFb: { alignItems: 'center', justifyContent: 'center' },
-    camBadge: { position: 'absolute', bottom: 2, right: 2, backgroundColor: '#1296f3', width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isLight ? '#fff' : '#1a1d23' },
+    camBadge: { position: 'absolute', bottom: 2, right: 2, backgroundColor: accent, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isLight ? '#fff' : '#1a1d23' },
 
     infoArea: { alignItems: 'center', paddingTop: 48, paddingBottom: 16, paddingHorizontal: 20 },
     channelName: { fontSize: 20, fontWeight: '800', color: isLight ? '#111' : '#f5f5f5', textAlign: 'center', marginBottom: 6 },
@@ -167,13 +170,13 @@ const getStyles = (isLight, hdr = '#1199ff') => StyleSheet.create({
     statLbl: { fontSize: 12, color: isLight ? '#aaa' : '#8a8f96', fontWeight: '500' },
     statSep: { width: 1, height: 36, backgroundColor: isLight ? '#e0e0e0' : '#2a2d33' },
 
-    newPostBtn: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: hdr, paddingVertical: 13, borderRadius: 14, elevation: 3, shadowColor: '#1296f3', shadowOpacity: 0.3, shadowRadius: 6, marginTop: 20 },
+    newPostBtn: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: hdr, paddingVertical: 13, borderRadius: 14, elevation: 3, shadowColor: accent, shadowOpacity: 0.3, shadowRadius: 6, marginTop: 20 },
     newPostTxt: { color: '#fff', fontWeight: '800', fontSize: 15 },
 
     tabsRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: isLight ? '#f0f0f0' : '#2a2d33', marginTop: 10 },
     tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14 },
     tabTxt: { fontSize: 14, fontWeight: '600', color: isLight ? '#bbb' : '#6b6f76' },
-    tabTxtActive: { color: '#1296f3' },
+    tabTxtActive: { color: accent },
     indicatorTrack: { height: 2.5, backgroundColor: isLight ? '#f0f0f0' : '#2a2d33' },
-    indicator: { width: '50%', height: '100%', backgroundColor: '#1296f3', borderRadius: 2 },
+    indicator: { width: '50%', height: '100%', backgroundColor: accent, borderRadius: 2 },
 });

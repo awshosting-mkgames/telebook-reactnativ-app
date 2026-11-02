@@ -287,7 +287,7 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
     const sheetConfig = {
         photo: {
             title: 'Photo',
-            color: '#1296f3',
+            color: theme.main,
             options: [
                 { label: 'Camera', icon: 'camera-outline', onPress: takePhoto, disabled: !!recordedAudio },
                 { label: 'Gallery', icon: 'images-outline', onPress: pickPhoto, disabled: !!recordedAudio },
@@ -312,7 +312,7 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
     };
 
     return (
-        <Modal
+        <Modal statusBarTranslucent
             visible={visible}
             animationType="fade"
             transparent
@@ -342,7 +342,7 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
                             </TouchableOpacity>
                             <Text style={styles.title}>New Post</Text>
                             <TouchableOpacity
-                                style={[styles.postBtn, sending && { opacity: 0.6 }]}
+                                style={[styles.postBtn, { backgroundColor: theme.main }, sending && { opacity: 0.6 }]}
                                 onPress={handlePost}
                                 disabled={sending}
                             >
@@ -425,15 +425,15 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
                             <TouchableOpacity
                                 style={[
                                     styles.actionBtn,
-                                    { borderColor: '#1296f3' },
+                                    { borderColor: theme.main },
                                     (sending || !!recordedAudio) && styles.disabledBtn,
                                 ]}
                                 onPress={() => setActiveSheet('photo')}
                                 disabled={sending || !!recordedAudio}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="image-outline" size={20} color="#1296f3" />
-                                <Text style={[styles.actionTxt, { color: '#1296f3' }]}>Photo</Text>
+                                <Ionicons name="image-outline" size={20} color={theme.main} />
+                                <Text style={[styles.actionTxt, { color: theme.main }]}>Photo</Text>
                             </TouchableOpacity>
 
                             {/* Video */}
@@ -488,7 +488,7 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
 
             {/* ── Action Sheet Modal ── */}
             {activeSheet && (
-                <Modal
+                <Modal statusBarTranslucent
                     visible={!!activeSheet}
                     transparent
                     animationType="slide"

@@ -1,9 +1,7 @@
 import { useCallback, useContext, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    Platform,
     RefreshControl,
-    SafeAreaView,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -11,6 +9,7 @@ import {
     View,
 } from 'react-native';
 import { useSelector } from 'react-redux';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
 import RecommendedChannels from './RecommendedChannels';
 import StatusSection from './StatusSection';
@@ -19,6 +18,7 @@ import GradientFill from '../../components/GradientFill';
 export default function Updates({ navigation }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
 
     const maniAllData = useSelector((state) => state.totalappData);
     const MY_USER_ID = maniAllData?.userId ?? '';
@@ -37,11 +37,11 @@ export default function Updates({ navigation }) {
     }, []);
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor={theme.header || '#1199ff'} barStyle="light-content" />
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff', paddingTop: insets.top, height: 56 + insets.top }]}>
                 <GradientFill />
                 <Text style={[styles.headerTitle, { color: theme.headerText || '#fff' }]}>{t('Updates')}</Text>
             </View>
@@ -50,7 +50,7 @@ export default function Updates({ navigation }) {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 120 }}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1296f3']} tintColor="#1296f3" />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.main]} tintColor={theme.main} />
                 }
             >
                 {/* Status Section (Status + Viewed Status) */}
@@ -66,17 +66,16 @@ export default function Updates({ navigation }) {
                     refreshSignal={statusRefreshSignal}
                 />
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        height: 90, backgroundColor: '#1296f3',
+        height: 90, backgroundColor: '#1296f3', overflow: 'hidden',
         flexDirection: 'row', alignItems: 'center',
         paddingHorizontal: 16,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     },
     headerTitle: { color: '#fff', fontSize: 19, fontWeight: '600' },
 });

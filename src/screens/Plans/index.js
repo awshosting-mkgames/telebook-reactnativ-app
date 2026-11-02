@@ -59,6 +59,8 @@ export default function Plans({ navigation }) {
 
     const isDark = theme?.mode === 'dark';
     const headerBg = theme?.header || '#1199ff';
+    const accent = theme?.main || '#0084ff';
+    const accentText = theme?.accentText || '#fff';
     const colors = {
         bg: isDark ? '#121212' : '#f2f4f7',
         card: isDark ? '#1e1e1e' : '#ffffff',
@@ -140,8 +142,8 @@ export default function Plans({ navigation }) {
                     </Text>
                 </View>
                 {!isUnlimited && (
-                    <View style={styles.usageBarBg}>
-                        <View style={[styles.usageBarFill, { width: `${pct}%`, backgroundColor: headerBg }]} />
+                    <View style={[styles.usageBarBg, { backgroundColor: accent + '22' }]}>
+                        <View style={[styles.usageBarFill, { width: `${pct}%`, backgroundColor: accent }]} />
                     </View>
                 )}
             </View>
@@ -163,7 +165,7 @@ export default function Plans({ navigation }) {
             </View>
 
             {(plansLoading || meLoading) && !plans.length ? (
-                <ActivityIndicator color="#0084ff" size="large" style={{ flex: 1 }} />
+                <ActivityIndicator color={accent} size="large" style={{ flex: 1 }} />
             ) : (
                 <FlatList
                     data={plans}
@@ -196,8 +198,8 @@ export default function Plans({ navigation }) {
                                 )}
 
                                 <TouchableOpacity style={styles.historyLink} onPress={() => navigation.navigate('PlanHistory')}>
-                                    <Text style={styles.historyLinkText}>View plan history</Text>
-                                    <Ionicons name="chevron-forward" size={14} color="#0084ff" />
+                                    <Text style={[styles.historyLinkText, { color: accent }]}>View plan history</Text>
+                                    <Ionicons name="chevron-forward" size={14} color={accent} />
                                 </TouchableOpacity>
                             </View>
 
@@ -291,17 +293,17 @@ export default function Plans({ navigation }) {
                                             <Text style={styles.ctaCurrentText}>Current plan</Text>
                                         </View>
                                         {buyActive && (
-                                            <TouchableOpacity style={styles.ctaBtn} onPress={() => onBuyPlan(plan)}>
-                                                <Text style={styles.ctaText}>Renew</Text>
+                                            <TouchableOpacity style={[styles.ctaBtn, { backgroundColor: accent }]} onPress={() => onBuyPlan(plan)}>
+                                                <Text style={[styles.ctaText, { color: accentText }]}>Renew</Text>
                                             </TouchableOpacity>
                                         )}
                                     </>
                                 ) : (
                                     <TouchableOpacity
-                                        style={[styles.ctaBtn, !buyActive && styles.ctaInfo]}
+                                        style={[styles.ctaBtn, { backgroundColor: accent }, !buyActive && [styles.ctaInfo, { backgroundColor: accent + '1A' }]]}
                                         onPress={() => onBuyPlan(plan)}
                                     >
-                                        <Text style={buyActive ? styles.ctaText : styles.ctaInfoText}>
+                                        <Text style={buyActive ? [styles.ctaText, { color: accentText }] : [styles.ctaInfoText, { color: accent }]}>
                                             {buyActive ? 'Upgrade' : 'Contact support'}
                                         </Text>
                                     </TouchableOpacity>

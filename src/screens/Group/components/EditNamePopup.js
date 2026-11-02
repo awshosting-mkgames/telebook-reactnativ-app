@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { ThemeContext } from '../../../components/ThemeContext';
 import {
     Modal, View, Text, TextInput, TouchableOpacity,
     StyleSheet, ActivityIndicator, Alert, Pressable,
 } from 'react-native';
 
 const EditNamePopup = ({ visible, currentName, onClose, onSave }) => {
+    const { theme } = useContext(ThemeContext);
     const [name,   setName]   = useState(currentName || '');
     const [saving, setSaving] = useState(false);
 
@@ -20,7 +22,7 @@ const EditNamePopup = ({ visible, currentName, onClose, onSave }) => {
     };
 
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+        <Modal statusBarTranslucent visible={visible} transparent animationType="fade" onRequestClose={onClose}>
             <Pressable style={styles.overlay} onPress={onClose}>
                 <Pressable style={styles.box} onPress={() => {}}>
                     <Text style={styles.title}>Group Name Edit Karo</Text>
@@ -40,7 +42,7 @@ const EditNamePopup = ({ visible, currentName, onClose, onSave }) => {
                         <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
                             <Text style={styles.cancelTxt}>Cancel</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
+                        <TouchableOpacity style={[styles.saveBtn, { backgroundColor: theme.main || '#3498db' }]} onPress={handleSave} disabled={saving}>
                             {saving
                                 ? <ActivityIndicator size="small" color="#fff" />
                                 : <Text style={styles.saveTxt}>Save</Text>}

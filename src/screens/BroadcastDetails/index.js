@@ -99,7 +99,7 @@ export default function BroadcastDetails({ route, navigation }) {
         inputBg: theme.inputBackground,
         msgBubbleBg: theme.bubbleMine ?? (isDark ? '#1f3a52' : '#d9efff'), // ek hi token — Chat jaisa
         msgText: isDark ? '#e9edef' : '#111111',
-        accent: '#1296f3',
+        accent: theme.main || '#1296f3',
     };
 
     const fetchDetails = useCallback(async () => {
@@ -316,7 +316,7 @@ export default function BroadcastDetails({ route, navigation }) {
 
                 {item.messageType === 'document' && item.attachments?.map((a, i) => (
                     <View key={i} style={[styles.docRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}>
-                        <View style={styles.docIcon}>
+                        <View style={[styles.docIcon, { backgroundColor: colors.accent }]}>
                             <Ionicons name="document-text" size={18} color="#fff" />
                         </View>
                         <Text style={[styles.docName, { color: colors.msgText }]} numberOfLines={1}>
@@ -333,7 +333,7 @@ export default function BroadcastDetails({ route, navigation }) {
                 <View style={styles.msgFooter}>
                     <Text style={[styles.msgTime, { color: colors.subText }]}>{fmtTime(item.createdAt)}</Text>
                     <View style={[styles.statPill, { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)' }]}>
-                        <Ionicons name="checkmark-done" size={12} color={colors.accent} />
+                        <Ionicons name="checkmark-done" size={12} color="#1296f3" />
                         <Text style={[styles.statNum, { color: colors.subText }]}>{delivered}</Text>
                         <Ionicons name="chevron-forward" size={11} color={colors.subText} />
                     </View>
@@ -364,7 +364,7 @@ export default function BroadcastDetails({ route, navigation }) {
     // ── Header har state me same rehta hai (loading me bhi) ─────────────────
     const headerBg = theme.header ?? '#1296f3';
     const Header = () => (
-        <View style={[styles.header, { backgroundColor: headerBg }]}>
+        <View style={[styles.header, { backgroundColor: headerBg, height: Math.max(90, 56 + insets.top), paddingTop: insets.top, overflow: 'hidden' }]}>
             <GradientFill />
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn} hitSlop={HIT}>
                 <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
@@ -508,7 +508,7 @@ export default function BroadcastDetails({ route, navigation }) {
                         </View>
 
                         <TouchableOpacity
-                            style={[styles.sendBtn, (!inputText.trim() || sending) && { opacity: 0.5 }]}
+                            style={[styles.sendBtn, { backgroundColor: colors.accent }, (!inputText.trim() || sending) && { opacity: 0.5 }]}
                             onPress={() => sendMessage({ content: inputText, msgType: 'text' })}
                             disabled={!inputText.trim() || sending}
                         >
@@ -528,7 +528,7 @@ export default function BroadcastDetails({ route, navigation }) {
                         onPress={() => setShowAddMember(true)}
                         activeOpacity={0.7}
                     >
-                        <View style={styles.addMemberIcon}>
+                        <View style={[styles.addMemberIcon, { backgroundColor: colors.accent }]}>
                             <Ionicons name="person-add" size={18} color="#FFFFFF" />
                         </View>
                         <Text style={[styles.addMemberText, { color: colors.accent }]}>Add recipients</Text>
@@ -563,7 +563,7 @@ export default function BroadcastDetails({ route, navigation }) {
             )}
 
             {/* OPTIONS — header ke neeche right corner me, Chat screen jaisa */}
-            <Modal visible={showOptions} transparent animationType="fade" onRequestClose={() => setShowOptions(false)}>
+            <Modal statusBarTranslucent visible={showOptions} transparent animationType="fade" onRequestClose={() => setShowOptions(false)}>
                 <Pressable style={styles.menuOverlay} onPress={() => setShowOptions(false)}>
                     <View style={[styles.menuBox, { backgroundColor: colors.cardBg }]}>
                         <TouchableOpacity
@@ -588,7 +588,7 @@ export default function BroadcastDetails({ route, navigation }) {
             </Modal>
 
             {/* ADD RECIPIENTS SHEET */}
-            <Modal visible={showAddMember} transparent animationType="slide" onRequestClose={() => setShowAddMember(false)}>
+            <Modal statusBarTranslucent visible={showAddMember} transparent animationType="slide" onRequestClose={() => setShowAddMember(false)}>
                 <KeyboardAvoidingView
                     style={{ flex: 1 }}
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -653,7 +653,7 @@ export default function BroadcastDetails({ route, navigation }) {
                                             <View style={[
                                                 styles.checkbox,
                                                 { borderColor: isSelected ? colors.accent : colors.border },
-                                                isSelected && styles.checkboxActive,
+                                                isSelected && [styles.checkboxActive, { backgroundColor: colors.accent, borderColor: colors.accent }],
                                             ]}>
                                                 {isSelected && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
                                             </View>
@@ -670,7 +670,7 @@ export default function BroadcastDetails({ route, navigation }) {
                             />
 
                             <TouchableOpacity
-                                style={[styles.submitBtn, !selectedNew.length && { opacity: 0.45 }]}
+                                style={[styles.submitBtn, { backgroundColor: colors.accent }, !selectedNew.length && { opacity: 0.45 }]}
                                 onPress={addMembers}
                                 disabled={!selectedNew.length}
                                 activeOpacity={0.85}

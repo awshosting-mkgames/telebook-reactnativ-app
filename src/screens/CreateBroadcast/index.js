@@ -17,10 +17,13 @@ import {
     Pressable,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useDispatch, useSelector } from 'react-redux';
+import { syncAllTabData } from '../../services/chatSync';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { handlePlanLimit } from '../../services/planLimit';
 import apiService from '../../services/apiService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
 import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
@@ -31,10 +34,13 @@ const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
 
 const CreateBroadcast = ({ navigation, route }) => {
+    const dispatch = useDispatch();
+    const myUserId = useSelector((state) => state.totalappData?.userId ?? null);
     const members = route?.params?.members || [];
     const createType = route?.params?.createType || 'Group';
 
     const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
     const isDark = theme.mode === 'dark';
 
     const [groupName, setGroupName] = useState('');
@@ -118,6 +124,7 @@ const CreateBroadcast = ({ navigation, route }) => {
             });
             console.log("response________", response)
             if (response.success === true) {
+                if (myUserId) await syncAllTabData(dispatch, myUserId, { background: true });
                 navigation.navigate('MyBroadcastList')
             } else if (handlePlanLimit(response, navigation)) {
             } else {
@@ -139,7 +146,7 @@ const CreateBroadcast = ({ navigation, route }) => {
                     uri: item?.appUser?.profilePicture ? Config.MEDIA_URL + item?.appUser?.profilePicture :
                         'https://cdn-icons-png.flaticon.com/512/149/149071.png',
                 }}
-                style={[styles.memberChipAvatar, { borderColor: theme.primary || '#4491f2' }]}
+                style={[styles.memberChipAvatar, { borderColor: theme.main || '#4491f2' }]}
             />
             <Text style={[styles.memberChipName, { color: theme.text }]} numberOfLines={1}>
                 {(item.name || item.phone || 'User').split(' ')[0]}
@@ -154,10 +161,10 @@ const CreateBroadcast = ({ navigation, route }) => {
         >
             <StatusBar
                 barStyle="light-content"
-                backgroundColor={theme.header || theme.primary || '#1199ff'}
+                backgroundColor={theme.header || '#1199ff'}
             />
             {/* ── Header ── */}
-            <View style={[styles.header, { backgroundColor: theme.header || theme.primary || '#1199ff' }]}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff', paddingTop: insets.top + 10, overflow: 'hidden' }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation?.goBack()}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -194,7 +201,7 @@ const CreateBroadcast = ({ navigation, route }) => {
                         {groupImage ? (
                             <Image source={{ uri: groupImage.uri }} style={styles.groupImage} />
                         ) : (
-                            <View style={[styles.imagePlaceholder, { backgroundColor: theme.primary || '#4491f2' }]}>
+                            <View style={[styles.imagePlaceholder, { backgroundColor: theme.main || '#4491f2' }]}>
                                 <Ionicons name="camera" size={34} color="#fff" />
                                 <Text style={styles.imagePlaceholderText}>Add photo</Text>
                             </View>
@@ -204,8 +211,8 @@ const CreateBroadcast = ({ navigation, route }) => {
                         </View>
                     </TouchableOpacity>
 
-                    <View style={[styles.nameInputWrapper, { borderBottomColor: theme.primary || '#4491f2' }]}>
-                        <Ionicons name="people" size={20} color={theme.primary || '#4491f2'} style={{ marginRight: 10 }} />
+                    <View style={[styles.nameInputWrapper, { borderBottomColor: theme.main || '#4491f2' }]}>
+                        <Ionicons name="people" size={20} color={theme.main || '#4491f2'} style={{ marginRight: 10 }} />
                         <TextInput
                             style={[styles.nameInput, { color: theme.text }]}
                             placeholder="Enter broadcast name..."
@@ -226,7 +233,7 @@ const CreateBroadcast = ({ navigation, route }) => {
                 <View style={styles.membersSection}>
                     <View style={styles.membersTitleRow}>
                         <Text style={[styles.membersTitle, { color: theme.text }]}>Members</Text>
-                        <View style={[styles.membersBadge, { backgroundColor: theme.primary || '#4491f2' }]}>
+                        <View style={[styles.membersBadge, { backgroundColor: theme.main || '#4491f2' }]}>
                             <Text style={styles.membersBadgeText}>{members.length}</Text>
                         </View>
                     </View>
@@ -269,7 +276,7 @@ const CreateBroadcast = ({ navigation, route }) => {
             </ScrollView>
 
             {/* ── Image Picker Modal ── */}
-            <Modal
+            <Modal statusBarTranslucent
                 visible={modalVisible}
                 transparent
                 animationType="slide"
@@ -286,7 +293,7 @@ const CreateBroadcast = ({ navigation, route }) => {
 
                         <View style={styles.modalOptions}>
                             <TouchableOpacity style={styles.modalOption} onPress={takePhoto}>
-                                <View style={[styles.modalOptionIcon, { backgroundColor: theme.primary || '#4491f2' }]}>
+                                <View style={[styles.modalOptionIcon, { backgroundColor: theme.main || '#4491f2' }]}>
                                     <Ionicons name="camera" size={26} color="#fff" />
                                 </View>
                                 <Text style={[styles.modalOptionLabel, { color: theme.text }]}>Camera</Text>

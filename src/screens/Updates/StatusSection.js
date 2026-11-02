@@ -321,7 +321,9 @@ const vs = StyleSheet.create({
 });
 
 // ─── MediaPickerSheet — theme-aware ──────────────────────────────────────────
-const MediaPickerSheet = ({ visible, uploading, onClose, onCamera, onGallery, onVideoGallery, onText, isDark }) => (
+const MediaPickerSheet = ({ visible, uploading, onClose, onCamera, onGallery, onVideoGallery, onText, isDark }) => {
+    const { theme } = useContext(ThemeContext);
+    return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
         <TouchableOpacity style={mp.overlay} activeOpacity={1} onPress={onClose}>
             <TouchableOpacity activeOpacity={1} style={[mp.sheet, { backgroundColor: isDark ? '#1a1a1a' : '#fff' }]}>
@@ -329,20 +331,20 @@ const MediaPickerSheet = ({ visible, uploading, onClose, onCamera, onGallery, on
                 <Text style={[mp.title, { color: isDark ? '#e0e0e0' : '#222' }]}>Add Status</Text>
                 {uploading ? (
                     <View style={mp.loadingBox}>
-                        <ActivityIndicator size="large" color="#1296f3" />
+                        <ActivityIndicator size="large" color={theme.main} />
                         <Text style={[mp.loadingText, { color: isDark ? '#aaa' : '#555' }]}>Uploading...</Text>
                     </View>
                 ) : (
                     <View style={mp.optionsRow}>
                         <TouchableOpacity style={mp.option} onPress={onCamera}>
                             <View style={[mp.iconBox, { backgroundColor: isDark ? '#0d1e2e' : '#f0f6ff' }]}>
-                                <Ionicons name="camera-outline" size={30} color="#1296f3" />
+                                <Ionicons name="camera-outline" size={30} color={theme.main} />
                             </View>
                             <Text style={[mp.label, { color: isDark ? '#ccc' : '#333' }]}>Camera</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={mp.option} onPress={onGallery}>
                             <View style={[mp.iconBox, { backgroundColor: isDark ? '#0d1e2e' : '#f0f6ff' }]}>
-                                <Ionicons name="image-outline" size={30} color="#1296f3" />
+                                <Ionicons name="image-outline" size={30} color={theme.main} />
                             </View>
                             <Text style={[mp.label, { color: isDark ? '#ccc' : '#333' }]}>Photo</Text>
                         </TouchableOpacity>
@@ -366,7 +368,8 @@ const MediaPickerSheet = ({ visible, uploading, onClose, onCamera, onGallery, on
             </TouchableOpacity>
         </TouchableOpacity>
     </Modal>
-);
+    );
+};
 
 const mp = StyleSheet.create({
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
@@ -469,6 +472,7 @@ const tc = StyleSheet.create({
 
 // ─── StatusCard ───────────────────────────────────────────────────────────────
 const StatusCard = ({ group, isMe, myUserId, onPress, onAddPress, isDark }) => {
+    const { theme } = useContext(ThemeContext);
     const resolveName = useNameResolver();
     const statuses = toArr(group?.statuses);
     const firstStatus = statuses[0];
@@ -496,7 +500,7 @@ const StatusCard = ({ group, isMe, myUserId, onPress, onAddPress, isDark }) => {
             >
                 <View style={sc.addAvatarWrap}>
                     <Image source={{ uri: avatar }} style={sc.addAvatar} />
-                    <View style={sc.plusBadge}>
+                    <View style={[sc.plusBadge, { backgroundColor: theme.main }]}>
                         <Ionicons name="add" size={13} color="#fff" />
                     </View>
                 </View>
@@ -537,11 +541,11 @@ const StatusCard = ({ group, isMe, myUserId, onPress, onAddPress, isDark }) => {
             ) : null}
 
             <View style={sc.avatarWrap}>
-                <View style={[sc.ring, { borderColor: allSeen ? '#c4c4c4' : '#1296f3' }]}>
+                <View style={[sc.ring, { borderColor: allSeen ? '#c4c4c4' : theme.main }]}>
                     <Image source={{ uri: avatar }} style={sc.avatar} />
                 </View>
                 {isMe && (
-                    <TouchableOpacity style={sc.plusBadge} onPress={onAddPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <TouchableOpacity style={[sc.plusBadge, { backgroundColor: theme.main }]} onPress={onAddPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                         <Ionicons name="add" size={13} color="#fff" />
                     </TouchableOpacity>
                 )}
@@ -783,13 +787,13 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
                     onPress={() => setShowPicker(true)}
                     activeOpacity={0.8}
                 >
-                    <Ionicons name="add" size={15} color="#1296f3" />
-                    <Text style={ss.addChipText}>Add</Text>
+                    <Ionicons name="add" size={15} color={theme.main} />
+                    <Text style={[ss.addChipText, { color: theme.main }]}>Add</Text>
                 </TouchableOpacity>
             </View>
 
             {loading ? (
-                <ActivityIndicator color="#1296f3" style={{ marginVertical: 20 }} />
+                <ActivityIndicator color={theme.main} style={{ marginVertical: 20 }} />
             ) : (
                 <>
                     <FlatList

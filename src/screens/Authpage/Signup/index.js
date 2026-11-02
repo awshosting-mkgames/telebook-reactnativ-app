@@ -67,7 +67,7 @@ const Signup = ({ navigation, renderSection }) => {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor="#1199ff" barStyle="light-content" />
+            <StatusBar backgroundColor={theme.header || '#1199ff'} barStyle="light-content" />
 
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: theme.borderColor || '#eee' }]}>
@@ -84,9 +84,9 @@ const Signup = ({ navigation, renderSection }) => {
                     {/* Avatar */}
                     <View style={styles.avatarSection}>
                         <View style={[styles.avatar, { backgroundColor: theme.inputBackground || '#EEF4FF' }]}>
-                            <Ionicons name="person" size={40} color="#1294F2" />
+                            <Ionicons name="person" size={40} color={theme.main} />
                         </View>
-                        <TouchableOpacity style={styles.avatarEditBtn}>
+                        <TouchableOpacity style={[styles.avatarEditBtn, { backgroundColor: theme.main }]}>
                             <Ionicons name="camera" size={14} color="#fff" />
                         </TouchableOpacity>
                         <Text style={[styles.avatarHint, { color: theme.subText || '#aaa' }]}>
@@ -100,10 +100,10 @@ const Signup = ({ navigation, renderSection }) => {
                             <Text style={[styles.label, { color: theme.subText || '#666' }]}>{field.label}</Text>
                             <View style={[
                                 styles.inputRow,
-                                { backgroundColor: theme.inputBackground || '#F5F5F5', borderColor: focused === field.key ? '#1294F2' : (theme.borderColor || '#E8E8E8') },
+                                { backgroundColor: theme.inputBackground || '#F5F5F5', borderColor: focused === field.key ? theme.main : (theme.borderColor || '#E8E8E8') },
                                 focused === field.key && styles.inputFocused,
                             ]}>
-                                <Ionicons name={field.icon} size={20} color={focused === field.key ? '#1294F2' : '#aaa'} />
+                                <Ionicons name={field.icon} size={20} color={focused === field.key ? theme.main : '#aaa'} />
                                 <TextInput
                                     style={[styles.input, { color: theme.text }]}
                                     placeholder={field.placeholder}
@@ -123,7 +123,7 @@ const Signup = ({ navigation, renderSection }) => {
 
                     {/* Submit */}
                     <TouchableOpacity
-                        style={[styles.submitBtn, loading && styles.submitDisabled]}
+                        style={[styles.submitBtn, { backgroundColor: theme.main }, loading && styles.submitDisabled, loading && { backgroundColor: theme.main + '88' }]}
                         onPress={handleSubmit}
                         disabled={loading}
                         activeOpacity={0.8}

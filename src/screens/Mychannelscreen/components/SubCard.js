@@ -17,7 +17,7 @@ export default function SubCard({ item }) {
 
     const { theme } = useContext(ThemeContext);
     const isLight = theme?.mode === 'light';
-    const styles = getStyles(isLight);
+    const styles = getStyles(isLight, theme.main);
 
     return (
         <View style={styles.row}>
@@ -36,12 +36,12 @@ export default function SubCard({ item }) {
     );
 }
 
-const getStyles = (isLight) => StyleSheet.create({
+const getStyles = (isLight, accent) => StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: isLight ? '#f5f5f5' : '#22252b', backgroundColor: isLight ? '#fff' : '#1a1d23', gap: 12 },
     avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: isLight ? '#f0f0f0' : '#2a2d33' },
     avatarFb: { alignItems: 'center', justifyContent: 'center' },
     name: { fontSize: 15, fontWeight: '600', color: isLight ? '#111' : '#f5f5f5' },
     mobile: { fontSize: 13, color: isLight ? '#aaa' : '#8a8f96', marginTop: 2 },
     chip: { backgroundColor: isLight ? '#e8f4fd' : '#16324a', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-    chipTxt: { color: '#1296f3', fontSize: 12, fontWeight: '600' },
+    chipTxt: { color: accent, fontSize: 12, fontWeight: '600' },
 });

@@ -103,11 +103,11 @@ const VideoAtt = memo(({ uri, size, auto, style, wrapStyle, pending, guard, onOp
 });
 
 // Audio: download hone tak sirf download button, uske baad normal player (local file se, offline bhi)
-const AudioAtt = memo(({ uri, size, auto, isMine, isDark, guard, onLongPress }) => {
+const AudioAtt = memo(({ uri, size, auto, isMine, isDark, guard, onLongPress, accent }) => {
     const dl = useMediaDownload(uri, { auto });
     if (dl.ready) return <AudioPlayer url={dl.localUri} isMine={isMine} isDark={isDark} />;
     return (
-        <Pressable style={styles.audioUploadRow} onPress={guard(() => dl.start())} onLongPress={onLongPress} delayLongPress={200}>
+        <Pressable style={[styles.audioUploadRow, accent && { backgroundColor: accent }]} onPress={guard(() => dl.start())} onLongPress={onLongPress} delayLongPress={200}>
             {dl.downloading
                 ? <ActivityIndicator size="small" color="#fff" />
                 : <Ionicons name={dl.failed ? 'refresh' : 'arrow-down-circle'} size={26} color="#fff" />}
@@ -118,10 +118,10 @@ const AudioAtt = memo(({ uri, size, auto, isMine, isDark, guard, onLongPress }) 
     );
 });
 
-const DocAtt = memo(({ uri, att, auto, guard, onOpen, onLongPress }) => {
+const DocAtt = memo(({ uri, att, auto, guard, onOpen, onLongPress, accent }) => {
     const dl = useMediaDownload(uri, { auto });
     return (
-        <TouchableOpacity style={styles.docRow} onPress={guard(() => (dl.ready ? onOpen(dl.localUri, att) : dl.start()))} onLongPress={onLongPress}>
+        <TouchableOpacity style={[styles.docRow, accent && { backgroundColor: accent }]} onPress={guard(() => (dl.ready ? onOpen(dl.localUri, att) : dl.start()))} onLongPress={onLongPress}>
             <MaterialCommunityIcons name={docIcon(att)} size={24} color="#fff" />
             <View style={{ flex: 1 }}>
                 <Text style={styles.docName} numberOfLines={1}>{att.filename || 'Document'}</Text>
@@ -170,6 +170,8 @@ const MessageBubble = ({
     const isDark = theme?.mode ? theme.mode === 'dark' : theme?.text === '#FFFFFF';
 
     // Outgoing bubble ka ek hi source: theme.bubbleMine (fallback sirf safety ke liye)
+    // Theme accent (selection circle, links, doc/audio rows)
+    const accent = theme?.main ?? '#1296f3';
     const mineBg = theme?.bubbleMine ?? (isDark ? '#1f3a52' : '#d9efff');
     const theirsBg = isDark ? '#1e2428' : '#ffffff';
     const normalBg = isMine ? mineBg : theirsBg;
@@ -182,8 +184,9 @@ const MessageBubble = ({
                 ? matchBg
                 : normalBg;
 
-    const textColor = isDark ? '#e9edef' : '#111111';
-    const timeColor = isDark ? '#8696a0' : '#777777';
+    const mineText = isMine && theme?.bubbleMineText;
+    const textColor = mineText || (isDark ? '#e9edef' : '#111111');
+    const timeColor = mineText ? '#5A4A1A' : (isDark ? '#8696a0' : '#777777');
     const replyTextC = isDark ? '#a0b0b8' : '#666666';
     const deletedC = isDark ? '#8696a0' : '#888888';
     const replyBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
@@ -242,6 +245,7 @@ const MessageBubble = ({
 
     return (
         <SwipeableMessage
+            accent={accent}
             onReply={() => {
                 if (!isSelectMode && !item.isDeleted) {
                     setReplyMsg(item);
@@ -256,7 +260,7 @@ const MessageBubble = ({
                 style={[styles.msgWrapper, isMine ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}
             >
                 {isSelectMode && !isMine && (
-                    <View style={[styles.selectCircle, isSelected && styles.selectCircleChecked, { marginRight: 8 }]}>
+                    <View style={[styles.selectCircle, isSelected && styles.selectCircleChecked, { borderColor: accent }, isSelected && { backgroundColor: accent }, { marginRight: 8 }]}>
                         {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
                     </View>
                 )}
@@ -270,7 +274,7 @@ const MessageBubble = ({
                         isMine ? styles.bubbleMine : styles.bubbleTheirs,
                     ]}>
                         {isGroup && !isMine && (
-                            <Text numberOfLines={1} style={styles.senderName}>
+                            <Text numberOfLines={1} style={[styles.senderName, { color: accent }]}>
                                 {resolveName(item.sender).title}
                             </Text>
                         )}
@@ -283,12 +287,12 @@ const MessageBubble = ({
                         {item.replyTo && (
                             <TouchableOpacity
                                 activeOpacity={0.7}
-                                style={[styles.replyPreview, { backgroundColor: replyBg }]}
+                                style={[styles.replyPreview, { backgroundColor: replyBg, borderLeftColor: accent }]}
                                 onPress={() => onReplyPress(item.replyTo._id || item.replyTo)}
                             >
                                 <View style={styles.replyBar} />
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.replyName} numberOfLines={1}>
+                                    <Text style={[styles.replyName, { color: accent }]} numberOfLines={1}>
                                         {resolveName(item.replyTo.sender).title}
                                     </Text>
                                     <Text style={[styles.replyText, { color: replyTextC }]} numberOfLines={1}>
@@ -340,7 +344,7 @@ const MessageBubble = ({
                                 {item.messageType === 'audio' && item.attachments?.map((att, i) => (
                                     <View key={i} style={styles.audioWrapper}>
                                         {isPendingUpload ? (
-                                            <Pressable style={styles.audioUploadRow} onPress={() => onCancelUpload?.(item._id)}>
+                                            <Pressable style={[styles.audioUploadRow, { backgroundColor: accent }]} onPress={() => onCancelUpload?.(item._id)}>
                                                 <ActivityIndicator size="small" color="#fff" />
                                                 <Text style={styles.docName}>Uploading voice message… {item.uploadProgress ?? 0}%</Text>
                                             </Pressable>
@@ -353,6 +357,7 @@ const MessageBubble = ({
                                                 isDark={isDark}
                                                 guard={openMedia}
                                                 onLongPress={handleLongPress}
+                                                accent={accent}
                                             />
                                         )}
                                     </View>
@@ -360,7 +365,7 @@ const MessageBubble = ({
 
                                 {item.messageType === 'document' && item.attachments?.map((att, i) => (
                                     isPendingUpload ? (
-                                        <Pressable key={i} style={styles.docRow} onPress={() => onCancelUpload?.(item._id)}>
+                                        <Pressable key={i} style={[styles.docRow, { backgroundColor: accent }]} onPress={() => onCancelUpload?.(item._id)}>
                                             <ActivityIndicator size="small" color="#fff" />
                                             <Text style={styles.docName} numberOfLines={1}>
                                                 {att.filename || 'Document'} · {item.uploadProgress ?? 0}%
@@ -375,6 +380,7 @@ const MessageBubble = ({
                                             guard={openMedia}
                                             onOpen={openLocalDoc}
                                             onLongPress={handleLongPress}
+                                            accent={accent}
                                         />
                                     )
                                 ))}
@@ -444,7 +450,7 @@ const MessageBubble = ({
                 </View>
 
                 {isSelectMode && isMine && (
-                    <View style={[styles.selectCircle, isSelected && styles.selectCircleChecked, { marginLeft: 8 }]}>
+                    <View style={[styles.selectCircle, isSelected && styles.selectCircleChecked, { borderColor: accent }, isSelected && { backgroundColor: accent }, { marginLeft: 8 }]}>
                         {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
                     </View>
                 )}

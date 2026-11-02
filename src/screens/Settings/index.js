@@ -79,7 +79,7 @@ const NOTIF_FIELDS = [
 
 // ── Small building blocks ────────────────────────────────────────────────────
 const Sheet = ({ visible, onClose, title, children, colors }) => (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal statusBarTranslucent visible={visible} transparent animationType="fade" onRequestClose={onClose}>
         <Pressable style={styles.overlay} onPress={onClose}>
             <Pressable style={[styles.popup, { backgroundColor: colors.card }]} onPress={() => { }}>
                 <View style={styles.popupHeader}>
@@ -254,12 +254,12 @@ export default function Settings({ navigation }) {
                         </Text>
                     </View>
                     <View style={styles.editPill}>
-                        <Ionicons name="pencil" size={14} color="#0084ff" />
+                        <Ionicons name="pencil" size={14} color={theme.main} />
                     </View>
                 </TouchableOpacity>
 
                 <Section label="ACCOUNT" colors={colors}>
-                    <Item icon="person-outline" color="#0084ff" title={t('Profile')} subtitle="Photo, name, about, city" onPress={() => navigation.navigate('Profile')} colors={colors} />
+                    <Item icon="person-outline" color={theme.main} title={t('Profile')} subtitle="Photo, name, about, city" onPress={() => navigation.navigate('Profile')} colors={colors} />
                     <Item icon="lock-closed-outline" color="#16a085" title="Privacy" subtitle={privacySummary} onPress={() => setSheet('privacy')} colors={colors} />
                     <Item icon="notifications-outline" color="#e84393" title="Notifications" subtitle={notifSummary} onPress={() => setSheet('notif')} colors={colors} last />
                 </Section>
@@ -302,7 +302,7 @@ export default function Settings({ navigation }) {
                         return (
                             <TouchableOpacity
                                 key={o.label}
-                                style={[styles.themeCard, { backgroundColor: o.bg, borderColor: active ? '#0084ff' : (o.dark ? '#333' : '#ddd') }]}
+                                style={[styles.themeCard, { backgroundColor: o.bg, borderColor: active ? theme.main : (o.dark ? '#333' : '#ddd') }]}
                                 onPress={() => { if (!active) toggleTheme(); close(); }}
                                 activeOpacity={0.8}
                             >
@@ -312,7 +312,7 @@ export default function Settings({ navigation }) {
                                     <View style={[styles.tpBubble, { alignSelf: 'flex-end', backgroundColor: o.mine }]} />
                                 </View>
                                 <Text style={[styles.themeLabel, { color: o.text }]}>{o.label}</Text>
-                                {active && <Ionicons name="checkmark-circle" size={20} color="#0084ff" style={{ marginTop: 6 }} />}
+                                {active && <Ionicons name="checkmark-circle" size={20} color={theme.main} style={{ marginTop: 6 }} />}
                             </TouchableOpacity>
                         );
                     })}
@@ -330,7 +330,7 @@ export default function Settings({ navigation }) {
                         <View style={{ flex: 1 }}>
                             <Text style={[styles.optionLabel, { color: colors.txt }]}>{label}</Text>
                         </View>
-                        {fontSize === key && <Ionicons name="checkmark-circle" size={22} color="#0084ff" />}
+                        {fontSize === key && <Ionicons name="checkmark-circle" size={22} color={theme.main} />}
                     </TouchableOpacity>
                 ))}
             </Sheet>
@@ -348,7 +348,7 @@ export default function Settings({ navigation }) {
                             <Text style={[styles.optionLabel, { color: colors.txt }]}>{lang.label}</Text>
                             <Text style={[styles.optionSub, { color: colors.sub }]}>{lang.native}</Text>
                         </View>
-                        {selectedLang === lang.code && <Ionicons name="checkmark-circle" size={22} color="#0084ff" />}
+                        {selectedLang === lang.code && <Ionicons name="checkmark-circle" size={22} color={theme.main} />}
                     </TouchableOpacity>
                 ))}
             </Sheet>
@@ -365,7 +365,7 @@ export default function Settings({ navigation }) {
                         <Text style={[styles.popupNote, { color: colors.sub }]}>Choose who can see your details.</Text>
                         {PRIVACY_FIELDS.map((f) => (
                             <TouchableOpacity key={f.key} style={styles.optionRow} onPress={() => setPrivacyPick(f.key)}>
-                                <Ionicons name={f.icon} size={20} color="#0084ff" style={{ marginRight: 12 }} />
+                                <Ionicons name={f.icon} size={20} color={theme.main} style={{ marginRight: 12 }} />
                                 <View style={{ flex: 1 }}>
                                     <Text style={[styles.optionLabel, { color: colors.txt }]}>{f.label}</Text>
                                     <Text style={[styles.optionSub, { color: colors.sub }]}>{privacyLabel(privacy?.[f.key])}</Text>
@@ -384,14 +384,14 @@ export default function Settings({ navigation }) {
                                     style={[styles.optionRow, active && { backgroundColor: colors.selected }]}
                                     onPress={() => choosePrivacy(privacyPick, o.value)}
                                 >
-                                    <Ionicons name={active ? 'radio-button-on' : 'radio-button-off'} size={20} color="#0084ff" style={{ marginRight: 12 }} />
+                                    <Ionicons name={active ? 'radio-button-on' : 'radio-button-off'} size={20} color={theme.main} style={{ marginRight: 12 }} />
                                     <Text style={[styles.optionLabel, { color: colors.txt, flex: 1 }]}>{o.label}</Text>
                                 </TouchableOpacity>
                             );
                         })}
                         <TouchableOpacity onPress={() => setPrivacyPick(null)} style={styles.backLink}>
-                            <Ionicons name="chevron-back" size={16} color="#0084ff" />
-                            <Text style={styles.backLinkText}>Back</Text>
+                            <Ionicons name="chevron-back" size={16} color={theme.main} />
+                            <Text style={[styles.backLinkText, { color: theme.main }]}>Back</Text>
                         </TouchableOpacity>
                     </>
                 )}
@@ -400,10 +400,10 @@ export default function Settings({ navigation }) {
             {/* Notifications */}
             <Sheet visible={sheet === 'notif'} onClose={close} title="Notifications" colors={colors}>
                 {!notif ? (
-                    <ActivityIndicator color="#0084ff" style={{ marginVertical: 24 }} />
+                    <ActivityIndicator color={theme.main} style={{ marginVertical: 24 }} />
                 ) : NOTIF_FIELDS.map((f) => (
                     <View key={f.key} style={styles.optionRow}>
-                        <Ionicons name={f.icon} size={20} color="#0084ff" style={{ marginRight: 12 }} />
+                        <Ionicons name={f.icon} size={20} color={theme.main} style={{ marginRight: 12 }} />
                         <View style={{ flex: 1 }}>
                             <Text style={[styles.optionLabel, { color: colors.txt }]}>{f.label}</Text>
                             <Text style={[styles.optionSub, { color: colors.sub }]}>{f.sub}</Text>
@@ -411,7 +411,7 @@ export default function Settings({ navigation }) {
                         <Switch
                             value={notif[f.key] !== false}
                             onValueChange={(v) => toggleNotif(f.key, v)}
-                            trackColor={{ false: '#ccc', true: '#0084ff' }}
+                            trackColor={{ false: '#ccc', true: theme.main }}
                             thumbColor="#fff"
                             activeThumbColor="#fff"
                         />
@@ -420,7 +420,7 @@ export default function Settings({ navigation }) {
             </Sheet>
 
             {/* Clear All Data — step 2: type CLEAR */}
-            <Modal visible={sheet === 'clear'} transparent animationType="fade" onRequestClose={clearing ? undefined : close}>
+            <Modal statusBarTranslucent visible={sheet === 'clear'} transparent animationType="fade" onRequestClose={clearing ? undefined : close}>
                 <Pressable style={styles.overlay} onPress={clearing ? undefined : close}>
                     <Pressable style={[styles.logoutPopup, { backgroundColor: colors.card }]} onPress={() => { }}>
                         <Text style={[styles.logoutTitle, { color: colors.txt }]}>{t('ca_confirm_title')}</Text>
@@ -452,7 +452,7 @@ export default function Settings({ navigation }) {
             </Modal>
 
             {/* Logout */}
-            <Modal visible={sheet === 'logout'} transparent animationType="fade" onRequestClose={close}>
+            <Modal statusBarTranslucent visible={sheet === 'logout'} transparent animationType="fade" onRequestClose={close}>
                 <Pressable style={styles.overlay} onPress={loggingOut ? undefined : close}>
                     <Pressable style={[styles.logoutPopup, { backgroundColor: colors.card }]} onPress={() => { }}>
                         <View style={styles.logoutIconWrap}>

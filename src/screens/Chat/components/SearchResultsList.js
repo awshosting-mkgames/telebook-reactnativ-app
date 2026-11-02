@@ -22,7 +22,7 @@ const SearchResultsList = ({
     if (isSearching) {
         return (
             <View style={styles.center}>
-                <ActivityIndicator size="large" color="#1296f3" />
+                <ActivityIndicator size="large" color={theme?.main ?? "#1296f3"} />
             </View>
         );
     }

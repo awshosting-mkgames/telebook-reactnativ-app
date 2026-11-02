@@ -18,11 +18,11 @@ const GroupHeader = ({ groupDetails, theme, onImagePress, onNamePress, onAddMemb
             <Image
                 source={{
                     uri: getImageUrl(groupDetails?.groupIcon)
-                        || `https://ui-avatars.com/api/?name=${encodeURIComponent(groupDetails?.chatName || 'Group')}&background=3498db&color=fff&size=200`,
+                        || `https://ui-avatars.com/api/?name=${encodeURIComponent(groupDetails?.chatName || 'Group')}&background=${encodeURIComponent((theme.main || '#3498db').replace('#', ''))}&color=fff&size=200`,
                 }}
                 style={styles.avatar}
             />
-            <View style={styles.cameraOverlay}>
+            <View style={[styles.cameraOverlay, { backgroundColor: theme.main || '#3498db' }]}>
                 <Ionicons name="camera" size={18} color="#fff" />
             </View>
         </TouchableOpacity>
@@ -32,7 +32,7 @@ const GroupHeader = ({ groupDetails, theme, onImagePress, onNamePress, onAddMemb
             <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
                 {groupDetails?.chatName || 'Group'}
             </Text>
-            <Ionicons name="pencil" size={16} color="#3498db" style={{ marginLeft: 6 }} />
+            <Ionicons name="pencil" size={16} color={theme.main || '#3498db'} style={{ marginLeft: 6 }} />
         </TouchableOpacity>
 
         <Text style={styles.sub}>

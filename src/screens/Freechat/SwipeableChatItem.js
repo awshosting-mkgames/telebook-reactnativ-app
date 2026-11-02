@@ -12,7 +12,7 @@ import {
     View,
 } from 'react-native';
 import { badgeTextColor } from '../../services/badgeConfig';
-import { badgeImageFor } from '../../utils/badgeImages';
+import { badgeStyleFor } from '../../utils/badgeImages';
 
 const ACTION_WIDTH = 140;
 const SWIPE_THRESHOLD = 60;
@@ -60,8 +60,8 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
     // Plan badge: server se aata hai (planBadge), admin placement flag Freechat se aata hai (showBadge)
     const planBadge = !isGroup ? item?.displayUser?.planBadge : null;
     const badgeVisible = !!(showBadge && planBadge && (planBadge.listLabel || planBadge.label));
-    const badgeBg = planBadge?.color || '#1199ff';
-    const badgeImg = badgeVisible ? badgeImageFor(planBadge) : null;
+    const badgeBg = planBadge?.color || theme.main || '#1199ff';
+    const badgeSt = badgeVisible ? badgeStyleFor(planBadge) : null;
     const ringColor = showRing && planBadge?.color ? planBadge.color : null;
     // Phonebook me save nahi hai (sirf 1-to-1) => 'Unknown' chip
     const isUnknown = !isGroup && item?.isSaved === false;
@@ -126,7 +126,7 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
 
     return (
         <View style={styles.swipeContainer}>
-            {isPinned && <View style={styles.pinStripe} />}
+            {isPinned && <View style={[styles.pinStripe, { backgroundColor: theme.main }]} />}
 
             <View style={styles.actionsContainer}>
                 {/* Group ko block nahi kar sakte — wahan sirf Delete */}
@@ -147,7 +147,7 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                 style={[
                     styles.chatRowAnimated,
                     {
-                        backgroundColor: isPinned ? (isLight ? '#f0f7ff' : '#16222c') : (theme.background || (isLight ? '#ffffff' : '#000000')),
+                        backgroundColor: isPinned ? (isLight ? (theme.main ? theme.main + '14' : '#f0f7ff') : '#16222c') : (theme.background || (isLight ? '#ffffff' : '#000000')),
                         transform: [{ translateX }],
                     },
                 ]}
@@ -174,7 +174,7 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                             )}
                             {!isGroup && item?.displayUser?.isOnline && <View style={styles.onlineDot} />}
                             {isPinned && (
-                                <View style={styles.pinBadge}>
+                                <View style={[styles.pinBadge, { backgroundColor: theme.main }]}>
                                     <Ionicons name="pin" size={9} color="#fff" />
                                 </View>
                             )}
@@ -183,19 +183,18 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                             <TouchableOpacity
                                 activeOpacity={0.8}
                                 onPress={() => { rowOpen.current ? closeRow() : onPress(item); }}
-                                style={badgeImg ? styles.planImgWrap : [styles.planPill, { backgroundColor: badgeBg }]}
+                                style={badgeSt
+                                    ? [styles.planPill, styles.planPillRow, { backgroundColor: badgeSt.bg, borderColor: badgeSt.border, borderWidth: 1.5 }]
+                                    : [styles.planPill, { backgroundColor: badgeBg }]}
                             >
-                                {badgeImg ? (
-                                    <Image source={badgeImg} style={styles.planImg} resizeMode="contain" />
-                                ) : (
-                                    <Text
-                                        style={[styles.planPillText, { color: badgeTextColor(badgeBg) }]}
-                                        numberOfLines={1}
-                                        ellipsizeMode="tail"
-                                    >
-                                        {planBadge.listLabel || planBadge.label}
-                                    </Text>
-                                )}
+                                {badgeSt && <Image source={badgeSt.icon} style={styles.planIcon} resizeMode="contain" />}
+                                <Text
+                                    style={[styles.planPillText, { color: badgeSt ? badgeSt.text : badgeTextColor(badgeBg) }]}
+                                    numberOfLines={1}
+                                    ellipsizeMode="tail"
+                                >
+                                    {badgeSt ? badgeSt.name : (planBadge.listLabel || planBadge.label)}
+                                </Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -206,8 +205,8 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                             <View style={{ flex: 1, marginRight: 8 }}>
                             <View style={styles.nameRow}>
                                 {isGroup && (
-                                    <View style={styles.groupTag}>
-                                        <Ionicons name="people" size={11} color="#1199ff" />
+                                    <View style={[styles.groupTag, theme.main && { backgroundColor: theme.main + '22' }]}>
+                                        <Ionicons name="people" size={11} color={theme.main || '#1199ff'} />
                                     </View>
                                 )}
                                 <Text style={[styles.name, { color: theme.text || '#111' }]} numberOfLines={1}>
@@ -219,7 +218,7 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                                 <Text style={[styles.unknownChipText, { color: subColor }]} numberOfLines={1}>{item.displaySub}</Text>
                             )}
                             </View>
-                            <Text style={[styles.time, { color: subColor }, unread > 0 && styles.timeUnread]}>{timeStr}</Text>
+                            <Text style={[styles.time, { color: subColor }, unread > 0 && styles.timeUnread, unread > 0 && { color: theme.main }]}>{timeStr}</Text>
                         </View>
 
                         <View style={styles.chatBottomRow}>
@@ -232,7 +231,7 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                                     : msgText}
                             </Text>
                             {unread > 0 && (
-                                <View style={styles.badge}>
+                                <View style={[styles.badge, { backgroundColor: theme.main }]}>
                                     <Text style={styles.badgeText}>{unread > 99 ? '99+' : unread}</Text>
                                 </View>
                             )}
@@ -256,10 +255,10 @@ const styles = StyleSheet.create({
     chatItem: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 13, alignItems: 'center' },
     avatarCol: { width: 58, alignItems: 'center', marginRight: 12 },
     avatarWrap: { position: 'relative' },
-    planPill: { marginTop: 4, maxWidth: 58, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 9 },
-    planImgWrap: { marginTop: 4 },
-    planImg: { width: 22, height: 22 },
-    planPillText: { fontSize: 10, fontWeight: '700' },
+    planPill: { marginTop: 4, maxWidth: 66, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 9 },
+    planPillRow: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 10 },
+    planIcon: { width: 11, height: 11 },
+    planPillText: { fontSize: 9, fontWeight: '800', flexShrink: 1 },
     unknownChip: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, flexShrink: 0 },
     unknownChipText: { fontSize: 10, fontWeight: '600' },
     avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#eee' },

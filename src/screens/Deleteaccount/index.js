@@ -2,14 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useContext, useState } from 'react';
 import {
     ActivityIndicator,
-    SafeAreaView,
-    Platform,
     StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { ThemeContext } from '../../components/ThemeContext';
 import GradientFill from '../../components/GradientFill';
@@ -20,12 +19,13 @@ const PRIVACY_URL = 'https://telebookservices.com/delete-account';
 export default function Deleteaccount({ navigation }) {
     const { theme } = useContext(ThemeContext);
     const isDark = theme?.mode === 'dark';
+    const insets = useSafeAreaInsets();
     const [loading, setLoading] = useState(true);
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0D1117' : '#fff' }]}>
-            <StatusBar backgroundColor={theme?.header || '#1199ff'} barStyle="light-content" />
-            <View style={[styles.topBar, { backgroundColor: theme?.header || '#1199ff' }]}>
+        <View style={[styles.container, { backgroundColor: isDark ? '#0D1117' : '#fff' }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+            <View style={[styles.topBar, { backgroundColor: theme?.header || '#1199ff', paddingTop: insets.top + 14 }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -45,11 +45,11 @@ export default function Deleteaccount({ navigation }) {
                 />
                 {loading && (
                     <View style={[styles.loaderOverlay, { backgroundColor: isDark ? '#0D1117' : '#fff' }]}>
-                        <ActivityIndicator size="large" color="#1296f3" />
+                        <ActivityIndicator size="large" color={theme.main} />
                     </View>
                 )}
             </View>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#1296f3',
         paddingHorizontal: 12,
         paddingVertical: 14,
-        paddingTop: (Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0) + 14,
+        overflow: 'hidden',
         gap: 14,
     },
     backBtn: { padding: 4 },

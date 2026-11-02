@@ -2,14 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, Alert, Platform,
+    ActivityIndicator, Alert, Platform, StatusBar,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import GradientFill from '../../components/GradientFill';
 import { useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
 import apiService from '../../services/apiService';
@@ -30,6 +31,8 @@ export default function GroupScreen({ navigation, route }) {
     const resolveName = useNameResolver();
     const { chatId } = route.params;
     const { theme }  = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
+    const headerBg = theme.header || theme.main || '#3498db';
 
     const maniAllData = useSelector((state) => state.totalappData);
     const MY_USER_ID  = maniAllData?.userId ?? '';
@@ -318,24 +321,27 @@ export default function GroupScreen({ navigation, route }) {
     if (loading) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-                <View style={styles.header}>
+                <View style={[styles.header, { backgroundColor: headerBg }]}>
+                    <GradientFill />
                     <TouchableOpacity onPress={() => navigation.goBack()}>
                         <Ionicons name="arrow-back" size={24} color="white" />
                     </TouchableOpacity>
                 </View>
                 <View style={styles.loaderWrap}>
-                    <ActivityIndicator size="large" color="#3498db" />
+                    <ActivityIndicator size="large" color={theme.main || '#3498db'} />
                     <Text style={[styles.loaderText, { color: theme.text }]}>Loading group info...</Text>
                 </View>
             </SafeAreaView>
         );
     }
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
-            {/* Top bar */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
+            {/* Top bar: gradient status bar ke neeche tak, left se right poora */}
+            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top, height: 60 + insets.top }]}>
+                <GradientFill />
+                <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Group Info</Text>
@@ -399,13 +405,13 @@ export default function GroupScreen({ navigation, route }) {
                 />
 
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container:   { flex: 1 },
-    header:      { height: 60, backgroundColor: '#3498db', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 14 },
+    header:      { height: 60, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 14 },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
     loaderWrap:  { flex: 1, justifyContent: 'center', alignItems: 'center' },
     loaderText:  { marginTop: 12, fontSize: 15, color: '#555' },

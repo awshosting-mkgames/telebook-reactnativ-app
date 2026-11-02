@@ -30,6 +30,7 @@ const previewOf = (m) => {
 const ForwardContactModal = ({ visible, onClose, onForward }) => {
     const { theme } = useContext(ThemeContext);
     const dark = theme?.mode === 'dark';
+    const accent = theme?.main ?? '#1296f3';
     // Point 4: popup current theme (dark/light) ke hisaab se
     const c = {
         sheet: dark ? '#1b1b1b' : '#fff',
@@ -103,7 +104,7 @@ const ForwardContactModal = ({ visible, onClose, onForward }) => {
                         </Text>
                     ) : null}
                 </View>
-                <View style={[s.checkbox, { borderColor: c.checkBorder }, selected && s.checkboxSelected]}>
+                <View style={[s.checkbox, { borderColor: c.checkBorder }, selected && s.checkboxSelected, selected && { backgroundColor: accent, borderColor: accent }]}>
                     {selected && <Ionicons name="checkmark" size={16} color="#fff" />}
                 </View>
             </TouchableOpacity>
@@ -111,7 +112,7 @@ const ForwardContactModal = ({ visible, onClose, onForward }) => {
     };
 
     return (
-        <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+        <Modal statusBarTranslucent visible={visible} animationType="slide" transparent onRequestClose={onClose}>
             <Pressable style={s.overlay} onPress={onClose} />
 
             <View style={[s.sheet, { backgroundColor: c.sheet }]}>
@@ -155,10 +156,10 @@ const ForwardContactModal = ({ visible, onClose, onForward }) => {
                                     source={{ uri: resolveAvatar(c.displayAvatar) }}
                                     style={s.chipAvatar}
                                 />
-                                <Text style={s.chipName} numberOfLines={1}>
+                                <Text style={[s.chipName, { color: accent }]} numberOfLines={1}>
                                     {c.displayName?.split(' ')[0]}
                                 </Text>
-                                <View style={s.chipClose}>
+                                <View style={[s.chipClose, { backgroundColor: accent }]}>
                                     <Ionicons name="close" size={10} color="#fff" />
                                 </View>
                             </TouchableOpacity>
@@ -167,7 +168,7 @@ const ForwardContactModal = ({ visible, onClose, onForward }) => {
                 )}
 
                 {loading ? (
-                    <ActivityIndicator style={{ marginTop: 40 }} size="large" color="#1296f3" />
+                    <ActivityIndicator style={{ marginTop: 40 }} size="large" color={accent} />
                 ) : (
                     <FlatList
                         data={filteredChats}
@@ -185,7 +186,7 @@ const ForwardContactModal = ({ visible, onClose, onForward }) => {
                 )}
 
                 {selectedChats.length > 0 && (
-                    <TouchableOpacity style={s.sendBtn} onPress={handleForward} activeOpacity={0.85}>
+                    <TouchableOpacity style={[s.sendBtn, { backgroundColor: accent }]} onPress={handleForward} activeOpacity={0.85}>
                         <Ionicons name="send" size={18} color="#fff" />
                         <Text style={s.sendBtnText}>
                             Send to {selectedChats.length} chat{selectedChats.length > 1 ? 's' : ''}

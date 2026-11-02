@@ -82,7 +82,7 @@ export default function EditChannelPopup({ visible, onClose, channel, onUpdated 
     const displayIcon = newIcon || getImg(channel?.channelIcon || channel?.avatar);
 
     return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={() => !saving && onClose()}>
+        <Modal statusBarTranslucent visible={visible} transparent animationType="slide" onRequestClose={() => !saving && onClose()}>
             <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                 <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => !saving && onClose()} />
                 <View style={styles.sheet}>
@@ -92,7 +92,7 @@ export default function EditChannelPopup({ visible, onClose, channel, onUpdated 
                             <Text style={styles.cancelTxt}>Cancel</Text>
                         </TouchableOpacity>
                         <Text style={styles.title}>Channel Edit Karo</Text>
-                        <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving}>
+                        <TouchableOpacity style={[styles.saveBtn, { backgroundColor: theme.main }, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving}>
                             {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveTxt}>Save</Text>}
                         </TouchableOpacity>
                     </View>
@@ -101,12 +101,12 @@ export default function EditChannelPopup({ visible, onClose, channel, onUpdated 
                         <View style={styles.iconSection}>
                             <TouchableOpacity style={styles.iconWrap} onPress={pickImage} disabled={saving}>
                                 {displayIcon
-                                    ? <Image source={{ uri: displayIcon }} style={styles.iconImg} />
-                                    : <View style={[styles.iconImg, styles.iconFb]}>
-                                        <Ionicons name="megaphone" size={32} color="#1296f3" />
+                                    ? <Image source={{ uri: displayIcon }} style={[styles.iconImg, { borderColor: theme.main }]} />
+                                    : <View style={[styles.iconImg, styles.iconFb, { borderColor: theme.main }]}>
+                                        <Ionicons name="megaphone" size={32} color={theme.main} />
                                     </View>
                                 }
-                                <View style={styles.camBadge}>
+                                <View style={[styles.camBadge, { backgroundColor: theme.main }]}>
                                     <Ionicons name="camera" size={13} color="#fff" />
                                 </View>
                             </TouchableOpacity>
@@ -146,7 +146,7 @@ export default function EditChannelPopup({ visible, onClose, channel, onUpdated 
                                 value={isPrivate}
                                 onValueChange={setIsPrivate}
                                 disabled={saving}
-                                trackColor={{ false: isLight ? '#d0d4da' : '#3a3d44', true: theme?.header || '#1199ff' }}
+                                trackColor={{ false: isLight ? '#d0d4da' : '#3a3d44', true: theme.main }}
                                 thumbColor="#fff"
                             />
                         </View>

@@ -5,12 +5,15 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
+import GradientFill from '../../components/GradientFill';
 
 const Community = ({ navigation }) => {
     const { t } = useTranslation();
     const { theme, toggleTheme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
+    const accent = theme.main || '#3498db';
     const members = [
         { id: '1', name: 'You', status: 'Available', img: 'https://i.pravatar.cc/100?u=1' },
         { id: '2', name: 'Kenny Payne', status: 'Busy', isAdmin: true, img: 'https://i.pravatar.cc/100?u=2' },
@@ -23,7 +26,7 @@ const Community = ({ navigation }) => {
         navigation.navigate('Group');
     }
 
-    const SettingItem = ({ icon, name, subText, hasSwitch, color = "#3498db" }) => (
+    const SettingItem = ({ icon, name, subText, hasSwitch, color = accent }) => (
         <TouchableOpacity style={styles.settingRow}>
             <View style={[styles.iconBox, { backgroundColor: color }]}>
                 <Ionicons name={icon} size={16} color="white" />
@@ -32,14 +35,15 @@ const Community = ({ navigation }) => {
                 <Text style={[styles.settingName,{ color: theme.text}]}>{name}</Text>
                 {subText && <Text style={styles.settingSub}>{subText}</Text>}
             </View>
-            {hasSwitch ? <Switch value={false} trackColor={{ false: "#ddd", true: "#3498db" }} /> : null}
+            {hasSwitch ? <Switch value={false} trackColor={{ false: "#ddd", true: accent }} /> : null}
         </TouchableOpacity>
     );
 
     return (
-        <SafeAreaView style={[styles.container,{ backgroundColor: theme.background}]}>
+        <SafeAreaView edges={['left', 'right', 'bottom']} style={[styles.container,{ backgroundColor: theme.background}]}>
             {/* HEADER */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#3498db', height: 60 + insets.top, paddingTop: insets.top, overflow: 'hidden' }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
@@ -65,7 +69,7 @@ const Community = ({ navigation }) => {
                             <Text style={styles.actionText}>Voice Chat</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.actionBtn}>
-                            <Ionicons name="search" size={20} color="#3498db" />
+                            <Ionicons name="search" size={20} color={accent} />
                             <Text style={[styles.actionText]}>Search</Text>
                         </TouchableOpacity>
                     </View>
@@ -108,27 +112,27 @@ const Community = ({ navigation }) => {
                         </View>
                         {item.isAdmin && (
                             <View style={[styles.adminBadge,{backgroundColor:theme.batchColor}]}>
-                                <Text style={styles.adminText}>Group Admin</Text>
+                                <Text style={[styles.adminText, { color: accent }]}>Group Admin</Text>
                             </View>
                         )}
                     </View>
                 ))}
 
                 <TouchableOpacity style={[styles.viewAllBtn,{backgroundColor:theme.batchColor}]}>
-                    <Text style={styles.viewAllText}>View all (250 more)</Text>
+                    <Text style={[styles.viewAllText, { color: accent }]}>View all (250 more)</Text>
                 </TouchableOpacity>
 
                  <View style={[styles.divider,{backgroundColor: theme.dividerColor}]} />
 
                 {/* FOOTER ACTIONS */}
                 <TouchableOpacity style={styles.footerItem}>
-                    <View style={[styles.iconBox, { backgroundColor:  '#3498db'  }]}>
+                    <View style={[styles.iconBox, { backgroundColor: accent }]}>
                         <Ionicons name="heart-outline" size={16} color="#ffffff" />
                     </View>
                     <Text style={[styles.footerText,{ color: theme.text}]}>Add to Favorites</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.footerItem}>
-                    <View style={[styles.iconBox, { backgroundColor: '#3498db' }]}>
+                    <View style={[styles.iconBox, { backgroundColor: accent }]}>
                         <MaterialCommunityIcons name="playlist-plus" size={16} color="#ffffff" />
                     </View>
                     <Text style={[styles.footerText,{ color: theme.text}]}>Add to list</Text>

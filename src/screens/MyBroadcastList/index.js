@@ -83,7 +83,7 @@ export default function MyBroadcastList({ navigation }) {
                 {item.broadcastIcon ? (
                     <Image source={{ uri: item.broadcastIcon ? BASE_URL + item.broadcastIcon : DEFAULT_AVATAR }} style={styles.avatar} />
                 ) : (
-                    <View style={[styles.avatar, styles.defaultIcon]}>
+                    <View style={[styles.avatar, styles.defaultIcon, { backgroundColor: theme.main }]}>
                         <Ionicons name="megaphone" size={24} color="#fff" />
                     </View>
                 )}
@@ -101,21 +101,22 @@ export default function MyBroadcastList({ navigation }) {
                     <Text style={styles.sub} numberOfLines={1}>
                         {item.lastMessage?.content ?? item.description ?? 'No messages yet'}
                     </Text>
-                    <View style={styles.badge}>
-                        <Ionicons name="people" size={12} color="#1296f3" />
-                        <Text style={styles.badgeText}>{item.recipients?.length ?? 0}</Text>
+                    <View style={[styles.badge, { backgroundColor: theme.main + '22' }]}>
+                        <Ionicons name="people" size={12} color={theme.main} />
+                        <Text style={[styles.badgeText, { color: theme.main }]}>{item.recipients?.length ?? 0}</Text>
                     </View>
                 </View>
-                <Text style={styles.statLine}>
+                <Text style={[styles.statLine, { color: theme.main }]}>
                     📤 {item.totalMessagesSent ?? 0} messages sent
                 </Text>
             </View>
         </TouchableOpacity>
     );
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor={theme.header ?? '#1296f3'} barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3' }]}>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+            {/* gradient status bar ke neeche tak */}
+            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3', paddingTop: insets.top, height: 60 + insets.top }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -123,7 +124,7 @@ export default function MyBroadcastList({ navigation }) {
                 <Text style={styles.headerTitle}>{t('MyBroadcastList')}</Text>
             </View>
             {loading ? (
-                <ActivityIndicator color="#1296f3" size="large" style={{ flex: 1 }} />
+                <ActivityIndicator color={theme.main} size="large" style={{ flex: 1 }} />
             ) : (
                 <FlatList
                     data={broadcasts}
@@ -141,16 +142,15 @@ export default function MyBroadcastList({ navigation }) {
                     }
                 />
             )}
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        height: 90, backgroundColor: '#1296f3', flexDirection: 'row',
-        alignItems: 'center', paddingHorizontal: 16,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, gap: 12,
+        height: 90, backgroundColor: '#1296f3', flexDirection: 'row', overflow: 'hidden',
+        alignItems: 'center', paddingHorizontal: 16, gap: 12,
     },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '600', flex: 1 },
 

@@ -116,7 +116,7 @@ const CreateChannelPopup = ({ visible, onClose }) => {
     const dividerColor = '#25D366';
 
     return (
-        <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
+        <Modal statusBarTranslucent animationType="fade" transparent visible={visible} onRequestClose={onClose}>
             <View style={styles.overlay}>
                 <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); onClose(); }}>
                     <View style={styles.backdrop} />

@@ -4,12 +4,13 @@ import {
     StatusBar, ScrollView, Alert,
     ActivityIndicator, Platform
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context'; // RN ka SafeAreaView Android par padding nahi deta
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'; // RN ka SafeAreaView Android par padding nahi deta
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Toast from 'react-native-toast-message';
 import { ThemeContext } from '../../components/ThemeContext';
+import GradientFill from '../../components/GradientFill';
 import { useSelector, useDispatch } from 'react-redux';
 import Config from '../../services/config';
 import { uploadProfilePhoto } from '../../services/profileSync';
@@ -75,6 +76,9 @@ const StatusItem = ({ item, onRemove }) => {
 const AvatarScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
+    const accent = theme.main || '#0084ff';
+    const accentText = theme.accentText || '#fff';
      const dispatch  = useDispatch();
     const maniAllData = useSelector((state) => state.totalappData);
     const userData    = maniAllData?.user ?? null;
@@ -134,11 +138,12 @@ const AvatarScreen = ({ navigation }) => {
    
     // ─────────────────────────────────────────────────────────────────────────
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
+        <SafeAreaView edges={['left', 'right', 'bottom']} style={[styles.container, { backgroundColor: bg }]}>
             <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#0084ff', height: undefined, paddingTop: insets.top + 12, paddingBottom: 16, overflow: 'hidden' }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
@@ -158,34 +163,34 @@ const AvatarScreen = ({ navigation }) => {
                                 <Image source={{ uri: profileUri || currentPhoto }} style={styles.avatarPreview} />
                             ) : (
                                 <View style={[styles.avatarPlaceholder, { backgroundColor: isDark ? '#2a2a2a' : '#f0f4ff' }]}>
-                                    <Ionicons name="person" size={44} color="#0084ff" />
+                                    <Ionicons name="person" size={44} color={accent} />
                                 </View>
                             )}
-                            <View style={styles.editBadge}>
+                            <View style={[styles.editBadge, { backgroundColor: accent }]}>
                                 <Ionicons name="camera" size={14} color="#fff" />
                             </View>
                         </TouchableOpacity>
 
                         <View style={styles.profileBtns}>
-                            <TouchableOpacity style={styles.sourceBtn} onPress={() => pickFromCamera(['images']).then(setPicked)}>
-                                <Ionicons name="camera-outline" size={18} color="#0084ff" />
-                                <Text style={styles.sourceBtnText}>Camera</Text>
+                            <TouchableOpacity style={[styles.sourceBtn, { borderColor: accent }]} onPress={() => pickFromCamera(['images']).then(setPicked)}>
+                                <Ionicons name="camera-outline" size={18} color={accent} />
+                                <Text style={[styles.sourceBtnText, { color: accent }]}>Camera</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.sourceBtn} onPress={() => pickMedia(['images']).then(setPicked)}>
-                                <Ionicons name="images-outline" size={18} color="#0084ff" />
-                                <Text style={styles.sourceBtnText}>Gallery</Text>
+                            <TouchableOpacity style={[styles.sourceBtn, { borderColor: accent }]} onPress={() => pickMedia(['images']).then(setPicked)}>
+                                <Ionicons name="images-outline" size={18} color={accent} />
+                                <Text style={[styles.sourceBtnText, { color: accent }]}>Gallery</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
 
                     <TouchableOpacity
-                        style={[styles.uploadBtn, (profileLoading || !profileAsset) && { opacity: 0.6 }]}
+                        style={[styles.uploadBtn, { backgroundColor: accent }, (profileLoading || !profileAsset) && { opacity: 0.6 }]}
                         onPress={uploadProfile}
                         disabled={profileLoading || !profileAsset}
                     >
                         {profileLoading
-                            ? <ActivityIndicator color="#fff" size="small" />
-                            : <><Ionicons name="cloud-upload-outline" size={18} color="#fff" /><Text style={styles.uploadBtnText}>Save Profile Photo</Text></>
+                            ? <ActivityIndicator color={accentText} size="small" />
+                            : <><Ionicons name="cloud-upload-outline" size={18} color={accentText} /><Text style={[styles.uploadBtnText, { color: accentText }]}>Save Profile Photo</Text></>
                         }
                     </TouchableOpacity>
                 </View>

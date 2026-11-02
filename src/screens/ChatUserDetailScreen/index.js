@@ -1,7 +1,7 @@
 import React, { useState, useContext, useRef, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, Image, TouchableOpacity,
-    ActivityIndicator, Alert, SafeAreaView, StatusBar,
+    ActivityIndicator, Alert, StatusBar,
     Platform, Modal, FlatList, Dimensions, Animated, Share, TextInput,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -9,6 +9,8 @@ import * as Contacts from 'expo-contacts/legacy';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
+import GradientFill from '../../components/GradientFill';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import apiService from '../../services/apiService';
 import { apiErrorMessage, fetchBlockedUsers, setBlocked as setBlockedApi } from '../../services/chatActions';
@@ -77,8 +79,10 @@ const formatFileSize = (bytes) => {
 };
 
 // ── Confirm Modal ─────────────────────────────────────────────────────────────
-const ConfirmModal = ({ visible, onClose, onConfirm, title, message, confirmLabel, isDanger, isDark }) => (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+const ConfirmModal = ({ visible, onClose, onConfirm, title, message, confirmLabel, isDanger, isDark }) => {
+    const { theme } = useContext(ThemeContext);
+    return (
+    <Modal statusBarTranslucent visible={visible} transparent animationType="fade" onRequestClose={onClose}>
         <View style={cm.overlay}>
             <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} />
             <View style={[cm.box, { backgroundColor: isDark ? '#1e1e1e' : '#fff' }]}>
@@ -86,7 +90,7 @@ const ConfirmModal = ({ visible, onClose, onConfirm, title, message, confirmLabe
                     <Ionicons
                         name={isDanger ? 'warning-outline' : 'trash-outline'}
                         size={28}
-                        color={isDanger ? '#e53935' : '#0084ff'}
+                        color={isDanger ? '#e53935' : theme.main}
                     />
                 </View>
                 <Text style={[cm.title, { color: isDark ? '#f0f0f0' : '#1a1a1a' }]}>{title}</Text>
@@ -99,7 +103,7 @@ const ConfirmModal = ({ visible, onClose, onConfirm, title, message, confirmLabe
                         <Text style={[cm.cancelTxt, { color: isDark ? '#aaa' : '#666' }]}>Cancel</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[cm.confirmBtn, { backgroundColor: isDanger ? '#e53935' : '#0084ff' }]}
+                        style={[cm.confirmBtn, { backgroundColor: isDanger ? '#e53935' : theme.main }]}
                         onPress={() => { onConfirm(); onClose(); }}
                     >
                         <Text style={cm.confirmTxt}>{confirmLabel}</Text>
@@ -108,7 +112,8 @@ const ConfirmModal = ({ visible, onClose, onConfirm, title, message, confirmLabe
             </View>
         </View>
     </Modal>
-);
+    );
+};
 const cm = StyleSheet.create({
     overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 24 },
     box: { width: '100%', borderRadius: 20, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowOffset: { width: 0, height: 8 }, shadowRadius: 20, elevation: 12 },
@@ -129,7 +134,7 @@ const MediaModal = ({ visible, onClose, items, startIndex }) => {
     useEffect(() => { setCurrent(startIndex); }, [startIndex]);
     if (!items?.length) return null;
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+        <Modal statusBarTranslucent visible={visible} transparent animationType="fade" onRequestClose={onClose}>
             <View style={mm.overlay}>
                 <TouchableOpacity style={mm.closeBtn} onPress={onClose}>
                     <Ionicons name="close" size={26} color="#fff" />
@@ -205,6 +210,8 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
     const [reporting, setReporting] = useState(false);
     const [savingContact, setSavingContact] = useState(false);
     const accent = theme?.main || theme?.maincolor || '#0499FF';
+    const insets = useSafeAreaInsets();
+    const headerBg = theme?.header || accent;
 
     // ── Toast ─────────────────────────────────────────────────────────────────
     const toastAnim = useRef(new Animated.Value(0)).current;
@@ -286,7 +293,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
 
     // ✅ Only show tabs that have items
     const TABS = [
-        { key: 'photos', label: 'Photos', icon: 'image-outline', count: mediaDetails?.images?.count || 0, color: '#0084ff' },
+        { key: 'photos', label: 'Photos', icon: 'image-outline', count: mediaDetails?.images?.count || 0, color: accent },
         { key: 'videos', label: 'Videos', icon: 'videocam-outline', count: mediaDetails?.videos?.count || 0, color: '#8e44ad' },
         { key: 'docs', label: 'Docs', icon: 'document-outline', count: mediaDetails?.documents?.count || 0, color: '#f39c12' },
         { key: 'audio', label: 'Audio', icon: 'mic-outline', count: mediaDetails?.audios?.count || 0, color: '#27ae60' },
@@ -385,9 +392,10 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
     // ── Loading ───────────────────────────────────────────────────────────────
     if (loading) {
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
-                <StatusBar backgroundColor="#0084ff" barStyle="light-content" />
-                <View style={styles.header}>
+            <View style={[styles.container, { backgroundColor: bg }]}>
+                <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+                <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top, minHeight: 68 + insets.top }]}>
+                    <GradientFill />
                     <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={24} color="#fff" />
                     </TouchableOpacity>
@@ -395,20 +403,21 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                     <View style={styles.moreBtn} />
                 </View>
                 <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#0084ff" />
+                    <ActivityIndicator size="large" color={accent} />
                     <Text style={[styles.loadingText, { color: sub }]}>Loading contact info...</Text>
                 </View>
-            </SafeAreaView>
+            </View>
         );
     }
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
-            <StatusBar backgroundColor="#0084ff" barStyle="light-content" />
+        <View style={[styles.container, { backgroundColor: bg }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
-            {/* ── Header ── */}
-            <View style={styles.header}>
+            {/* ── Header ── gradient status bar ke neeche tak */}
+            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top, minHeight: 68 + insets.top }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
@@ -420,16 +429,18 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
 
                 {/* ── Profile Hero Card ── */}
                 <View style={[styles.heroCard, { backgroundColor: card }]}>
-                    <View style={styles.heroGradient} />
+                    <View style={[styles.heroGradient, { backgroundColor: headerBg }]}>
+                        <GradientFill />
+                    </View>
                     <View style={styles.avatarWrap}>
-                        <Image source={{ uri: avatarUri }} style={styles.avatar} />
+                        <Image source={{ uri: avatarUri }} style={[styles.avatar, { shadowColor: accent }]} />
                         {otherUser?.isOnline && <View style={styles.onlineDot} />}
                     </View>
                     <Text style={[styles.heroName, { color: txt }]}>
                         {displayName}
                     </Text>
                     <View style={styles.phoneRow}>
-                        <Ionicons name="call-outline" size={13} color="#0084ff" />
+                        <Ionicons name="call-outline" size={13} color={accent} />
                         <Text style={[styles.phoneText, { color: sub }]}>{phone || 'No number'}</Text>
                     </View>
                     {!resolved.isSaved && !!resolved.subtitle && (
@@ -450,7 +461,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                         <View style={styles.statsRow}>
                             {chatInfo?.totalMessages > 0 && (
                                 <View style={[styles.statBox, { backgroundColor: isDark ? '#1a2a3a' : '#e8f4ff' }]}>
-                                    <Ionicons name="chatbubbles-outline" size={14} color="#0084ff" />
+                                    <Ionicons name="chatbubbles-outline" size={14} color={accent} />
                                     <Text style={[styles.statNum, { color: txt }]}>{chatInfo.totalMessages.toLocaleString()}</Text>
                                     <Text style={[styles.statLabel, { color: sub }]}>Messages</Text>
                                 </View>
@@ -531,7 +542,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                 {!!chatInfo?.createdAt && (
                     <View style={[styles.infoCard, { backgroundColor: card, borderColor: border }]}>
                         <View style={[styles.infoIconWrap, { backgroundColor: isDark ? '#1a2a3a' : '#e8f4ff' }]}>
-                            <Ionicons name="calendar-outline" size={18} color="#0084ff" />
+                            <Ionicons name="calendar-outline" size={18} color={accent} />
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={[styles.infoLabel, { color: sub }]}>Chatting Since</Text>
@@ -673,13 +684,13 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                                                         )}
                                                     </View>
                                                     {!!item?.sender?.name && (
-                                                        <Text style={[styles.docSender, { color: '#0084ff' }]} numberOfLines={1}>
+                                                        <Text style={[styles.docSender, { color: accent }]} numberOfLines={1}>
                                                             {resolveName(item.sender).title}
                                                         </Text>
                                                     )}
                                                 </View>
                                                 <TouchableOpacity style={styles.docAction}>
-                                                    <Ionicons name="download-outline" size={20} color="#0084ff" />
+                                                    <Ionicons name="download-outline" size={20} color={accent} />
                                                 </TouchableOpacity>
                                             </View>
                                         );
@@ -796,7 +807,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                 confirmLabel="Clear All" isDanger={false} isDark={isDark}
             />
             {/* Report: reason picker (local bottom sheet) */}
-            <Modal visible={showReport} transparent animationType="slide" onRequestClose={() => setShowReport(false)}>
+            <Modal statusBarTranslucent visible={showReport} transparent animationType="slide" onRequestClose={() => setShowReport(false)}>
                 <View style={rs.overlay}>
                     <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setShowReport(false)} />
                     <View style={[rs.sheet, { backgroundColor: card }]}>
@@ -836,7 +847,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                 visible={mediaModal} onClose={() => setMediaModal(false)}
                 items={allViewableMedia} startIndex={mediaIndex} isDark={isDark}
             />
-        </SafeAreaView>
+        </View>
     );
 };
 
@@ -862,14 +873,14 @@ const styles = StyleSheet.create({
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     loadingText: { marginTop: 12, fontSize: 15 },
 
-    header: { minHeight: 90, backgroundColor: '#0084ff', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 22 },
+    header: { minHeight: 90, backgroundColor: '#0084ff', overflow: 'hidden', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
     backBtn: { marginRight: 12, padding: 2 },
     headerTitle: { flex: 1, color: '#fff', fontSize: 20, fontWeight: '700' },
     moreBtn: { padding: 4 },
 
     // Hero Card
     heroCard: { marginHorizontal: 16, marginTop: 16, borderRadius: 20, alignItems: 'center', paddingBottom: 24, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 4 },
-    heroGradient: { height: 70, width: '100%', backgroundColor: '#0084ff', marginBottom: -35 },
+    heroGradient: { height: 70, width: '100%', backgroundColor: '#0084ff', marginBottom: -35, overflow: 'hidden' },
     avatarWrap: { position: 'relative', marginBottom: 12 },
     avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: '#fff', shadowColor: '#0084ff', shadowOpacity: 0.3, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 6 },
     onlineDot: { position: 'absolute', bottom: 4, right: 4, width: 18, height: 18, borderRadius: 9, backgroundColor: '#25D366', borderWidth: 3, borderColor: '#fff' },

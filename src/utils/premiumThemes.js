@@ -5,12 +5,14 @@
 // accent  : spec ka accent colour — active pill, filter chip background, highlights.
 // main    : accent ka gehra (contrast-safe) roop — icon/text/FAB, jo safed background par
 //           bhi saaf dikhe (jaise Rose Gold ka #FFC1D5 safed par nahi dikhta).
+import { DarkTheme } from './theme';
+
 export const PREMIUM_THEMES = {
     'royal-sapphire': { key: 'royal-sapphire', name: 'Royal Sapphire', emoji: '🔵', gradient: ['#1565C0', '#00B4DB'], accent: '#00C6FF', main: '#0A84D0', bubble: '#D9F0FF', background: '#F5FAFF' },
     'emerald-luxury': { key: 'emerald-luxury', name: 'Emerald Luxury', emoji: '🟢', gradient: ['#064E3B', '#10B981'], accent: '#34D399', main: '#059669', bubble: '#D1FAE5', background: '#F3FCF7' },
     'royal-amethyst': { key: 'royal-amethyst', name: 'Royal Amethyst', emoji: '🟣', gradient: ['#581C87', '#A855F7'], accent: '#D8B4FE', main: '#9333EA', bubble: '#F0E3FF', background: '#FAF7FF' },
     'rose-gold': { key: 'rose-gold', name: 'Rose Gold', emoji: '🌸', gradient: ['#9D174D', '#F09AB8'], accent: '#FFC1D5', main: '#D6336C', bubble: '#FFE4ED', background: '#FFF8FA' },
-    'obsidian-gold': { key: 'obsidian-gold', name: 'Obsidian Gold', emoji: '🖤', gradient: ['#111827', '#374151'], accent: '#D4AF37', main: '#B8921F', bubble: '#F5EACB', background: '#F8F7F2' },
+    'obsidian-gold': { key: 'obsidian-gold', name: 'Obsidian Gold', emoji: '🖤', gradient: ['#111827', '#374151'], accent: '#F5B800', main: '#F5B800', bubble: '#F5C84B', background: '#0B0E14', dark: true },
 };
 
 export const PREMIUM_THEME_LIST = Object.values(PREMIUM_THEMES);
@@ -50,9 +52,12 @@ export const readableOn = (hex) => {
  */
 export const applyPremiumTheme = (base, p) => {
     if (!p) return base;
-    const light = base.mode === 'light';
+    // Obsidian Gold jaisi dark premium theme: light mode me bhi poora dark UI
+    const forceDark = !!p.dark && base.mode === 'light';
+    const b = forceDark ? { ...DarkTheme, ChatBackimage: DarkTheme.ChatBackimage } : base;
+    const light = b.mode === 'light';
     return {
-        ...base,
+        ...b,
         premiumKey: p.key,
         gradient: p.gradient,
         accent: p.accent,
@@ -61,7 +66,11 @@ export const applyPremiumTheme = (base, p) => {
         maincolor: p.main,
         header: p.gradient[0],
         headerText: '#FFFFFF',
-        batchColor: light ? p.bubble : base.batchColor,
-        ...(light ? { background: p.background, bubbleMine: p.bubble, freeChatmess: p.bubble } : {}),
+        batchColor: light ? p.bubble : b.batchColor,
+        bubbleMine: p.dark ? p.bubble : (light ? p.bubble : b.bubbleMine),
+        bubbleMineText: p.dark ? '#1A1405' : undefined,
+        chatTint: light ? p.background : undefined,
+        ...(light ? { background: p.background, freeChatmess: p.bubble } : {}),
+        ...(p.dark ? { background: p.background, inputBackground: '#1B2029', freeChatmess: '#161B24' } : {}),
     };
 };

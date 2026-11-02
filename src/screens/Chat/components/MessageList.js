@@ -328,7 +328,7 @@ const MessageList = ({
         if (loadingMore) {
             return (
                 <View style={styles.loadMoreWrap}>
-                    <ActivityIndicator size="small" color="#1296f3" />
+                    <ActivityIndicator size="small" color={theme?.main ?? "#1296f3"} />
                 </View>
             );
         }
@@ -336,7 +336,7 @@ const MessageList = ({
             // Scroll se auto-load na ho paye (ya user chahe) to button se purane messages (Point 14)
             return (
                 <TouchableOpacity style={styles.loadMoreWrap} onPress={() => onLoadMore?.()} activeOpacity={0.7}>
-                    <Text style={[styles.allLoadedText, { color: "#1296f3" }]}>Load older messages</Text>
+                    <Text style={[styles.allLoadedText, { color: theme?.main ?? "#1296f3" }]}>Load older messages</Text>
                 </TouchableOpacity>
             );
         }
@@ -348,7 +348,7 @@ const MessageList = ({
             );
         }
         return null;
-    }, [loadingMore, hasMore, onLoadMore]);
+    }, [loadingMore, hasMore, onLoadMore, theme?.main]);
 
     // Full-screen blocking spinner sirf tab jab dikhane ke liye kuch bhi nahi
     // hai (asli pehli load). Agar cache/pehle se fetched messages maujood
@@ -361,7 +361,7 @@ const MessageList = ({
     if (loading && messages.length === 0) {
         return (
             <View style={styles.loaderContainer}>
-                <ActivityIndicator size="large" color="#1296f3" />
+                <ActivityIndicator size="large" color={theme?.main ?? "#1296f3"} />
             </View>
         );
     }
@@ -370,7 +370,7 @@ const MessageList = ({
         <View style={{ flex: 1 }}>
             {loading && messages.length > 0 && (
                 <View style={styles.syncBar}>
-                    <ActivityIndicator size="small" color="#1296f3" />
+                    <ActivityIndicator size="small" color={theme?.main ?? "#1296f3"} />
                 </View>
             )}
             <FlatList
@@ -410,13 +410,13 @@ const MessageList = ({
                     activeOpacity={0.8}
                 >
                     {newMsgCount > 0 && (
-                        <View style={styles.badge}>
+                        <View style={[styles.badge, { backgroundColor: theme?.main ?? "#1296f3" }]}>
                             <Text style={styles.badgeText}>
                                 {newMsgCount > 99 ? "99+" : newMsgCount}
                             </Text>
                         </View>
                     )}
-                    <Ionicons name="chevron-down" size={22} color="#1296f3" />
+                    <Ionicons name="chevron-down" size={22} color={theme?.main ?? "#1296f3"} />
                 </TouchableOpacity>
             )}
         </View>

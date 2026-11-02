@@ -11,7 +11,6 @@ import {
     Platform,
     Pressable,
     Share,
-    SafeAreaView,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -26,6 +25,8 @@ import apiService from '../../services/apiService';
 import { APP_LINK_HOST } from '../../navigation/deepLinks';
 import { useDispatch, useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
+import GradientFill from '../../components/GradientFill';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Config from '../../services/config';
 import { fetchMyPlan } from '../../redex/slices/plansSlice';
 import { useBadgePlacements } from '../../services/badgeConfig';
@@ -58,6 +59,7 @@ const FIELDS = {
 // ── Edit bottom sheet ────────────────────────────────────────────────────────
 const EditSheet = ({ field, value, onClose, onSave, isDark }) => {
     const { t } = useTranslation();
+    const { theme } = useContext(ThemeContext);
     const cfg = FIELDS[field] ?? {};
     const [text, setText] = useState(value ?? '');
     const [saving, setSaving] = useState(false);
@@ -77,7 +79,7 @@ const EditSheet = ({ field, value, onClose, onSave, isDark }) => {
     };
 
     return (
-        <Modal visible={!!field} transparent animationType="slide" onRequestClose={onClose}>
+        <Modal statusBarTranslucent visible={!!field} transparent animationType="slide" onRequestClose={onClose}>
             <KeyboardAvoidingView style={styles.sheetOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                 <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
                 <View style={[styles.sheet, { backgroundColor: isDark ? '#1e1e1e' : '#fff' }]}>
@@ -110,7 +112,7 @@ const EditSheet = ({ field, value, onClose, onSave, isDark }) => {
                         <TouchableOpacity style={[styles.sheetCancelBtn, { borderColor: isDark ? '#444' : '#ddd' }]} onPress={onClose}>
                             <Text style={[styles.sheetCancelText, { color: isDark ? '#aaa' : '#666' }]}>{t('Cancel')}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.sheetSaveBtn, !canSave && { opacity: 0.5 }]} onPress={handleSave} disabled={!canSave}>
+                        <TouchableOpacity style={[styles.sheetSaveBtn, { backgroundColor: theme.main }, !canSave && { opacity: 0.5 }]} onPress={handleSave} disabled={!canSave}>
                             {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.sheetSaveText}>{t('Save')}</Text>}
                         </TouchableOpacity>
                     </View>
@@ -124,6 +126,7 @@ const EditSheet = ({ field, value, onClose, onSave, isDark }) => {
 const ProfileScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
     const dispatch = useDispatch();
     // Redux hi source of truth — local copy nahi, isliye kahin aur se update ho to yahan bhi dikhe
     const user = useSelector((state) => state.totalappData?.user) || {};
@@ -236,16 +239,18 @@ const ProfileScreen = ({ navigation }) => {
                         {value || placeholder}
                     </Text>
                 </View>
-                <Ionicons name={field ? 'pencil' : 'lock-closed-outline'} size={16} color={field ? '#0084ff' : sub} />
+                <Ionicons name={field ? 'pencil' : 'lock-closed-outline'} size={16} color={field ? theme.main : sub} />
             </View>
         </TouchableOpacity>
     );
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: bg }]}>
-            <StatusBar backgroundColor="#0084ff" barStyle="light-content" />
+        <View style={[styles.container, { backgroundColor: bg }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
-            <View style={styles.header}>
+            {/* gradient status bar ke neeche tak */}
+            <View style={[styles.header, { backgroundColor: theme.header || theme.main, paddingTop: insets.top + 12 }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn} hitSlop={10}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
@@ -262,7 +267,7 @@ const ProfileScreen = ({ navigation }) => {
                                 <ActivityIndicator color="#fff" size="large" />
                             </View>
                         )}
-                        <View style={styles.cameraBadge}>
+                        <View style={[styles.cameraBadge, { backgroundColor: theme.main }]}>
                             <Ionicons name="camera" size={18} color="#fff" />
                         </View>
                     </TouchableOpacity>
@@ -270,13 +275,13 @@ const ProfileScreen = ({ navigation }) => {
                     {!!phone && <Text style={[styles.bigPhone, { color: sub }]}>{phone}</Text>}
                     {placements.profile && <PlanBadge badge={myBadge} onPress={() => navigation.navigate('Plans')} />}
                     <TouchableOpacity onPress={choosePhoto} disabled={photoBusy}>
-                        <Text style={styles.changePhoto}>{photoBusy ? 'Uploading…' : 'Change photo'}</Text>
+                        <Text style={[styles.changePhoto, { color: theme.main }]}>{photoBusy ? 'Uploading…' : 'Change photo'}</Text>
                     </TouchableOpacity>
                 </View>
 
                 <Text style={[styles.sectionLabel, { color: sub }]}>PERSONAL INFO</Text>
                 <View style={[styles.card, { backgroundColor: card }]}>
-                    <Row icon="person-outline" iconBg="#e8f4ff" iconColor="#0084ff" label={t('full_name')} value={user.name} field="name" placeholder="Add your name" />
+                    <Row icon="person-outline" iconBg={theme.main + '22'} iconColor={theme.main} label={t('full_name')} value={user.name} field="name" placeholder="Add your name" />
                     <Row icon="chatbubble-ellipses-outline" iconBg="#fff0e8" iconColor="#e67e22" label={t('About')} value={user.about} field="about" placeholder="Add a few words about you" last />
                 </View>
 
@@ -287,12 +292,12 @@ const ProfileScreen = ({ navigation }) => {
                             <Text style={[styles.linkText, { color: txt }]} numberOfLines={1}>{inviteLink}</Text>
                             <View style={[styles.linkActions, { borderTopColor: divider }]}>
                                 <TouchableOpacity style={styles.linkBtn} onPress={copyMyLink} activeOpacity={0.7}>
-                                    <Ionicons name="link-outline" size={20} color="#0084ff" />
-                                    <Text style={styles.linkBtnText}>Copy Link</Text>
+                                    <Ionicons name="link-outline" size={20} color={theme.main} />
+                                    <Text style={[styles.linkBtnText, { color: theme.main }]}>Copy Link</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.linkBtn} onPress={shareMyLink} activeOpacity={0.7}>
-                                    <Ionicons name="share-social-outline" size={20} color="#0084ff" />
-                                    <Text style={styles.linkBtnText}>Share Profile</Text>
+                                    <Ionicons name="share-social-outline" size={20} color={theme.main} />
+                                    <Text style={[styles.linkBtnText, { color: theme.main }]}>Share Profile</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -319,7 +324,7 @@ const ProfileScreen = ({ navigation }) => {
                 onSave={saveField}
                 isDark={isDark}
             />
-        </SafeAreaView>
+        </View>
     );
 };
 
@@ -330,9 +335,8 @@ const styles = StyleSheet.create({
     planPillText: { fontSize: 12, fontWeight: '700' },
     container: { flex: 1 },
     header: {
-        backgroundColor: '#0084ff', flexDirection: 'row', alignItems: 'center',
+        backgroundColor: '#0084ff', overflow: 'hidden', flexDirection: 'row', alignItems: 'center',
         paddingHorizontal: 16, paddingBottom: 14,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
     },
     backBtn: { marginRight: 14 },
     headerTitle: { color: '#fff', fontSize: 20, fontWeight: '700' },

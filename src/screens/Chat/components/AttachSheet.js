@@ -22,7 +22,7 @@ const AttachSheet = ({ visible, onClose, openCamera, openGallery, openDocument, 
     ];
 
     return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+        <Modal statusBarTranslucent visible={visible} transparent animationType="slide" onRequestClose={onClose}>
             <Pressable style={styles.overlay} onPress={onClose}>
                 <View style={[styles.sheet, { backgroundColor: sheetBg }]}>
                     <View style={[styles.handle, { backgroundColor: handleBg }]} />

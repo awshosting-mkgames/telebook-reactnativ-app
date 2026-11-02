@@ -159,7 +159,7 @@ export default function Call({ navigation }) {
                     <Ionicons
                         name={selected.has(item._id) ? 'checkmark-circle' : 'ellipse-outline'}
                         size={24}
-                        color={selected.has(item._id) ? '#1296f3' : '#9aa0a6'}
+                        color={selected.has(item._id) ? theme.main : '#9aa0a6'}
                         style={{ marginRight: 10 }}
                     />
                 )}
@@ -227,11 +227,11 @@ export default function Call({ navigation }) {
                 )}
             </View>
 
-            <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+            <Modal statusBarTranslucent visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
                 <Pressable style={styles.menuOverlay} onPress={() => setMenuOpen(false)}>
                     <View style={[styles.menuBox, { backgroundColor: theme?.mode === 'dark' ? '#1f2c34' : '#fff', top: HEADER_CONTENT_HEIGHT + insets.top - 8 }]}>
                         <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setSelectMode(true); setSelected(new Set()); }}>
-                            <Ionicons name="checkmark-circle-outline" size={18} color="#1296f3" />
+                            <Ionicons name="checkmark-circle-outline" size={18} color={theme.main} />
                             <Text style={[styles.menuText, { color: theme.text }]}>Select calls</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.menuItem} onPress={clearAll}>
@@ -248,7 +248,7 @@ export default function Call({ navigation }) {
                     <Text style={styles.emptyTitle}>Calling isn't available right now</Text>
                 </View>
             ) : loading ? (
-                <ActivityIndicator color="#1296f3" size="large" style={{ flex: 1 }} />
+                <ActivityIndicator color={theme.main} size="large" style={{ flex: 1 }} />
             ) : (
                 <FlatList
                     data={calls}
@@ -260,7 +260,7 @@ export default function Call({ navigation }) {
                     onRefresh={() => fetchCalls(1)}
                     onEndReachedThreshold={0.4}
                     onEndReached={loadMore}
-                    ListFooterComponent={loadingMore ? <ActivityIndicator color="#1296f3" style={{ marginVertical: 16 }} /> : null}
+                    ListFooterComponent={loadingMore ? <ActivityIndicator color={theme.main} style={{ marginVertical: 16 }} /> : null}
                     ListEmptyComponent={
                         <View style={styles.emptyWrap}>
                             <Ionicons name="call-outline" size={56} color="#ccc" />

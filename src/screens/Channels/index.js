@@ -53,21 +53,24 @@ const timeAgo = (dateStr) => {
 
 // Icon load fail ho to placeholder — warna khali circle reh jata tha
 const ChannelAvatar = ({ uri, isDark }) => {
+    const { theme } = useContext(ThemeContext);
     const [failed, setFailed] = useState(false);
     if (!uri || failed) {
         return (
             <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: isDark ? '#1a2a3a' : '#e8f4fd' }]}>
-                <Ionicons name="megaphone" size={22} color="#1296f3" />
+                <Ionicons name="megaphone" size={22} color={theme.main} />
             </View>
         );
     }
     return <Image source={{ uri }} style={styles.avatar} onError={() => setFailed(true)} />;
 };
 
-const EmptyState = ({ icon = 'alert-circle-outline', message = 'No data found', hint, action, onAction, isDark }) => (
+const EmptyState = ({ icon = 'alert-circle-outline', message = 'No data found', hint, action, onAction, isDark }) => {
+    const { theme } = useContext(ThemeContext);
+    return (
     <View style={styles.emptyWrap}>
         <View style={[styles.emptyIcon, { backgroundColor: isDark ? '#141414' : '#f4f7f9' }]}>
-            <Ionicons name={icon} size={30} color="#1296f3" />
+            <Ionicons name={icon} size={30} color={theme.main} />
         </View>
         <Text style={[styles.emptyTitle, { color: isDark ? '#bbb' : '#555' }]}>{message}</Text>
         {!!hint && <Text style={[styles.emptyText, { color: isDark ? '#555' : '#9aa5ad' }]}>{hint}</Text>}
@@ -77,11 +80,12 @@ const EmptyState = ({ icon = 'alert-circle-outline', message = 'No data found', 
                 onPress={onAction}
                 activeOpacity={0.8}
             >
-                <Text style={styles.emptyActionText}>{action}</Text>
+                <Text style={[styles.emptyActionText, { color: theme.main }]}>{action}</Text>
             </TouchableOpacity>
         )}
     </View>
-);
+    );
+};
 
 const TABS = [
     { key: 'all', label: 'Discover' },
@@ -291,7 +295,7 @@ const Channels = ({ navigation }) => {
 
 
                 <TouchableOpacity
-                    style={[styles.followBtn, isFollowed && styles.followedBtn]}
+                    style={[styles.followBtn, { backgroundColor: theme.main, shadowColor: theme.main }, isFollowed && styles.followedBtn]}
                     onPress={() => handleFollow(item)}
                     disabled={isLoading}
                     activeOpacity={0.8}
@@ -427,7 +431,7 @@ const Channels = ({ navigation }) => {
                 <View style={{ flex: 1 }}>
                     <View style={styles.nameRow}>
                         <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>{name}</Text>
-                        {verified && <Ionicons name="checkmark-circle" size={15} color="#1296f3" />}
+                        {verified && <Ionicons name="checkmark-circle" size={15} color={theme.main} />}
                         {item?.isPrivate && <Ionicons name="lock-closed" size={12} color={isDark ? '#666' : '#999'} />}
                     </View>
 
@@ -442,9 +446,9 @@ const Channels = ({ navigation }) => {
                 </View>
 
                 <View style={styles.rowEnd}>
-                    <Text style={styles.time}>{timeAgo(updatedAt)}</Text>
+                    <Text style={[styles.time, { color: theme.main }]}>{timeAgo(updatedAt)}</Text>
                     {unseen > 0 && (
-                        <View style={styles.unseenBadge}>
+                        <View style={[styles.unseenBadge, { backgroundColor: theme.main }]}>
                             <Text style={styles.unseenText}>{unseen > 99 ? '99+' : unseen}</Text>
                         </View>
                     )}
@@ -462,11 +466,11 @@ const Channels = ({ navigation }) => {
                                 activeOpacity={0.8}
                             >
                                 {boostLoadingId === id ? (
-                                    <ActivityIndicator size="small" color="#1296f3" />
+                                    <ActivityIndicator size="small" color={theme.main} />
                                 ) : (
                                     <>
-                                        <Ionicons name="rocket-outline" size={14} color={isDark ? '#fff' : '#1296f3'} />
-                                        <Text style={[styles.sponsorText, isDark && { color: '#fff' }]}>Boost</Text>
+                                        <Ionicons name="rocket-outline" size={14} color={isDark ? '#fff' : theme.main} />
+                                        <Text style={[styles.sponsorText, { color: theme.main }, isDark && { color: '#fff' }]}>Boost</Text>
                                     </>
                                 )}
                             </TouchableOpacity>
@@ -505,11 +509,11 @@ const Channels = ({ navigation }) => {
                     return (
                         <TouchableOpacity
                             key={tab.key}
-                            style={[styles.tabItem, active && { borderBottomColor: '#1296f3' }]}
+                            style={[styles.tabItem, active && { borderBottomColor: theme.main }]}
                             onPress={() => handleTabPress(tab.key)}
                             activeOpacity={0.8}
                         >
-                            <Text style={[styles.tabLabel, { color: active ? '#1296f3' : (isDark ? '#888' : '#667781') }]}>
+                            <Text style={[styles.tabLabel, { color: active ? theme.main : (isDark ? '#888' : '#667781') }]}>
                                 {tab.label}
                             </Text>
                         </TouchableOpacity>
@@ -540,7 +544,7 @@ const Channels = ({ navigation }) => {
                     </View>
 
                     {loading ? (
-                        <ActivityIndicator color="#1296f3" size="large" style={{ marginTop: 40 }} />
+                        <ActivityIndicator color={theme.main} size="large" style={{ marginTop: 40 }} />
                     ) : (
                         <FlatList
                             data={filteredChannels}
@@ -581,13 +585,13 @@ const Channels = ({ navigation }) => {
                             onPress={() => setCreateChannelPopup(true)}
                             activeOpacity={0.8}
                         >
-                            <Ionicons name="add" size={16} color="#1296f3" />
-                            <Text style={styles.createBtnText}>Create</Text>
+                            <Ionicons name="add" size={16} color={theme.main} />
+                            <Text style={[styles.createBtnText, { color: theme.main }]}>Create</Text>
                         </TouchableOpacity>
                     </View>
 
                     {loadingMyChannels ? (
-                        <ActivityIndicator color="#1296f3" style={{ marginTop: 40 }} />
+                        <ActivityIndicator color={theme.main} style={{ marginTop: 40 }} />
                     ) : (
                         <FlatList
                             data={myChannels}
@@ -626,7 +630,7 @@ const Channels = ({ navigation }) => {
                     </View>
 
                     {loadingSubscribed ? (
-                        <ActivityIndicator color="#1296f3" style={{ marginTop: 40 }} />
+                        <ActivityIndicator color={theme.main} style={{ marginTop: 40 }} />
                     ) : (
                         <FlatList
                             data={subscribedChannels}

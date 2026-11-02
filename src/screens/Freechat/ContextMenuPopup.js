@@ -1,11 +1,13 @@
 // components/ContextMenuPopup.js
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useContext } from 'react';
 import {
     View, Text, Image, TouchableOpacity, StyleSheet,
     Modal, Animated, Alert,
 } from 'react-native';
 import { TouchableWithoutFeedback } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ThemeContext } from '../../components/ThemeContext';
+import GradientFill from '../../components/GradientFill';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
@@ -20,6 +22,8 @@ const lastMsgPreview = (lastMsg) => {
 };
 
 export default function ContextMenuPopup({ visible, item, onClose, onPin, onDelete, onBlock, isPinned, isBlocked }) {
+    const { theme } = useContext(ThemeContext);
+    const accent = theme?.main || '#1199ff';
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -79,8 +83,8 @@ export default function ContextMenuPopup({ visible, item, onClose, onPin, onDele
         {
             icon: isPinned ? 'pin' : 'pin-outline',
             label: isPinned ? 'Unpin Chat' : 'Pin Chat',
-            iconBg: '#e8f4ff',
-            iconColor: '#1199ff',
+            iconBg: theme?.main ? theme.main + '22' : '#e8f4ff',
+            iconColor: accent,
             textColor: '#1a1a1a',
             onPress: handlePin,
             show: true,
@@ -111,7 +115,8 @@ export default function ContextMenuPopup({ visible, item, onClose, onPin, onDele
                 <View style={styles.overlay}>
                     <TouchableWithoutFeedback>
                         <Animated.View style={[styles.popup, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
-                            <View style={styles.header}>
+                            <View style={[styles.header, { backgroundColor: theme?.header || accent }]}>
+                                <GradientFill />
                                 <Image
                                     source={{ uri: item.displayAvatar || DEFAULT_AVATAR }}
                                     style={styles.headerAvatar}
@@ -148,7 +153,7 @@ export default function ContextMenuPopup({ visible, item, onClose, onPin, onDele
                             <View style={styles.divider} />
 
                             <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-                                <Text style={styles.cancelText}>Cancel</Text>
+                                <Text style={[styles.cancelText, { color: accent }]}>Cancel</Text>
                             </TouchableOpacity>
                         </Animated.View>
                     </TouchableWithoutFeedback>
@@ -161,7 +166,7 @@ export default function ContextMenuPopup({ visible, item, onClose, onPin, onDele
 const styles = StyleSheet.create({
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
     popup: { width: '100%', backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden' },
-    header: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1199ff', paddingHorizontal: 18, paddingVertical: 16, gap: 12 },
+    header: { overflow: 'hidden', flexDirection: 'row', alignItems: 'center', backgroundColor: '#1199ff', paddingHorizontal: 18, paddingVertical: 16, gap: 12 },
     headerAvatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.5)', backgroundColor: '#cce5ff' },
     headerInfo: { flex: 1 },
     headerName: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 3 },

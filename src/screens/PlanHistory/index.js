@@ -1,12 +1,13 @@
 import { useCallback, useContext, useState } from 'react';
 import {
     ActivityIndicator, FlatList, Modal, Platform, Pressable, RefreshControl,
-    SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View,
+    StatusBar, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
 import { fetchMyPlan, fetchPlanHistory } from '../../redex/slices/plansSlice';
 import GradientFill from '../../components/GradientFill';
@@ -20,6 +21,7 @@ const fmtDate = (iso) => {
 export default function PlanHistory({ navigation }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
     const dispatch = useDispatch();
     const { me, history, historyLoading, historyError, historyPagination, historyCurrent } = useSelector((s) => s.plans);
 
@@ -34,7 +36,7 @@ export default function PlanHistory({ navigation }) {
         txt: isDark ? '#f0f0f0' : '#1a1a1a',
         sub: isDark ? '#9a9a9a' : '#8a8f98',
         divider: isDark ? '#2a2a2a' : '#eceef1',
-        accent: headerBg,
+        accent: theme?.main || headerBg,
         ok: '#27ae60',
         bad: '#e74c3c',
     };
@@ -63,7 +65,7 @@ export default function PlanHistory({ navigation }) {
     const previous = (history || []).filter((h) => h.status !== 'active');
     const topPlan = ent?.planName || historyCurrent?.planName;
     const badgeLabel = ent?.badge?.label || historyCurrent?.badgeLabel;
-    const badgeColor = ent?.badge?.color || headerBg;
+    const badgeColor = ent?.badge?.color || theme?.main || headerBg;
     const startAt = ent?.startAt || historyCurrent?.startAt;
     const endAt = ent?.endAt || historyCurrent?.endAt;
 
@@ -138,9 +140,9 @@ export default function PlanHistory({ navigation }) {
     );
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar backgroundColor={headerBg} barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: headerBg }]}>
+        <View style={[styles.container, { backgroundColor: colors.bg }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top + 12 }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -178,7 +180,7 @@ export default function PlanHistory({ navigation }) {
             )}
 
             {/* Receipt / detail sheet */}
-            <Modal visible={!!detail} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
+            <Modal statusBarTranslucent visible={!!detail} transparent animationType="slide" onRequestClose={() => setDetail(null)}>
                 <Pressable style={styles.overlay} onPress={() => setDetail(null)}>
                     <Pressable style={[styles.sheet, { backgroundColor: colors.card }]} onPress={() => { }}>
                         <View style={styles.sheetHandle} />
@@ -201,7 +203,7 @@ export default function PlanHistory({ navigation }) {
                     </Pressable>
                 </Pressable>
             </Modal>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -210,7 +212,7 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row', alignItems: 'center', gap: 18,
         paddingHorizontal: 16, paddingBottom: 14,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
+        overflow: 'hidden',
     },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
     card: { borderRadius: 16, padding: 16, marginBottom: 14 },

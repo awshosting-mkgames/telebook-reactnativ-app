@@ -80,7 +80,7 @@ const GroupMembers = ({
             {ManinAdmin && (
                 <>
                     <TouchableOpacity style={styles.row} onPress={onAddMember}>
-                        <View style={styles.iconCircle}>
+                        <View style={[styles.iconCircle, { backgroundColor: theme.main || '#3498db' }]}>
                             <Ionicons name="person-add" size={20} color="white" />
                         </View>
                         <Text style={[styles.shortcutText, { color: theme.text }]}>Add members</Text>
@@ -103,7 +103,7 @@ const GroupMembers = ({
                         <Image
                             source={{
                                 uri: getImageUrl(member.profilePicture)
-                                    || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.mobile || '?')}&background=3498db&color=fff&size=100`,
+                                    || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.mobile || '?')}&background=${encodeURIComponent((theme.main || '#3498db').replace('#', ''))}&color=fff&size=100`,
                             }}
                             style={styles.avatar}
                         />
@@ -115,12 +115,12 @@ const GroupMembers = ({
                         <View style={styles.badges}>
                             {role===1 && (
                                 <View style={[styles.adminBadge, { backgroundColor: theme.batchColor }]}>
-                                    <Text style={styles.adminText}>{t('Group Admin')}</Text>
+                                    <Text style={[styles.adminText, { color: theme.main || '#3498db' }]}>{t('Group Admin')}</Text>
                                 </View>
                             )}
                             {role===2 && (
                                 <View style={[styles.adminBadge, { backgroundColor: theme.batchColor }]}>
-                                    <Text style={styles.adminText}>{t('Admin')}</Text>
+                                    <Text style={[styles.adminText, { color: theme.main || '#3498db' }]}>{t('Admin')}</Text>
                                 </View>
                             )}
                             {role === 2  && (
@@ -143,7 +143,7 @@ const GroupMembers = ({
                     style={[styles.viewAllBtn, { backgroundColor: theme.batchColor }]}
                     onPress={() => setShowAllMembers(!showAllMembers)}
                 >
-                    <Text style={styles.viewAllText}>
+                    <Text style={[styles.viewAllText, { color: theme.main || '#3498db' }]}>
                         {showAllMembers
                             ? 'Show less'
                             : `View all (${groupDetails.totalMembers - 5} more)`}

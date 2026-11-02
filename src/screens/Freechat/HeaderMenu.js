@@ -50,7 +50,7 @@ export default function HeaderMenu({ visible, onClose, onProfile, onSyncData, sy
             icon: 'refresh-outline',
             label: syncing ? 'Syncing...' : 'Sync Data',
             sublabel: 'Refresh all chat tabs',
-            color: '#1199ff',
+            color: theme.main || '#1199ff',
             bg: iconBgs.sync,
             onPress: onSyncData,
             disabled: syncing,

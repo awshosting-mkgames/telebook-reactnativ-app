@@ -180,7 +180,7 @@ export default function ActiveCallBar() {
     }, []);
 
     const rechargeModal = (
-        <Modal visible={rechargeOpen} transparent animationType="fade" onRequestClose={hideRechargePrompt}>
+        <Modal statusBarTranslucent visible={rechargeOpen} transparent animationType="fade" onRequestClose={hideRechargePrompt}>
             <View style={styles.modalBackdrop}>
                 <View style={styles.modalCard}>
                     <Ionicons name="wallet-outline" size={36} color="#e67e22" />

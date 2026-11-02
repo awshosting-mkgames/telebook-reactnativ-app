@@ -49,7 +49,7 @@ const Freechat = ({ navigation }) => {
     const dispatch = useDispatch();
 
     const isDark = theme.text === '#FFFFFF';
-    const accent = theme.premiumKey ? theme.main : '#1199ff';   // premium gradient theme ka accent
+    const accent = theme.main || '#1199ff';   // theme ka accent
     const [activeFilter, setActiveFilter] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [menuVisible, setMenuVisible] = useState(false);
@@ -333,7 +333,7 @@ const Freechat = ({ navigation }) => {
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.profileBtn} activeOpacity={0.8}>
                     <Image source={{ uri: avatarUri }} style={[styles.profileAvatar, isDark && styles.profileAvatarDark]} />
-                    {totalUnread > 0 && <View style={styles.headerBadge} />}
+                    {totalUnread > 0 && <View style={[styles.headerBadge, { borderColor: theme.header || '#1199ff' }]} />}
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>
                     <Text style={[styles.headerTitle, { color: theme.headerText || '#fff' }]}>{userData?.name || userData?.mobile || 'Chats'}</Text>

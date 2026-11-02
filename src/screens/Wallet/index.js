@@ -1,11 +1,11 @@
 import { useCallback, useContext, useState } from 'react';
 import {
-    ActivityIndicator, FlatList, Platform, SafeAreaView,
-    StatusBar, StyleSheet, Text, TouchableOpacity, View,
+    ActivityIndicator, FlatList, Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
 import { fetchWallet, fetchWalletTransactions } from '../../redex/slices/walletSlice';
 import { fetchPaymentConfig, getCachedPaymentConfig, canBuy } from '../../services/paymentConfigStore';
@@ -34,6 +34,7 @@ const fmtDate = (iso) => {
 
 export default function Wallet({ navigation }) {
     const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
     const dispatch = useDispatch();
     const { wallet, walletLoading, transactions, txLoading, txPagination, txType } = useSelector((s) => s.wallet);
 
@@ -96,9 +97,9 @@ export default function Wallet({ navigation }) {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar backgroundColor={headerBg} barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: headerBg }]}>
+        <View style={[styles.container, { backgroundColor: colors.bg }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top + 12 }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -111,7 +112,7 @@ export default function Wallet({ navigation }) {
             </View>
 
             {walletLoading && !wallet ? (
-                <ActivityIndicator color="#0084ff" size="large" style={{ flex: 1 }} />
+                <ActivityIndicator color={theme.main} size="large" style={{ flex: 1 }} />
             ) : (
                 <FlatList
                     data={transactions}
@@ -120,7 +121,7 @@ export default function Wallet({ navigation }) {
                     contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
                     onEndReachedThreshold={0.5}
                     onEndReached={loadMore}
-                    ListFooterComponent={txLoading && transactions.length ? <ActivityIndicator color="#0084ff" style={{ marginVertical: 14 }} /> : null}
+                    ListFooterComponent={txLoading && transactions.length ? <ActivityIndicator color={theme.main} style={{ marginVertical: 14 }} /> : null}
                     ListHeaderComponent={
                         <>
                             {/* Balance card */}
@@ -156,8 +157,8 @@ export default function Wallet({ navigation }) {
                                                 <Ionicons name="logo-bitcoin" size={22} color="#f39c12" />
                                                 <Text style={[styles.packCoins, { color: colors.txt }]}>{pack.coins} coins</Text>
                                                 <Text style={[styles.packPrice, { color: colors.sub }]}>₹{pack.price}</Text>
-                                                <View style={[styles.packCta, !buyActive && styles.packCtaInfo]}>
-                                                    <Text style={buyActive ? styles.packCtaText : styles.packCtaInfoText}>
+                                                <View style={[styles.packCta, { backgroundColor: buyActive ? theme.main : theme.main + '1A' }, !buyActive && styles.packCtaInfo]}>
+                                                    <Text style={buyActive ? [styles.packCtaText, { color: theme.accentText || '#fff' }] : [styles.packCtaInfoText, { color: theme.main }]}>
                                                         {buyActive ? 'Buy' : 'Contact support'}
                                                     </Text>
                                                 </View>
@@ -172,10 +173,10 @@ export default function Wallet({ navigation }) {
                                 {TABS.map((t) => (
                                     <TouchableOpacity
                                         key={t.key}
-                                        style={[styles.tabBtn, tab === t.key && styles.tabBtnActive]}
+                                        style={[styles.tabBtn, { backgroundColor: theme.main + '14' }, tab === t.key && { backgroundColor: theme.main }]}
                                         onPress={() => changeTab(t.key)}
                                     >
-                                        <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
+                                        <Text style={[styles.tabText, { color: theme.main }, tab === t.key && { color: theme.accentText || '#fff' }]}>{t.label}</Text>
                                     </TouchableOpacity>
                                 ))}
                             </View>
@@ -186,7 +187,7 @@ export default function Wallet({ navigation }) {
                     }
                 />
             )}
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -195,7 +196,7 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row', alignItems: 'center', gap: 18,
         paddingHorizontal: 16, paddingBottom: 14,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
+        overflow: 'hidden',
     },
     planHistoryLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     planHistoryText: { color: '#fff', fontSize: 13, fontWeight: '600' },

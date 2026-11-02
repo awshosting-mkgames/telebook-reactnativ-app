@@ -6,11 +6,11 @@ import {
     TextInput,
     TouchableOpacity,
     FlatList,
-    SafeAreaView,
-    StatusBar,Platform,
+    StatusBar,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
 import GradientFill from '../../components/GradientFill';
 
@@ -19,6 +19,7 @@ import GradientFill from '../../components/GradientFill';
 export default function InviteAFriends({navigation}) {
      const { t } = useTranslation();
     const { theme, toggleTheme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
     const contacts = [
         { id: '1', name: 'Alexander', phone: '+44 1836 822222' },
         { id: '2', name: 'Kenny', phone: '+44 1975 985465' },
@@ -42,7 +43,7 @@ export default function InviteAFriends({navigation}) {
                 <Text style={[styles.contactName,{ color: theme.text}]}>{item.name}</Text>
                 <Text style={styles.contactPhone}>{item.phone}</Text>
             </View>
-            <TouchableOpacity style={styles.inviteButton}>
+            <TouchableOpacity style={[styles.inviteButton, { backgroundColor: theme.main }]}>
                 <Text style={styles.inviteButtonText}>Invite</Text>
             </TouchableOpacity>
         </View>
@@ -77,11 +78,11 @@ export default function InviteAFriends({navigation}) {
     );
 
     return (
-        <SafeAreaView style={[styles.container,{ backgroundColor: theme.background}]}>
-             <StatusBar backgroundColor={theme.header || '#1199ff'} barStyle="light-content" />
+        <View style={[styles.container,{ backgroundColor: theme.background}]}>
+             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff', paddingTop: insets.top, height: 56 + insets.top }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Ionicons name="arrow-back" size={26} color="white" />
@@ -96,7 +97,7 @@ export default function InviteAFriends({navigation}) {
                 ListHeaderComponent={ListHeader}
                 showsVerticalScrollIndicator={false}
             />
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -107,11 +108,11 @@ const styles = StyleSheet.create({
     },
     header: {
         backgroundColor: '#4491f2',
+        overflow: 'hidden',
         height: 90,
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 15,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     },
     headerTitle: {
         color: 'white',

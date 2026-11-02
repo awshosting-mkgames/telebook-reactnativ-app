@@ -1,7 +1,7 @@
 import React, { useState, useContext, useRef, useEffect } from 'react';
 import {
     StyleSheet, Text, View, TextInput, Image, TouchableOpacity,
-    FlatList, SafeAreaView, StatusBar, ActivityIndicator,
+    FlatList, StatusBar, ActivityIndicator,
     Platform, Alert, Keyboard, Share,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,7 @@ import { contactSync } from '../../services/contactSync';
 import CreateChannelPopup from '../../components/CreateChannelPopup';
 import apiService from '../../services/apiService';
 import { useSelector, useDispatch, shallowEqual } from 'react-redux';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GradientFill from '../../components/GradientFill';
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
@@ -23,6 +24,7 @@ export default function Contact({ navigation }) {
     const { theme } = useContext(ThemeContext);
 
     const isDark = theme.mode === 'dark';
+    const insets = useSafeAreaInsets();
 
     const contacts = useSelector((state) => state.contacts?.contacts ?? [], shallowEqual);
     const loading = useSelector((state) => state.contacts?.syncing ?? false);
@@ -192,20 +194,20 @@ export default function Contact({ navigation }) {
                 </View>
                 {isUnregistered ? (
                     <TouchableOpacity onPress={() => handleInvite(phone)} style={styles.inviteContainer}>
-                        <Text style={styles.inviteText}>{t('Invite Now')}</Text>
+                        <Text style={[styles.inviteText, { color: theme.main }]}>{t('Invite Now')}</Text>
                     </TouchableOpacity>
                 ) : (
                     <View
                         style={{
                             ...styles.inviteContainer,
-                            borderColor: headerBg,
+                            borderColor: theme.main,
                             borderWidth: 2,
                             borderRadius: 15,
                             paddingVertical: 5,
                             paddingHorizontal: 15,
                         }}
                     >
-                        <Text style={styles.inviteText}>{t('Chat')}</Text>
+                        <Text style={[styles.inviteText, { color: theme.main }]}>{t('Chat')}</Text>
                     </View>
                 )}
             </TouchableOpacity>
@@ -214,7 +216,7 @@ export default function Contact({ navigation }) {
 
     const ActionItem = ({ type, icon, label }) => (
         <TouchableOpacity onPress={() => gotoCreateNew(type)} style={styles.actionItem}>
-            <View style={styles.actionIconContainer}>
+            <View style={[styles.actionIconContainer, { backgroundColor: theme.main }]}>
                 <Ionicons name={icon} size={22} color="white" />
             </View>
             <Text style={[styles.actionLabel, { color: theme.text }]}>{label}</Text>
@@ -224,11 +226,11 @@ export default function Contact({ navigation }) {
     const SearchResultList = () => {
         if (!search.trim()) return null;
         if (searchLoading)
-            return <ActivityIndicator size="small" color={theme.primary || '#4491f2'} style={{ marginVertical: 20 }} />;
+            return <ActivityIndicator size="small" color={theme.main} style={{ marginVertical: 20 }} />;
         const digits = cleanPhoneNumber(search);
         if (!searchResult.length) {
             if (remote.loading) {
-                return <ActivityIndicator size="small" color={headerBg} style={{ marginVertical: 20 }} />;
+                return <ActivityIndicator size="small" color={theme.main} style={{ marginVertical: 20 }} />;
             }
             if (remote.users.length) {
                 return (
@@ -261,7 +263,7 @@ export default function Contact({ navigation }) {
                                 </Text>
                             </View>
                             <TouchableOpacity onPress={() => handleInvite(digits)} style={styles.inviteContainer}>
-                                <Text style={styles.inviteText}>{t('Invite Now')}</Text>
+                                <Text style={[styles.inviteText, { color: theme.main }]}>{t('Invite Now')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -284,9 +286,9 @@ export default function Contact({ navigation }) {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar barStyle="light-content" backgroundColor={headerBg} />
-            <View style={[styles.header, { backgroundColor: headerBg }]}>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top, height: 56 + insets.top }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={26} color={theme.headerText || 'white'} />
@@ -328,7 +330,7 @@ export default function Contact({ navigation }) {
             </View>
             {/* Sync background me chalta hai; bada loader sirf tab jab dikhane ko koi contact hi na ho */}
             {loading && contacts.length === 0 ? (
-                <ActivityIndicator size="large" color="#4491f2" style={{ marginTop: 100 }} />
+                <ActivityIndicator size="large" color={theme.main} style={{ marginTop: 100 }} />
             ) : (
                 <View style={{ flex: 1 }}>
                     <FlatList
@@ -347,17 +349,16 @@ export default function Contact({ navigation }) {
             {createChannelPopup && (
                 <CreateChannelPopup visible={createChannelPopup} onClose={() => setCreateChannelPopup(false)} />
             )}
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        height: 90,
+        overflow: 'hidden',
         flexDirection: 'row', alignItems: 'center',
         paddingHorizontal: 15,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 20,
     },
     headerTitle: { color: 'white', fontSize: 20, fontWeight: '500', marginLeft: 25 },
     refreshBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6, paddingHorizontal: 6, maxWidth: 150 },

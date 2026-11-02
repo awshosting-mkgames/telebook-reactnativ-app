@@ -1,12 +1,13 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StatusBar,
+    ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StatusBar,
     StyleSheet, Switch, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import Toast from 'react-native-toast-message';
 import { useDispatch, useSelector } from 'react-redux';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
 import { fetchPlans } from '../../redex/slices/plansSlice';
 import apiService from '../../services/apiService';
@@ -20,6 +21,7 @@ const DEFAULT_COOLDOWN = 24;
 export default function AutoReply({ navigation }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
     const dispatch = useDispatch();
     const plans = useSelector((s) => s.plans?.plans) || [];
 
@@ -41,7 +43,7 @@ export default function AutoReply({ navigation }) {
         sub: isDark ? '#9a9a9a' : '#8a8f98',
         divider: isDark ? '#2a2a2a' : '#eceef1',
         input: isDark ? '#262626' : '#f5f6f8',
-        accent: headerBg,
+        accent: theme?.main || headerBg,
     };
 
     // Kaunsa sabse sasta plan Auto Reply deta hai (limits.autoReply truthy)
@@ -112,9 +114,9 @@ export default function AutoReply({ navigation }) {
     );
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar backgroundColor={headerBg} barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: headerBg }]}>
+        <View style={[styles.container, { backgroundColor: colors.bg }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top + 12 }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -186,7 +188,7 @@ export default function AutoReply({ navigation }) {
                     </ScrollView>
                 </KeyboardAvoidingView>
             )}
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -195,7 +197,7 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row', alignItems: 'center', gap: 18,
         paddingHorizontal: 16, paddingBottom: 14,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
+        overflow: 'hidden',
     },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },

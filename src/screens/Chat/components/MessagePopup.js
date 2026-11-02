@@ -18,19 +18,19 @@ const MessagePopup = ({
 
     const hasText = !!message.content && message.messageType !== 'document';
     const actions = [
-        { icon: 'return-down-back-outline', label: 'Reply', color: '#1296f3', fn: onReply },
+        { icon: 'return-down-back-outline', label: 'Reply', color: theme?.main ?? '#1296f3', fn: onReply },
         ...(hasText && onCopy ? [{ icon: 'copy-outline', label: 'Copy', color: '#16a085', fn: onCopy }] : []),
         ...(isMine && canEdit && onEdit && message.messageType === 'text' && hasText ? [{ icon: 'create-outline', label: 'Edit', color: '#8e44ad', fn: onEdit }] : []),
         { icon: 'share-outline', label: 'Forward', color: '#5b5fc7', fn: onForward },
         { icon: isStarred ? 'star' : 'star-outline', label: isStarred ? 'Unstar' : 'Star', color: '#f0a500', fn: onStar },
-        ...(onSelect ? [{ icon: 'checkmark-circle-outline', label: 'Select', color: '#1296f3', fn: onSelect }] : []),
+        ...(onSelect ? [{ icon: 'checkmark-circle-outline', label: 'Select', color: theme?.main ?? '#1296f3', fn: onSelect }] : []),
         { icon: 'trash-outline', label: 'Delete for Me', color: '#e67e22', fn: onDelete },
         ...(isMine && canDeleteForAll ? [{ icon: 'trash', label: 'Delete for Everyone', color: '#e74c3c', fn: onDeleteForAll }] : []),
         ...(!isMine && onBlock ? [{ icon: isSenderBlocked ? 'checkmark-circle-outline' : 'ban-outline', label: isSenderBlocked ? 'Unblock User' : 'Block User', color: '#888', fn: onBlock }] : []),
     ];
 
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+        <Modal statusBarTranslucent visible={visible} transparent animationType="fade" onRequestClose={onClose}>
             <Pressable style={styles.overlay} onPress={onClose}>
                 <Pressable style={[styles.box, { backgroundColor: boxBg }]} onPress={() => { }}>
                     {/* 9 emoji ek row me nahi aate — horizontally scroll */}

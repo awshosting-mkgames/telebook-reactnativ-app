@@ -18,11 +18,12 @@ const formatCount = (n = 0) => {
 };
 
 const ChannelAvatar = ({ uri, isDark }) => {
+    const { theme } = useContext(ThemeContext);
     const [failed, setFailed] = useState(false);
     if (!uri || failed) {
         return (
             <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: isDark ? '#1a2a3a' : '#e8f4fd' }]}>
-                <Ionicons name="megaphone" size={20} color="#1296f3" />
+                <Ionicons name="megaphone" size={20} color={theme.main} />
             </View>
         );
     }
@@ -124,7 +125,7 @@ const RecommendedChannels = ({ navigation, refreshSignal = 0 }) => {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={styles.subscribeBtn}
+                    style={[styles.subscribeBtn, { backgroundColor: theme.main }]}
                     onPress={() => handleSubscribe(item)}
                     disabled={!!subscribingId}
                     activeOpacity={0.8}
@@ -132,7 +133,7 @@ const RecommendedChannels = ({ navigation, refreshSignal = 0 }) => {
                     {isSubscribing ? (
                         <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                        <Text style={styles.subscribeText}>Subscribe</Text>
+                        <Text style={[styles.subscribeText, { color: theme.accentText || '#fff' }]}>Subscribe</Text>
                     )}
                 </TouchableOpacity>
             </View>
@@ -146,7 +147,7 @@ const RecommendedChannels = ({ navigation, refreshSignal = 0 }) => {
             <View style={[styles.divider, { backgroundColor: isDark ? '#1e1e1e' : '#f0f0f0' }]} />
 
             {loading ? (
-                <ActivityIndicator color="#1296f3" style={{ marginVertical: 20 }} />
+                <ActivityIndicator color={theme.main} style={{ marginVertical: 20 }} />
             ) : (
                 <>
                     {sponsored.length > 0 && (
@@ -172,8 +173,8 @@ const RecommendedChannels = ({ navigation, refreshSignal = 0 }) => {
                         onPress={() => navigation.navigate('Channels')}
                         activeOpacity={0.8}
                     >
-                        <Text style={styles.moreBtnText}>More Channels</Text>
-                        <Ionicons name="chevron-forward" size={15} color="#1296f3" />
+                        <Text style={[styles.moreBtnText, { color: theme.main }]}>More Channels</Text>
+                        <Ionicons name="chevron-forward" size={15} color={theme.main} />
                     </TouchableOpacity>
                 </>
             )}

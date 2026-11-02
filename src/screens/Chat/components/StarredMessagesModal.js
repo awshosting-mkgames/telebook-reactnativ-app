@@ -39,14 +39,14 @@ export default function StarredMessagesModal({ visible, chatId, myUserId, onClos
     const preview = (m) => (m.messageType && m.messageType !== 'text' ? `📎 ${m.messageType}${m.content ? ` · ${m.content}` : ''}` : m.content);
 
     return (
-        <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+        <Modal statusBarTranslucent visible={visible} animationType="slide" onRequestClose={onClose}>
             <View style={[styles.root, { backgroundColor: bg }]}>
                 <View style={[styles.header, { paddingTop: insets.top + 10, backgroundColor: theme?.header ?? '#1296f3' }]}>
                     <GradientFill />
                     <TouchableOpacity onPress={onClose} hitSlop={10}><Ionicons name="arrow-back" size={22} color="#fff" /></TouchableOpacity>
                     <Text style={styles.title}>Starred messages</Text>
                 </View>
-                {loading ? <ActivityIndicator style={{ marginTop: 40 }} color="#1296f3" />
+                {loading ? <ActivityIndicator style={{ marginTop: 40 }} color={theme?.main ?? '#1296f3'} />
                     : error ? <Text style={[styles.empty, { color: sub }]}>{error}</Text>
                     : (
                         <FlatList
@@ -59,7 +59,7 @@ export default function StarredMessagesModal({ visible, chatId, myUserId, onClos
                                 return (
                                     <View style={[styles.row, { backgroundColor: card }]}>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={[styles.name, { color: '#1296f3' }]} numberOfLines={1}>{mine ? 'You' : resolveName(item.sender).title}</Text>
+                                            <Text style={[styles.name, { color: theme?.main ?? '#1296f3' }]} numberOfLines={1}>{mine ? 'You' : resolveName(item.sender).title}</Text>
                                             <Text style={{ color: txt, marginTop: 2 }} numberOfLines={4}>{preview(item)}</Text>
                                             <Text style={[styles.time, { color: sub }]}>{moment(item.createdAt).format('DD MMM, hh:mm A')}</Text>
                                         </View>
@@ -76,7 +76,7 @@ export default function StarredMessagesModal({ visible, chatId, myUserId, onClos
 
 const styles = StyleSheet.create({
     root: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingBottom: 14 },
+    header: { overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingBottom: 14 },
     title: { color: '#fff', fontSize: 18, fontWeight: '600' },
     empty: { textAlign: 'center', marginTop: 60, fontSize: 14, paddingHorizontal: 24 },
     row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 12, marginBottom: 8 },

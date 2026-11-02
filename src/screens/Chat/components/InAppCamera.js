@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ThemeContext } from '../../../components/ThemeContext';
 
 const FLASH_ORDER = ['off', 'on', 'auto'];
 const FLASH_ICON = { off: 'flash-off', on: 'flash', auto: 'flash-outline' };
@@ -17,6 +18,7 @@ const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 
  */
 export default function InAppCamera({ visible, onClose, onCaptured, onOpenGallery }) {
     const insets = useSafeAreaInsets();
+    const { theme } = useContext(ThemeContext);
     const camRef = useRef(null);
     const timerRef = useRef(null);
     const [camPerm, requestCam] = useCameraPermissions();
@@ -77,7 +79,7 @@ export default function InAppCamera({ visible, onClose, onCaptured, onOpenGaller
                 <View style={[styles.fill, styles.center]}>
                     <Ionicons name="camera-outline" size={44} color="#fff" />
                     <Text style={styles.permText}>Camera permission chahiye</Text>
-                    <TouchableOpacity style={styles.permBtn} onPress={requestCam}><Text style={styles.permBtnText}>Allow</Text></TouchableOpacity>
+                    <TouchableOpacity style={[styles.permBtn, { backgroundColor: theme?.main ?? '#1296f3' }]} onPress={requestCam}><Text style={styles.permBtnText}>Allow</Text></TouchableOpacity>
                 </View>
             );
         }

@@ -20,7 +20,7 @@ const BTN_LARGE = 50;
 const BTN_SMALL = 42;
 
 // ─── Sticker Panel ────────────────────────────────────────────
-const StickerPanel = ({ onSendSticker, isDark, getFullUrl }) => {
+const StickerPanel = ({ onSendSticker, isDark, getFullUrl, accent = '#1296f3' }) => {
     const [stickers, setStickers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -60,7 +60,7 @@ const StickerPanel = ({ onSendSticker, isDark, getFullUrl }) => {
     if (loading) {
         return (
             <View style={[stickerStyles.center, { backgroundColor: panelBg }]}>
-                <ActivityIndicator size="large" color="#1296f3" />
+                <ActivityIndicator size="large" color={accent} />
             </View>
         );
     }
@@ -71,7 +71,7 @@ const StickerPanel = ({ onSendSticker, isDark, getFullUrl }) => {
                 <Text style={[stickerStyles.errorText, { color: errorColor }]}>
                     {error || 'Koi sticker nahi mila'}
                 </Text>
-                <TouchableOpacity onPress={fetchStickers} style={stickerStyles.retryBtn}>
+                <TouchableOpacity onPress={fetchStickers} style={[stickerStyles.retryBtn, { backgroundColor: accent }]}>
                     <Text style={stickerStyles.retryText}>Retry</Text>
                 </TouchableOpacity>
             </View>
@@ -162,13 +162,14 @@ const TextInputSection = ({
     const placeholder = isDark ? '#8696a0' : '#999999';
 
     const replyBanBg = isDark ? '#1f2c34' : '#ffffff';
-    const replyNameC = '#1296f3';
+    const accent = theme?.main ?? '#1296f3';
+    const replyNameC = accent;
     const replyTextC = isDark ? '#8696a0' : '#777777';
 
     const recBarBg = isDark ? '#1f2c34' : '#ffffff';
-    const tabActiveBg = isDark ? '#2a3942' : '#e8f4fe';
+    const tabActiveBg = isDark ? '#2a3942' : (theme?.main ? theme.main + '22' : '#e8f4fe');
     const tabBg = isDark ? '#1f2c34' : '#f5f5f5';
-    const tabActiveText = '#1296f3';
+    const tabActiveText = accent;
     const tabInactiveText = isDark ? '#8696a0' : '#888';
 
     const [inputHeight, setInputHeight] = useState(MIN_H);
@@ -242,8 +243,8 @@ const TextInputSection = ({
 
                 {/* Reply Banner */}
                 {replyMsg && !editMsg && (
-                    <View style={[styles.replyBanner, { backgroundColor: replyBanBg }]}>
-                        <View style={styles.replyAccent} />
+                    <View style={[styles.replyBanner, { backgroundColor: replyBanBg, borderLeftColor: accent }]}>
+                        <View style={[styles.replyAccent, { backgroundColor: accent }]} />
                         <View style={{ flex: 1 }}>
                             <Text style={[styles.replyName, { color: replyNameC }]}>
                                 Replying to {replyMsg.sender ? resolveName(replyMsg.sender).title : 'You'}
@@ -268,7 +269,7 @@ const TextInputSection = ({
                         <View style={styles.recordLabelWrapper}>
                             <Text style={[styles.recordLabel, { color: iconColor }]}>{t('Recording...')}</Text>
                         </View>
-                        <TouchableOpacity onPress={stopRecording} style={styles.recordSendBtn}>
+                        <TouchableOpacity onPress={stopRecording} style={[styles.recordSendBtn, { backgroundColor: accent }]}>
                             <Ionicons name="send" size={18} color="#fff" style={{ marginLeft: 2 }} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={cancelRecording} style={styles.recordCancelBtn}>
@@ -324,6 +325,7 @@ const TextInputSection = ({
                                 onSendSticker={handleStickerSend}
                                 isDark={isDark}
                                 getFullUrl={getFullUrl}
+                                accent={accent}
                             />
                         )}
                     </View>
@@ -376,7 +378,7 @@ const TextInputSection = ({
                     {/* Send / Mic button */}
                     <Animated.View style={[
                         styles.actionBtnBase,
-                        { width: btnSize, height: btnSize, borderRadius: btnRadius, backgroundColor: '#1296f3' },
+                        { width: btnSize, height: btnSize, borderRadius: btnRadius, backgroundColor: accent },
                     ]}>
                         {showSend ? (
                             <TouchableOpacity

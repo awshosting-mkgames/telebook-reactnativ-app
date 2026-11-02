@@ -5,6 +5,8 @@ import {
     KeyboardAvoidingView, ScrollView, Modal, Pressable,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useDispatch, useSelector } from 'react-redux';
+import { syncAllTabData } from '../../services/chatSync';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { ThemeContext } from '../../components/ThemeContext';
@@ -13,6 +15,7 @@ import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
 import AddWalletAmt from '../../components/AddWalletAmt';
 import GradientFill from '../../components/GradientFill';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Backend ye codes bheje to: group limit / coins kam — wallet me coins add karwao
 const COIN_ERROR_CODES = ['GROUP_LIMIT', 'INSUFFICIENT_COINS', 'INSUFFICIENT_BALANCE'];
@@ -42,11 +45,14 @@ const getAvatar = (item) =>
     item?.appUser?.profilePicture ? Config.MEDIA_URL + item.appUser.profilePicture : null;
 
 const CreateGroup = ({ navigation, route }) => {
+    const dispatch = useDispatch();
+    const myUserId = useSelector((state) => state.totalappData?.userId ?? null);
     const members = route?.params?.members || [];
     const createType = route?.params?.createType || 'group';
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
     const isDark = theme.text === '#FFFFFF';
+    const insets = useSafeAreaInsets();
 
     const [groupName, setGroupName] = useState('');
     const [groupImage, setGroupImage] = useState(null);
@@ -65,7 +71,7 @@ const CreateGroup = ({ navigation, route }) => {
     const charClr = isDark ? '#444' : '#c0c0c0';
     const rowBorder = isDark ? '#222' : '#f0f2f8';
     const checkBg = isDark ? '#0d2e1a' : '#e8faf0';
-    const heroTop = '#4491f2';
+    const heroTop = theme.header || theme.main || '#4491f2';
     const modalBg = isDark ? '#1a1a1a' : '#ffffff';
     const modalHandle = isDark ? '#333' : '#ddd';
     const modalTitleC = isDark ? '#e0e0e0' : '#111';
@@ -111,6 +117,8 @@ const CreateGroup = ({ navigation, route }) => {
             }
             const res = await apiService({ method: 'POST', endpoint: 'chats/group', data: fd, isMultipart: true });
             if (res.success) {
+                // Naya group chat list me turant aaye (SQL + Redux), app restart na lagey
+                if (myUserId) await syncAllTabData(dispatch, myUserId, { background: true });
                 Alert.alert('Group Created!', `"${groupName}" successfully created`, [{ text: 'OK', onPress: () => navigation.navigate('tab') }]);
             } else if (COIN_ERROR_CODES.includes(res?.error?.code)) {
                 setWalletSheet({ visible: true, message: res?.error?.message || 'Group limit poori ho gayi. Naya group banane ke liye wallet me coins add karo.' });
@@ -135,8 +143,9 @@ const CreateGroup = ({ navigation, route }) => {
     return (
         <KeyboardAvoidingView style={[styles.container, { backgroundColor: pageBg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
             {/* ── Header ── */}
-            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff', paddingTop: insets.top + 10 }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -159,7 +168,8 @@ const CreateGroup = ({ navigation, route }) => {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
 
                 {/* ── Hero: image picker ── */}
-                <View style={styles.heroSection}>
+                <View style={[styles.heroSection, { backgroundColor: heroTop }]}>
+                    <GradientFill />
                     <TouchableOpacity style={styles.avatarBtn} onPress={() => setModalVisible(true)} activeOpacity={0.85}>
                         {groupImage ? (
                             <Image source={{ uri: groupImage.uri }} style={styles.heroImage} />
@@ -178,9 +188,9 @@ const CreateGroup = ({ navigation, route }) => {
 
                 {/* ── Name card ── */}
                 <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                    <Text style={styles.fieldLabel}>Group Name</Text>
+                    <Text style={[styles.fieldLabel, { color: theme.main }]}>Group Name</Text>
                     <View style={styles.nameRow}>
-                        <Ionicons name="people" size={18} color="#4491f2" style={{ marginRight: 10 }} />
+                        <Ionicons name="people" size={18} color={theme.main} style={{ marginRight: 10 }} />
                         <TextInput
                             style={[styles.nameInput, { color: inputClr }]}
                             placeholder={createType === 'group' ? 'Enter group name...' : 'Enter broadcast name...'}
@@ -196,7 +206,7 @@ const CreateGroup = ({ navigation, route }) => {
                             </TouchableOpacity>
                         )}
                     </View>
-                    <View style={styles.nameUnderline} />
+                    <View style={[styles.nameUnderline, { backgroundColor: theme.main }]} />
                     <Text style={[styles.charCount, { color: charClr }]}>{groupName.length}/50</Text>
                 </View>
 
@@ -204,7 +214,7 @@ const CreateGroup = ({ navigation, route }) => {
                 <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                     <View style={styles.sectionHeader}>
                         <Text style={[styles.sectionTitle, { color: textPrimary }]}>Members</Text>
-                        <View style={styles.countBadge}>
+                        <View style={[styles.countBadge, { backgroundColor: theme.main }]}>
                             <Text style={styles.countBadgeText}>{members.length}</Text>
                         </View>
                     </View>
@@ -214,7 +224,7 @@ const CreateGroup = ({ navigation, route }) => {
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
                             {members.map((item, i) => (
                                 <View key={item?.id?.toString() ?? i} style={styles.chip}>
-                                    <Avatar uri={getAvatar(item)} name={item.name} size={44} border="#4491f2" />
+                                    <Avatar uri={getAvatar(item)} name={item.name} size={44} border={theme.main} />
                                     <Text style={[styles.chipName, { color: textSec }]} numberOfLines={1}>
                                         {(item.name || item.phone || 'User').split(' ')[0]}
                                     </Text>
@@ -242,7 +252,7 @@ const CreateGroup = ({ navigation, route }) => {
             </ScrollView>
 
             {/* ── Image Picker Modal ── */}
-            <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
+            <Modal statusBarTranslucent visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
                 <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
                     <Pressable style={[styles.modalSheet, { backgroundColor: modalBg }]} onPress={e => e.stopPropagation()}>
                         <View style={[styles.modalHandle, { backgroundColor: modalHandle }]} />
@@ -251,7 +261,7 @@ const CreateGroup = ({ navigation, route }) => {
 
                         <View style={styles.modalOptions}>
                             <TouchableOpacity style={styles.modalOption} onPress={takePhoto}>
-                                <View style={[styles.modalIconBox, { backgroundColor: '#4491f2' }]}>
+                                <View style={[styles.modalIconBox, { backgroundColor: theme.main }]}>
                                     <Ionicons name="camera" size={26} color="#fff" />
                                 </View>
                                 <Text style={[styles.modalOptionLabel, { color: modalTitleC }]}>Camera</Text>
@@ -293,14 +303,14 @@ const CreateGroup = ({ navigation, route }) => {
 const styles = StyleSheet.create({
     container: { flex: 1 },
 
-    header: { backgroundColor: '#4491f2', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 52, paddingBottom: 14, elevation: 4 },
+    header: { backgroundColor: '#4491f2', overflow: 'hidden', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 14, elevation: 4 },
     backBtn: { padding: 4, marginRight: 10 },
     headerTitle: { flex: 1, color: '#fff', fontSize: 18, fontWeight: '600' },
     createPill: { backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, minWidth: 68, alignItems: 'center' },
     createPillDisabled: { opacity: 0.4 },
     createPillText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
-    heroSection: { backgroundColor: '#4491f2', alignItems: 'center', paddingBottom: 28, paddingTop: 4 },
+    heroSection: { backgroundColor: '#4491f2', overflow: 'hidden', alignItems: 'center', paddingBottom: 28, paddingTop: 4 },
     avatarBtn: { position: 'relative' },
     heroImage: { width: 96, height: 96, borderRadius: 48, borderWidth: 3, borderColor: 'rgba(255,255,255,0.5)' },
     heroPlaceholder: { width: 96, height: 96, borderRadius: 48, backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.5)', justifyContent: 'center', alignItems: 'center', gap: 4 },

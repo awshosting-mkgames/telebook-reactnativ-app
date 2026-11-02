@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { ThemeContext } from '../../../components/ThemeContext';
 import { useNameResolver } from '../../../services/nameResolver';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GradientFill from '../../../components/GradientFill';
 
 const ChatHeader = ({
@@ -25,7 +26,10 @@ const ChatHeader = ({
     const isDark = theme?.mode ? theme.mode === 'dark' : theme?.text === '#FFFFFF';
     // Header colour theme token se (dark me neutral dark, light me wahi blue)
     const headerBg = theme?.header ?? '#1296f3';
-    const headerStyle = [styles.header, { backgroundColor: headerBg }];
+    const insets = useSafeAreaInsets();
+    const accent = theme?.main ?? '#1296f3';
+    // Status bar ke neeche tak gradient/colour (paddingTop = safe-area top)
+    const headerStyle = [styles.header, { backgroundColor: headerBg, paddingTop: insets.top, height: 68 + insets.top }];
 
     const menuBg = isDark ? '#1f2c34' : '#ffffff';
     const menuText = isDark ? '#e9edef' : '#222222';
@@ -89,18 +93,18 @@ const ChatHeader = ({
                 <TouchableOpacity onPress={() => setSelMenuVisible(true)} style={styles.headerActionBtn}>
                     <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
                 </TouchableOpacity>
-                <Modal visible={selMenuVisible} transparent animationType="fade" onRequestClose={() => setSelMenuVisible(false)}>
+                <Modal statusBarTranslucent visible={selMenuVisible} transparent animationType="fade" onRequestClose={() => setSelMenuVisible(false)}>
                     <Pressable style={styles.menuOverlay} onPress={() => setSelMenuVisible(false)}>
                         <View style={[styles.menuBox, { backgroundColor: menuBg }]}>
                             {selectedCount === 1 && !!onMoreSelected && (
                                 <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => { setSelMenuVisible(false); onMoreSelected(); }}>
-                                    <Ionicons name="options-outline" size={18} color="#1296f3" />
+                                    <Ionicons name="options-outline" size={18} color={accent} />
                                     <Text style={[styles.menuText, { color: menuText }]}>More options</Text>
                                 </TouchableOpacity>
                             )}
                             {!!onSelectAll && (
                                 <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => { setSelMenuVisible(false); onSelectAll(); }}>
-                                    <Ionicons name="checkmark-done-outline" size={18} color="#1296f3" />
+                                    <Ionicons name="checkmark-done-outline" size={18} color={accent} />
                                     <Text style={[styles.menuText, { color: menuText }]}>Select all</Text>
                                 </TouchableOpacity>
                             )}
@@ -131,7 +135,7 @@ const ChatHeader = ({
                         source={{ uri: chatImage }}
                         style={styles.avatar}
                     />
-                    {!isGroup && isOnline && <View style={styles.onlineDot} />}
+                    {!isGroup && isOnline && <View style={[styles.onlineDot, { borderColor: headerBg }]} />}
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={gotouserDetails} style={{ flex: 1 }}>
@@ -170,7 +174,7 @@ const ChatHeader = ({
             </View>
 
             {/* Dropdown menu */}
-            <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
+            <Modal statusBarTranslucent visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
                 <Pressable style={styles.menuOverlay} onPress={() => setMenuVisible(false)}>
                     <View style={[styles.menuBox, { backgroundColor: menuBg }]}>
                         <TouchableOpacity
@@ -178,7 +182,7 @@ const ChatHeader = ({
                             onPress={() => { setMenuVisible(false); onOpenSearch?.(); }}
                             activeOpacity={0.7}
                         >
-                            <Ionicons name="search" size={18} color="#1296f3" />
+                            <Ionicons name="search" size={18} color={accent} />
                             <Text style={[styles.menuText, { color: menuText }]}>Search</Text>
                         </TouchableOpacity>
                         {!!onOpenStarred && (
@@ -211,7 +215,7 @@ const ChatHeader = ({
                                     onPress={() => { setMenuVisible(false); onSaveContact(); }}
                                     activeOpacity={0.7}
                                 >
-                                    <Ionicons name="person-add-outline" size={18} color="#1296f3" />
+                                    <Ionicons name="person-add-outline" size={18} color={accent} />
                                     <Text style={[styles.menuText, { color: menuText }]}>Save contact</Text>
                                 </TouchableOpacity>
                             </>
@@ -237,7 +241,7 @@ const ChatHeader = ({
 };
 
 const styles = StyleSheet.create({
-    header: { height: 90, backgroundColor: '#1296f3', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, gap: 8 },
+    header: { height: 90, overflow: 'hidden', backgroundColor: '#1296f3', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, gap: 8 },
     backBtn: { padding: 4 },
     headerActionBtn: { padding: 8 },
     avatarWrap: { position: 'relative' },

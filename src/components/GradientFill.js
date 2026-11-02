@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { ThemeContext } from './ThemeContext';
 
-// theme.gradient ho to parent ko 135deg gradient se bhar deta hai (parent ka
+// theme.gradient ho to parent ko left-to-right gradient se bhar deta hai (parent ka
 // backgroundColor fallback rehta hai). Gradient na ho to kuch render nahi karta.
 // react-native-svg pehle se installed hai, isliye native rebuild nahi chahiye.
 export default function GradientFill({ colors }) {
@@ -14,7 +14,7 @@ export default function GradientFill({ colors }) {
     return (
         <Svg style={StyleSheet.absoluteFill} pointerEvents="none" width="100%" height="100%" preserveAspectRatio="none">
             <Defs>
-                <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+                <LinearGradient id={id} x1="0" y1="0" x2="1" y2="0.15">
                     <Stop offset="0" stopColor={g[0]} />
                     <Stop offset="1" stopColor={g[1]} />
                 </LinearGradient>

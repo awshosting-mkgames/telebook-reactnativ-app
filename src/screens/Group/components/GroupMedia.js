@@ -24,20 +24,20 @@ const GroupMedia = ({ mediaDetails, theme, onMediaPress }) => {
             <View style={styles.statsRow}>
                 {mediaDetails?.images?.count > 0 && (
                     <View style={styles.stat}>
-                        <Ionicons name="image-outline" size={16} color="#3498db" />
-                        <Text style={styles.statText}>{mediaDetails.images.count} Photos</Text>
+                        <Ionicons name="image-outline" size={16} color={theme.main || '#3498db'} />
+                        <Text style={[styles.statText, { color: theme.main || '#3498db' }]}>{mediaDetails.images.count} Photos</Text>
                     </View>
                 )}
                 {mediaDetails?.videos?.count > 0 && (
                     <View style={styles.stat}>
-                        <Ionicons name="videocam-outline" size={16} color="#3498db" />
-                        <Text style={styles.statText}>{mediaDetails.videos.count} Videos</Text>
+                        <Ionicons name="videocam-outline" size={16} color={theme.main || '#3498db'} />
+                        <Text style={[styles.statText, { color: theme.main || '#3498db' }]}>{mediaDetails.videos.count} Videos</Text>
                     </View>
                 )}
                 {mediaDetails?.documents?.count > 0 && (
                     <View style={styles.stat}>
-                        <Ionicons name="document-outline" size={16} color="#3498db" />
-                        <Text style={styles.statText}>{mediaDetails.documents.count} Docs</Text>
+                        <Ionicons name="document-outline" size={16} color={theme.main || '#3498db'} />
+                        <Text style={[styles.statText, { color: theme.main || '#3498db' }]}>{mediaDetails.documents.count} Docs</Text>
                     </View>
                 )}
             </View>

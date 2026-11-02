@@ -220,6 +220,7 @@ const handleMediaDownload = async (url, filename, type) => {
 
 /* ─── Modals (Zoom & Video) ───────────────────────────── */
 function ZoomSliderModal({ visible, attachments, startIndex = 0, onClose }) {
+    const { theme } = useContext(ThemeContext);
     const [activeIdx, setActiveIdx] = useState(startIndex);
     const [dlLoading, setDlLoading] = useState(false);
     const flatRef = useRef(null);
@@ -261,7 +262,7 @@ function ZoomSliderModal({ visible, attachments, startIndex = 0, onClose }) {
                 <View style={zs.topBar}>
                     <TouchableOpacity onPress={onClose} style={zs.headerBtn}><Ionicons name="close" size={26} color="#fff" /></TouchableOpacity>
                     <Text style={zs.counterText}>{activeIdx + 1} / {attachments?.length}</Text>
-                    <TouchableOpacity onPress={onDownload} style={[zs.headerBtn, { backgroundColor: '#1A8CFF' }]}>
+                    <TouchableOpacity onPress={onDownload} style={[zs.headerBtn, { backgroundColor: theme?.main || '#1A8CFF' }]}>
                         {dlLoading ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="download-outline" size={22} color="#fff" />}
                     </TouchableOpacity>
                 </View>
@@ -280,6 +281,7 @@ function ZoomSliderModal({ visible, attachments, startIndex = 0, onClose }) {
 }
 
 function VideoZoomModal({ visible, uri, onClose }) {
+    const { theme } = useContext(ThemeContext);
     const [dlLoading, setDlLoading] = useState(false);
 
     const player = useVideoPlayer(uri || null, (p) => {
@@ -312,7 +314,7 @@ function VideoZoomModal({ visible, uri, onClose }) {
                     <TouchableOpacity onPress={onClose} style={videoModal.headerBtn}><Ionicons name="close" size={26} color="#fff" /></TouchableOpacity>
                     <TouchableOpacity
                         onPress={async () => { setDlLoading(true); await handleMediaDownload(uri, "video.mp4", 'video'); setDlLoading(false); }}
-                        style={[videoModal.headerBtn, { backgroundColor: '#1A8CFF' }]}
+                        style={[videoModal.headerBtn, { backgroundColor: theme?.main || '#1A8CFF' }]}
                     >
                         {dlLoading ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="download-outline" size={22} color="#fff" />}
                     </TouchableOpacity>
@@ -541,7 +543,9 @@ export default function ChannelDetailScreen({ navigation, route }) {
     const { theme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
 
-    const pal = PALETTES[theme?.mode] ?? PALETTES.light;
+    // Accent/header-blue theme se follow kare
+    const palBase = PALETTES[theme?.mode] ?? PALETTES.light;
+    const pal = { ...palBase, accent: theme?.main || palBase.accent, dotActive: theme?.main || palBase.dotActive };
     const { channelId } = route.params ?? {};
     const [channel, setChannel] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -752,10 +756,10 @@ export default function ChannelDetailScreen({ navigation, route }) {
 
     return (
         <View style={[sc.container, { backgroundColor: pal.bg }]}>
-            <StatusBar backgroundColor={headerBg} barStyle={pal.statusBar} />
+            <StatusBar translucent backgroundColor="transparent" barStyle={pal.statusBar} />
 
             {/* HEADER — baaki app ke header jaisa (avatar + naam + subscribers + menu) */}
-            <View style={[sc.topBar, { backgroundColor: headerBg }]}>
+            <View style={[sc.topBar, { backgroundColor: headerBg, paddingTop: insets.top, height: 56 + insets.top }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} style={sc.iconBtn} hitSlop={HIT}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -1081,7 +1085,7 @@ const sc = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+        overflow: 'hidden',
         backgroundColor: '#1296f3',
         gap: 8,
     },

@@ -3,16 +3,18 @@
 // dono screens yahi use karte hain. Forward destination ke liye chat ka existing
 // ForwardContactModal (read-only import) reuse hota hai.
 import { Ionicons } from '@expo/vector-icons';
-import { useRef, useState } from 'react';
+import { useContext, useRef, useState } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ForwardContactModal from '../../Chat/components/ForwardContactModal';
+import { ThemeContext } from '../../../components/ThemeContext';
 import { copyText, forwardChannelPost, showToast } from '../../../services/channelActions';
 
 export default function PostActions({ post, channelId, onClose, colors = {} }) {
+    const { theme } = useContext(ThemeContext);
     const bg = colors.bg || '#ffffff';
     const text = colors.text || '#111111';
     const border = colors.border || '#e5e5e5';
-    const accent = colors.accent || '#1199ff';
+    const accent = colors.accent || theme?.main || '#1199ff';
 
     const [forwardOpen, setForwardOpen] = useState(false);
     // In-flight guard: double-tap / retry se same post do baar forward na ho
@@ -49,7 +51,7 @@ export default function PostActions({ post, channelId, onClose, colors = {} }) {
 
     return (
         <>
-            <Modal
+            <Modal statusBarTranslucent
                 visible={!!post && !forwardOpen}
                 transparent
                 animationType="fade"

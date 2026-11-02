@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import {
     Modal, View, Text, TextInput, FlatList, Image,
     TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ThemeContext } from '../../../components/ThemeContext';
+import GradientFill from '../../../components/GradientFill';
 import { useSelector } from 'react-redux';
 import { handlePlanLimit } from '../../../services/planLimit';
 import { useNavigation } from '@react-navigation/native';
@@ -14,6 +16,9 @@ const AddMemberModal = ({ visible, onClose, chatId, existingMemberIds, onAdded }
     const navigation = useNavigation();
     const allContacts = useSelector((state) => state.contacts?.contacts ?? []);
 
+    const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
+    const accent = theme.main || '#3498db';
     const [searchText,       setSearchText]       = useState('');
     const [selectedContacts, setSelectedContacts] = useState([]);
     const [adding,           setAdding]           = useState(false);
@@ -66,11 +71,12 @@ const AddMemberModal = ({ visible, onClose, chatId, existingMemberIds, onAdded }
     };
 
     return (
-        <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-            <SafeAreaView style={styles.container}>
+        <Modal statusBarTranslucent visible={visible} animationType="slide" onRequestClose={onClose}>
+            <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: theme.background }]}>
 
                 {/* Header */}
-                <View style={styles.header}>
+                <View style={[styles.header, { backgroundColor: theme.header || accent, paddingTop: insets.top + 14, overflow: 'hidden' }]}>
+                    <GradientFill />
                     <TouchableOpacity onPress={onClose}>
                         <Ionicons name="arrow-back" size={24} color="#fff" />
                     </TouchableOpacity>
@@ -103,9 +109,9 @@ const AddMemberModal = ({ visible, onClose, chatId, existingMemberIds, onAdded }
                                     source={{ uri: c.appUser?.avatar || `https://avatar.iran.liara.run/public/boy?username=${c.name}` }}
                                     style={styles.chipAvatar}
                                 />
-                                <Text style={styles.chipName} numberOfLines={1}>{(c.name || c.phone || 'User').split(' ')[0]}</Text>
+                                <Text style={[styles.chipName, { color: accent }]} numberOfLines={1}>{(c.name || c.phone || 'User').split(' ')[0]}</Text>
                                 <View style={styles.chipClose}>
-                                    <Ionicons name="close" size={12} color="#3498db" />
+                                    <Ionicons name="close" size={12} color={accent} />
                                 </View>
                             </TouchableOpacity>
                         ))}
@@ -152,7 +158,7 @@ const AddMemberModal = ({ visible, onClose, chatId, existingMemberIds, onAdded }
                                     <Text style={styles.name}>{item.name || item.phone || 'User'}</Text>
                                     <Text style={styles.phone}>{item.phone}</Text>
                                 </View>
-                                <View style={[styles.checkbox, sel && styles.checkboxSel]}>
+                                <View style={[styles.checkbox, sel && { backgroundColor: accent, borderColor: accent }]}>
                                     {sel && <Ionicons name="checkmark" size={14} color="#fff" />}
                                 </View>
                             </TouchableOpacity>
@@ -170,7 +176,7 @@ const AddMemberModal = ({ visible, onClose, chatId, existingMemberIds, onAdded }
 
                 {/* FAB */}
                 {selectedContacts.length > 0 && (
-                    <TouchableOpacity style={styles.fab} onPress={handleAdd} disabled={adding} activeOpacity={0.85}>
+                    <TouchableOpacity style={[styles.fab, { backgroundColor: accent }]} onPress={handleAdd} disabled={adding} activeOpacity={0.85}>
                         <Ionicons name="person-add" size={20} color="#fff" />
                         <Text style={styles.fabText}>
                             Add {selectedContacts.length} Member{selectedContacts.length > 1 ? 's' : ''}

@@ -9,7 +9,7 @@ const SearchNavBar = ({ isSearching, current, total, onPrev, onNext, theme }) =>
     const barBg = isDark ? '#1f2c34' : '#ffffff';
     const txtC = isDark ? '#e9edef' : '#222222';
     const subC = isDark ? '#8696a0' : '#777777';
-    const iconC = isDark ? '#e9edef' : '#1296f3';
+    const iconC = isDark ? '#e9edef' : (theme?.main ?? '#1296f3');
     const disC = isDark ? '#3a4a52' : '#c4c4c4';
     const borderC = isDark ? '#2a3942' : '#eeeeee';
 

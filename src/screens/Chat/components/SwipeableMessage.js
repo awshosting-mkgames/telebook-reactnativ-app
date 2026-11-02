@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 const SWIPE_THRESHOLD = 60;
 const SWIPE_MAX = 80;
 
-const SwipeableMessage = ({ onReply, children }) => {
+const SwipeableMessage = ({ onReply, children, accent = '#1296f3' }) => {
     const translateX = useRef(new Animated.Value(0)).current;
     const replyScale = useRef(new Animated.Value(0)).current;
     const triggered  = useRef(false);
@@ -46,8 +46,8 @@ const SwipeableMessage = ({ onReply, children }) => {
 
     return (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Animated.View style={[styles.replyIcon, { transform: [{ scale: replyScale }], opacity: replyScale }]}>
-                <Ionicons name="return-down-forward" size={18} color="#1296f3" />
+            <Animated.View style={[styles.replyIcon, { shadowColor: accent, transform: [{ scale: replyScale }], opacity: replyScale }]}>
+                <Ionicons name="return-down-forward" size={18} color={accent} />
             </Animated.View>
             <Animated.View style={{ flex: 1, transform: [{ translateX }] }} {...panResponder.panHandlers}>
                 {children}

@@ -33,7 +33,7 @@ const WhatsAppBottomUI = () => {
                     <Ionicons name="attach" size={26} color="#909090" style={styles.rotateIcon} />
                     <Ionicons name="camera" size={24} color="#909090" />
                 </View>
-                <TouchableOpacity style={styles.micButton}>
+                <TouchableOpacity style={[styles.micButton, { backgroundColor: theme.main }]}>
                     <Ionicons name="mic" size={16} color={theme.background} />
                 </TouchableOpacity>
             </View>

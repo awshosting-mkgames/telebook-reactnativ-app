@@ -169,7 +169,7 @@ function MediaModal({ visible, item, onClose }) {
     if (!item) return null;
 
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
+        <Modal statusBarTranslucent visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
             <StatusBar backgroundColor="#000" barStyle="light-content" />
             <View style={zm.overlay}>
                 <View style={zm.header}>

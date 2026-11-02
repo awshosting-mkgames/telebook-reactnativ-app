@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { useEffect, useRef } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import {
     ActivityIndicator, Alert,
     Animated,
@@ -9,12 +9,15 @@ import {
     Text, TouchableOpacity,
     View,
 } from 'react-native';
+import { ThemeContext } from '../../../components/ThemeContext';
 import { useMediaUri } from '../../../utils/mediaCache';
 import { claimPlayback, useExclusivePlayback } from '../../../utils/playbackManager';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 const AudioPlayer = ({ url: remoteUrl }) => {
+    const { theme } = useContext(ThemeContext);
+    const accent = theme?.main ?? '#1296f3';
     // Offline: pehle sun chuka audio local file se chalta hai (Point 5)
     const url = useMediaUri(remoteUrl);
     // expo-audio ka player. Source badalne par hook khud naya player bana deta hai
@@ -83,7 +86,7 @@ const AudioPlayer = ({ url: remoteUrl }) => {
 
     return (
         <View style={styles.container}>
-            <TouchableOpacity style={styles.playBtn} onPress={togglePlay} disabled={loading}>
+            <TouchableOpacity style={[styles.playBtn, { backgroundColor: accent }]} onPress={togglePlay} disabled={loading}>
                 {loading
                     ? <ActivityIndicator size="small" color="#fff" />
                     : <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color="#fff" />}
@@ -107,6 +110,7 @@ const AudioPlayer = ({ url: remoteUrl }) => {
                     <Animated.View
                         pointerEvents="none"
                         style={[styles.progressOverlay, {
+                            backgroundColor: accent + '60',
                             width: progressAnim.interpolate({
                                 inputRange: [0, 1],
                                 outputRange: [0, barWidth],

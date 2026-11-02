@@ -215,7 +215,7 @@ export default function MyChannelScreen({ navigation, route }) {
                     ListEmptyComponent={
                         <View style={styles.empty}>
                             <Ionicons name="cloud-upload-outline" size={50} color={isLight ? '#ddd' : '#3a3d44'} />
-                            <TouchableOpacity style={styles.emptyBtn} onPress={() => setShowNewPost(true)}>
+                            <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: theme.main }]} onPress={() => setShowNewPost(true)}>
                                 <Ionicons name="add" size={16} color="#fff" />
                             </TouchableOpacity>
                         </View>
@@ -231,11 +231,11 @@ export default function MyChannelScreen({ navigation, route }) {
                     contentContainerStyle={{ paddingBottom: 110 }}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
-                        <RefreshControl refreshing={subLoading} onRefresh={fetchSubscribers} colors={['#1296f3']} />
+                        <RefreshControl refreshing={subLoading} onRefresh={fetchSubscribers} colors={[theme.main]} />
                     }
                     ListEmptyComponent={
                         subLoading
-                            ? <ActivityIndicator color="#1296f3" style={{ marginTop: 40 }} />
+                            ? <ActivityIndicator color={theme.main} style={{ marginTop: 40 }} />
                             : (
                                 <View style={styles.empty}>
                                     <Ionicons name="people-outline" size={50} color={isLight ? '#ddd' : '#3a3d44'} />
@@ -258,7 +258,7 @@ export default function MyChannelScreen({ navigation, route }) {
             />
 
             {/* FAB */}
-            <TouchableOpacity style={styles.fab} onPress={() => setShowNewPost(true)}>
+            <TouchableOpacity style={[styles.fab, { backgroundColor: theme.main, shadowColor: theme.main }]} onPress={() => setShowNewPost(true)}>
                 <Ionicons name="add" size={28} color="#fff" />
             </TouchableOpacity>
 

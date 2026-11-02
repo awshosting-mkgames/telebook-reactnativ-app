@@ -24,7 +24,6 @@ import {
     Linking,
     Modal,
     Platform,
-    SafeAreaView,
     StatusBar,
     StyleSheet,
     Text,
@@ -1577,7 +1576,7 @@ export default function ChatScreen({ route, navigation }) {
     const bgImage = isDark ? Images.ChatblackBackground : Images.ChatwhiteBackground;
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <StatusBar backgroundColor={theme?.header ?? "#1296f3"} barStyle="light-content" />
 
             <ChatHeader
@@ -1651,7 +1650,7 @@ export default function ChatScreen({ route, navigation }) {
                 behavior="padding"
                 keyboardVerticalOffset={0}
             >
-                <ImageBackground source={bgImage} style={styles.chatBg} resizeMode="cover">
+                <ImageBackground source={bgImage} style={[styles.chatBg, theme?.chatTint && { backgroundColor: theme.chatTint }]} imageStyle={theme?.chatTint ? { opacity: 0.35 } : undefined} resizeMode="cover">
                     {/* Search me bhi actual chat hi dikhti hai — matches inline highlight + scroll hote hain */}
                     <MessageList
                         key="chat"
@@ -1699,7 +1698,7 @@ export default function ChatScreen({ route, navigation }) {
                         activeOpacity={0.8}
                     >
                         <Text style={[styles.blockedText, { color: theme?.text ?? '#333' }]}>
-                            You blocked this contact. <Text style={styles.blockedLink}>Tap to unblock.</Text>
+                            You blocked this contact. <Text style={[styles.blockedLink, { color: theme?.main ?? '#1296f3' }]}>Tap to unblock.</Text>
                         </Text>
                     </TouchableOpacity>
                 )}
@@ -1798,7 +1797,7 @@ export default function ChatScreen({ route, navigation }) {
                     onClose={() => setVideoModalUri(null)}
                 />
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </View>
     );
 }
 

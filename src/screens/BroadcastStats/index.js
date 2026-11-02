@@ -6,6 +6,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiService from '../../services/apiService';
 import { useNameResolver } from '../../services/nameResolver';
 import GradientFill from '../../components/GradientFill';
@@ -26,6 +27,7 @@ export default function BroadcastStats({ route, navigation }) {
     const { messageId, content } = route.params;
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const insets = useSafeAreaInsets();
     const resolveName = useNameResolver();
 
     const [stats,   setStats]   = useState(null);
@@ -116,7 +118,7 @@ export default function BroadcastStats({ route, navigation }) {
                 {item.user?.profilePicture ? (
                     <Image source={{ uri: item.user.profilePicture }} style={styles.avatar} />
                 ) : (
-                    <View style={[styles.avatar, styles.avatarFallback]}>
+                    <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: theme.main }]}>
                         <Text style={styles.avatarLetter}>{item.user?.name?.[0]?.toUpperCase() ?? '?'}</Text>
                     </View>
                 )}
@@ -143,8 +145,9 @@ export default function BroadcastStats({ route, navigation }) {
     };
 
     if (loading) return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3' }]}>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3', paddingTop: insets.top, height: 60 + insets.top }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -152,18 +155,18 @@ export default function BroadcastStats({ route, navigation }) {
                 <Text style={styles.headerTitle}>Message Stats</Text>
                 <View style={{ width: 22 }} />
             </View>
-            <ActivityIndicator color="#1296f3" size="large" style={{ flex: 1 }} />
-        </SafeAreaView>
+            <ActivityIndicator color={theme.main} size="large" style={{ flex: 1 }} />
+        </View>
     );
 
     const msg = stats?.message;
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor={theme.header ?? '#1296f3'} barStyle="light-content" />
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             {/* HEADER */}
-            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3' }]}>
+            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3', paddingTop: insets.top, height: 60 + insets.top }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -270,7 +273,7 @@ export default function BroadcastStats({ route, navigation }) {
                             ].map(f => (
                                 <TouchableOpacity
                                     key={f.key}
-                                    style={[styles.filterTab, activeFilter === f.key && styles.filterTabActive]}
+                                    style={[styles.filterTab, activeFilter === f.key && styles.filterTabActive, activeFilter === f.key && { backgroundColor: theme.main }]}
                                     onPress={() => setActiveFilter(f.key)}
                                 >
                                     <Text style={[styles.filterTabText, activeFilter === f.key && styles.filterTabTextActive]}>
@@ -288,16 +291,15 @@ export default function BroadcastStats({ route, navigation }) {
                 }
                 showsVerticalScrollIndicator={false}
             />
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        height: 90, backgroundColor: '#1296f3', flexDirection: 'row',
+        height: 90, backgroundColor: '#1296f3', flexDirection: 'row', overflow: 'hidden',
         alignItems: 'center', paddingHorizontal: 16,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
         justifyContent: 'space-between',
     },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },

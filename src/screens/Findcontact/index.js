@@ -30,7 +30,9 @@ const AvatarImg = ({ uri, name: rawName = '', size = 50, style }) => {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
+import GradientFill from '../../components/GradientFill';
 import Config from '../../services/config';
 
 const getAvatar = (item) =>
@@ -41,6 +43,9 @@ const FindContact = ({ navigation, route }) => {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
     const isDark = theme.text === '#FFFFFF';
+    const insets = useSafeAreaInsets();
+    const accent = theme.main || '#4491f2';
+    const accentText = theme.accentText || '#fff';
 
     const allContacts = useSelector((state) => state.contacts?.contacts ?? []);
     const loading = useSelector((state) => state.contacts?.syncing ?? false);
@@ -144,13 +149,13 @@ const FindContact = ({ navigation, route }) => {
                 {registered ? (
                     <View style={[
                         styles.checkbox,
-                        { borderColor: selected ? '#4491f2' : (isDark ? '#333' : '#ccc') },
-                        selected && styles.checkboxSelected,
+                        { borderColor: selected ? accent : (isDark ? '#333' : '#ccc') },
+                        selected && [styles.checkboxSelected, { backgroundColor: accent, borderColor: accent }],
                     ]}>
                         {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
                     </View>
                 ) : (
-                    <Text style={styles.inviteText}>Invite</Text>
+                    <Text style={[styles.inviteText, { color: accent }]}>Invite</Text>
                 )}
             </TouchableOpacity>
         );
@@ -175,10 +180,10 @@ const FindContact = ({ navigation, route }) => {
                                     onPress={() => removeSelected(item.id)}
                                     style={[styles.chipRemove, { backgroundColor: isDark ? '#0a0a0a' : '#ffffff' }]}
                                     hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }} >
-                                    <Ionicons name="close-circle" size={18} color="#4491f2" />
+                                    <Ionicons name="close-circle" size={18} color={accent} />
                                 </TouchableOpacity>
                             </View>
-                            <Text style={[styles.chipName, { color: isDark ? '#7ab4f5' : '#4491f2' }]} numberOfLines={1} >
+                            <Text style={[styles.chipName, { color: isDark ? '#7ab4f5' : accent }]} numberOfLines={1} >
                                 {(item.name || item.phone || 'User').split(' ')[0]}
                             </Text>
                         </View>
@@ -192,7 +197,8 @@ const FindContact = ({ navigation, route }) => {
         <View style={[styles.container, { backgroundColor: bgColor }]}>
 
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#4491f2', paddingTop: insets.top + 10, overflow: 'hidden' }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.headerBack}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
@@ -232,7 +238,7 @@ const FindContact = ({ navigation, route }) => {
 
             {loading ? (
                 <View style={styles.loadingBox}>
-                    <ActivityIndicator size="large" color="#4491f2" />
+                    <ActivityIndicator size="large" color={accent} />
                     <Text style={[styles.loadingText, { color: textSecondary }]}>Loading contacts...</Text>
                 </View>
             ) : (
@@ -270,7 +276,7 @@ const FindContact = ({ navigation, route }) => {
 
             {/* Floating button */}
             {selectedContacts.length >= 1 && (
-                <TouchableOpacity style={styles.floatingBtn} onPress={handleCreateGroup} activeOpacity={0.85}>
+                <TouchableOpacity style={[styles.floatingBtn, { backgroundColor: accent }]} onPress={handleCreateGroup} activeOpacity={0.85}>
                     <Ionicons name="people" size={20} color="#fff" />
                     <Text style={styles.floatingBtnText}>
                         {createType === 'group' ? 'Create Group' : 'Broadcast'} ({selectedContacts.length})

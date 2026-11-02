@@ -39,7 +39,7 @@ export default function DeleteChannelModal({ visible, onClose, channel, onDelete
     };
 
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={() => !deleting && onClose()}>
+        <Modal statusBarTranslucent visible={visible} transparent animationType="fade" onRequestClose={() => !deleting && onClose()}>
             <Pressable style={s.overlay} onPress={() => !deleting && onClose()}>
                 <Pressable style={s.box} onPress={() => { }}>
 
