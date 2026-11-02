@@ -9303,3 +9303,18 @@ Channel post senders are intentionally **not** given a mobile.
 **Display-name rule (client):** phonebook saved name → else mobile number as title with profile `name` (or "Unknown") as small secondary text. Profile name is never the title.
 
 **Push notifications:** the server now builds the title per receiver from their synced `contact-cache` (phonebook saved name, else the sender's mobile number). Applies to message push, incoming-call push (`callerName`, new `callerMobile`) and missed-call push. Lookup is cached in memory for 5 minutes per receiver.
+
+## Addendum (30 Oct – 2 Nov 2026)
+
+Full list: `telebook-backend-api/docs/CHANGELOG_2026-10-29_to_11-02.md`. Summary of API-visible changes:
+
+- **Errors:** `403 PLAN_LIMIT` `{ limitKey, limit, used, planCode, upgrade:true }`; `403 ACCOUNT_SUSPENDED` (suspended users; only `/account/*` and `/auth/logout` stay open).
+- **Account:** `GET /api/account/status`, `POST /api/account/review-request`; socket `account:review-decision`.
+- **Devices:** `PUT /api/devices/current`, `POST /api/devices/revoke-others` (`{deviceId}`), `DELETE /api/devices/:deviceId`.
+- **Calls:** `DELETE /api/calls/history` with `{ ids:[…] }` or `{ all:true }` (hidden for the caller only).
+- **Announcements:** `GET /api/announcements`.
+- **Payments:** `POST /api/payments/verify`; webhook `POST /api/payments/webhook/razorpay`.
+- **Block:** blocked-by users appear masked (`blockedMe:true`, no photo/about/online/last seen); privacy masking enforced by default (`PRIVACY_ENFORCE`).
+- **Search:** exact profile id or share link finds a user.
+- **Share links:** domain `telebookservices.com`; `/.well-known/assetlinks.json` served.
+- **Admin:** `PUT /api/admin/channels/:channelId/fake-stats`; `GET/PUT /api/admin/review-requests`.
