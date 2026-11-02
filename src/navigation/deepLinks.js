@@ -5,15 +5,16 @@ import { store } from '../redex/store';
 import { navigationRef } from './RootNavigation';
 
 // Share links ka host — app.json ke intentFilters me bhi yahi host hai.
-// Share links ka host: yahi server landing page (/u/:code, /c/:slug) serve karta hai.
-// Pehle 'telebook.app' tha jiska certificate/hosting is server par nahi hai, isliye Chrome me link kabhi load nahi hota tha.
-export const APP_LINK_HOST = 'api.telebookservices.com';
+// Share links ka host: telebookservices.com (/u/:code, /c/:slug). Is domain par /u, /c aur /.well-known API server
+// tak proxy hona chahiye (telebook-backend-api/docs/DEEP_LINKS.md). api.telebookservices.com aur purana telebook.app
+// links bhi abhi khulte hain.
+export const APP_LINK_HOST = 'telebookservices.com';
 const LEGACY_LINK_HOST = 'telebook.app';
 export const APP_LINK_SCHEME = 'telebook';
 
 // Links: https://telebook.app/u/<code>, https://telebook.app/c/<slug>,
 //        telebook://u/<code>, telebook://c/<slug>
-const LINK_RE = /^(?:telebook:\/\/|https?:\/\/(?:www\.)?(?:telebook\.app|api\.telebookservices\.com)\/)(u|c)\/([^/?#\s]+)/i;
+const LINK_RE = /^(?:telebook:\/\/|https?:\/\/(?:www\.)?(?:telebook\.app|(?:api\.)?telebookservices\.com)\/)(u|c)\/([^/?#\s]+)/i;
 
 export const parseDeepLink = (url) => {
     const m = LINK_RE.exec(String(url || '').trim());
@@ -113,7 +114,7 @@ export const flushPendingDeepLink = () => {
 // NavigationContainer `linking` — React Navigation ko screens map nahi karne dete
 // (links ko API se resolve karna padta hai), bas URL events hum handle karte hain.
 export const linking = {
-    prefixes: [`${APP_LINK_SCHEME}://`, `https://${APP_LINK_HOST}`, `https://${LEGACY_LINK_HOST}`, `https://www.${LEGACY_LINK_HOST}`],
+    prefixes: [`${APP_LINK_SCHEME}://`, `https://${APP_LINK_HOST}`, `https://www.${APP_LINK_HOST}`, `https://api.${APP_LINK_HOST}`, `https://${LEGACY_LINK_HOST}`, `https://www.${LEGACY_LINK_HOST}`],
     getInitialURL: async () => {
         try {
             const url = await Linking.getInitialURL();

@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
 import { fetchMyPlan, fetchPlanHistory } from '../../redex/slices/plansSlice';
+import GradientFill from '../../components/GradientFill';
 
 const fmtDate = (iso) => {
     if (!iso) return '—';
@@ -140,6 +141,7 @@ export default function PlanHistory({ navigation }) {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
             <StatusBar backgroundColor={headerBg} barStyle="light-content" />
             <View style={[styles.header, { backgroundColor: headerBg }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>

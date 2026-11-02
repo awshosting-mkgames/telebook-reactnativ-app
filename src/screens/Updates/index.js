@@ -14,6 +14,7 @@ import { useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
 import RecommendedChannels from './RecommendedChannels';
 import StatusSection from './StatusSection';
+import GradientFill from '../../components/GradientFill';
 
 export default function Updates({ navigation }) {
     const { t } = useTranslation();
@@ -41,6 +42,7 @@ export default function Updates({ navigation }) {
 
             {/* Header */}
             <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
+                <GradientFill />
                 <Text style={[styles.headerTitle, { color: theme.headerText || '#fff' }]}>{t('Updates')}</Text>
             </View>
 

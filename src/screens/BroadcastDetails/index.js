@@ -30,6 +30,7 @@ import Config from '../../services/config';
 import Images from '../../utils/images';
 import { appendFile } from '../../utils/uploadFile';
 import { useNameResolver } from '../../services/nameResolver';
+import GradientFill from '../../components/GradientFill';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -364,6 +365,7 @@ export default function BroadcastDetails({ route, navigation }) {
     const headerBg = theme.header ?? '#1296f3';
     const Header = () => (
         <View style={[styles.header, { backgroundColor: headerBg }]}>
+            <GradientFill />
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn} hitSlop={HIT}>
                 <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
             </TouchableOpacity>

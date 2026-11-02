@@ -1,6 +1,6 @@
 import { useCallback, useContext, useState } from 'react';
 import {
-    ActivityIndicator, FlatList, Image,
+    ActivityIndicator, Alert, BackHandler, FlatList, Image, Modal, Pressable,
     StatusBar, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -13,6 +13,7 @@ import Config from '../../services/config';
 import { fetchCallsConfig, getCachedCallsConfig } from '../../services/callConfigStore';
 import { startCall } from '../../services/callHelpers';
 import { useNameResolver } from '../../services/nameResolver';
+import GradientFill from '../../components/GradientFill';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 const toImageUrl = (v) => (!v ? DEFAULT_AVATAR : /^(https?:|file:|data:)/.test(v) ? v : `${Config.MEDIA_URL}${v}`);
@@ -42,6 +43,58 @@ export default function Call({ navigation }) {
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [available, setAvailable] = useState(getCachedCallsConfig()?.available ?? null);
+
+    // Call history delete: long press -> select mode, Select all, Delete; 3-dots -> Select / Clear call history
+    const [selectMode, setSelectMode] = useState(false);
+    const [selected, setSelected] = useState(() => new Set());
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+
+    const exitSelect = useCallback(() => { setSelectMode(false); setSelected(new Set()); }, []);
+    const toggleSelect = (id) => setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        if (next.size === 0) setSelectMode(false);
+        return next;
+    });
+    const allSelected = calls.length > 0 && selected.size === calls.length;
+    const selectAll = () => setSelected(allSelected ? new Set() : new Set(calls.map((c) => c._id)));
+
+    useFocusEffect(useCallback(() => {
+        const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+            if (selectMode) { exitSelect(); return true; }
+            return false;
+        });
+        return () => sub.remove();
+    }, [selectMode, exitSelect]));
+
+    const runDelete = async (payload, removeLocal) => {
+        setDeleting(true);
+        const res = await apiService({ method: 'DELETE', endpoint: 'calls/history', data: payload });
+        setDeleting(false);
+        if (res?.success && res.data?.success !== false) {
+            setCalls((prev) => prev.filter((c) => !removeLocal(c)));
+            exitSelect();
+            if (payload.all) { setHasMore(false); fetchCalls(1); }
+        } else {
+            Alert.alert('Error', res?.error?.message || 'Could not delete call history. Please try again.');
+        }
+    };
+    const deleteSelected = () => {
+        if (!selected.size) return;
+        const ids = [...selected];
+        Alert.alert('Delete call history', `Delete ${ids.length} selected call${ids.length > 1 ? 's' : ''}?`, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: () => runDelete(allSelected && !hasMore ? { all: true } : { ids }, (c) => selected.has(c._id)) },
+        ]);
+    };
+    const clearAll = () => {
+        setMenuOpen(false);
+        Alert.alert('Clear call history', 'Delete all your call history? This cannot be undone.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Clear all', style: 'destructive', onPress: () => runDelete({ all: true }, () => true) },
+        ]);
+    };
 
     const fetchCalls = useCallback(async (pageNum = 1) => {
         if (pageNum === 1) setLoading(true);
@@ -95,7 +148,21 @@ export default function Call({ navigation }) {
         const isOutgoing = item.direction === 'outgoing';
 
         return (
-            <TouchableOpacity style={styles.row} onPress={() => recall(item)} activeOpacity={0.7}>
+            <TouchableOpacity
+                style={[styles.row, selectMode && selected.has(item._id) && { backgroundColor: 'rgba(18,150,243,0.12)' }]}
+                onPress={() => (selectMode ? toggleSelect(item._id) : recall(item))}
+                onLongPress={() => { if (!selectMode) { setSelectMode(true); setSelected(new Set([item._id])); } else toggleSelect(item._id); }}
+                delayLongPress={300}
+                activeOpacity={0.7}
+            >
+                {selectMode && (
+                    <Ionicons
+                        name={selected.has(item._id) ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={24}
+                        color={selected.has(item._id) ? '#1296f3' : '#9aa0a6'}
+                        style={{ marginRight: 10 }}
+                    />
+                )}
                 <Image source={{ uri: toImageUrl(item.user?.profilePicture) }} style={styles.avatar} />
                 <View style={{ flex: 1 }}>
                     <Text style={[styles.name, { color: theme.text }, isMissed && styles.missed]} numberOfLines={1}>
@@ -120,9 +187,11 @@ export default function Call({ navigation }) {
                         )}
                     </View>
                 </View>
-                <View style={[styles.callBtn, { backgroundColor: isMissed ? '#e53935' : '#2ecc71' }]}>
-                    <Ionicons name={isVideo ? 'videocam' : 'call'} size={15} color="#fff" />
-                </View>
+                {!selectMode && (
+                    <View style={[styles.callBtn, { backgroundColor: isMissed ? '#e53935' : '#2ecc71' }]}>
+                        <Ionicons name={isVideo ? 'videocam' : 'call'} size={15} color="#fff" />
+                    </View>
+                )}
             </TouchableOpacity>
         );
     };
@@ -132,8 +201,46 @@ export default function Call({ navigation }) {
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
             {/* Android 15/16 me edge-to-edge force hai: status bar ke neeche header ko insets.top se hi dhakna padta hai */}
             <View style={[styles.header, { backgroundColor: theme?.header || '#1199ff', height: HEADER_CONTENT_HEIGHT + insets.top, paddingTop: insets.top }]}>
-                <Text style={styles.headerTitle}>{t('Calls')}</Text>
+                <GradientFill />
+                {selectMode ? (
+                    <>
+                        <TouchableOpacity onPress={exitSelect} hitSlop={10} style={styles.hdrBtn}>
+                            <Ionicons name="close" size={24} color="#fff" />
+                        </TouchableOpacity>
+                        <Text style={[styles.headerTitle, { flex: 1 }]}>{selected.size} selected</Text>
+                        <TouchableOpacity onPress={selectAll} hitSlop={10} style={styles.hdrBtn}>
+                            <Ionicons name={allSelected ? 'checkmark-done-circle' : 'checkmark-done-outline'} size={24} color="#fff" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={deleteSelected} hitSlop={10} style={styles.hdrBtn} disabled={deleting || !selected.size}>
+                            {deleting ? <ActivityIndicator color="#fff" /> : <Ionicons name="trash-outline" size={23} color="#fff" />}
+                        </TouchableOpacity>
+                    </>
+                ) : (
+                    <>
+                        <Text style={[styles.headerTitle, { flex: 1 }]}>{t('Calls')}</Text>
+                        {calls.length > 0 && (
+                            <TouchableOpacity onPress={() => setMenuOpen(true)} hitSlop={10} style={styles.hdrBtn}>
+                                <Ionicons name="ellipsis-vertical" size={22} color="#fff" />
+                            </TouchableOpacity>
+                        )}
+                    </>
+                )}
             </View>
+
+            <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+                <Pressable style={styles.menuOverlay} onPress={() => setMenuOpen(false)}>
+                    <View style={[styles.menuBox, { backgroundColor: theme?.mode === 'dark' ? '#1f2c34' : '#fff', top: HEADER_CONTENT_HEIGHT + insets.top - 8 }]}>
+                        <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setSelectMode(true); setSelected(new Set()); }}>
+                            <Ionicons name="checkmark-circle-outline" size={18} color="#1296f3" />
+                            <Text style={[styles.menuText, { color: theme.text }]}>Select calls</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.menuItem} onPress={clearAll}>
+                            <Ionicons name="trash-outline" size={18} color="#e74c3c" />
+                            <Text style={[styles.menuText, { color: '#e74c3c' }]}>Clear call history</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
+            </Modal>
 
             {available === false ? (
                 <View style={styles.emptyWrap}>
@@ -146,6 +253,7 @@ export default function Call({ navigation }) {
                 <FlatList
                     data={calls}
                     keyExtractor={(item) => item._id}
+                    extraData={[selectMode, selected]}
                     renderItem={renderItem}
                     showsVerticalScrollIndicator={false}
                     refreshing={loading}
@@ -174,6 +282,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
     },
     headerTitle: { color: '#fff', fontSize: 20, fontWeight: '700' },
+    hdrBtn: { paddingHorizontal: 8, paddingVertical: 6 },
+    menuOverlay: { flex: 1 },
+    menuBox: { position: 'absolute', right: 10, borderRadius: 12, paddingVertical: 6, minWidth: 190, elevation: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8 },
+    menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16 },
+    menuText: { fontSize: 15, fontWeight: '500' },
 
     row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
     avatar: { width: 48, height: 48, borderRadius: 24, marginRight: 12, backgroundColor: '#ddd' },

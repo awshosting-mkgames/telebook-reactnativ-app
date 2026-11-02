@@ -12,6 +12,7 @@ import apiService from '../../services/apiService';
 import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
 import AddWalletAmt from '../../components/AddWalletAmt';
+import GradientFill from '../../components/GradientFill';
 
 // Backend ye codes bheje to: group limit / coins kam — wallet me coins add karwao
 const COIN_ERROR_CODES = ['GROUP_LIMIT', 'INSUFFICIENT_COINS', 'INSUFFICIENT_BALANCE'];
@@ -136,6 +137,7 @@ const CreateGroup = ({ navigation, route }) => {
 
             {/* ── Header ── */}
             <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>

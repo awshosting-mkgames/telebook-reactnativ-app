@@ -9,7 +9,9 @@
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
       "package": "com.telebookapp.chatapp",
       "versionCode": 5,
@@ -44,20 +46,43 @@
       "intentFilters": [
         {
           "action": "VIEW",
-          "autoVerify": true,
           "data": [
             {
               "scheme": "https",
-              "host": "telebook.app",
+              "host": "telebookservices.com",
               "pathPrefix": "/u/"
             },
             {
               "scheme": "https",
-              "host": "telebook.app",
+              "host": "telebookservices.com",
               "pathPrefix": "/c/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
+          "autoVerify": true
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.telebookservices.com",
+              "pathPrefix": "/u/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.telebookservices.com",
+              "pathPrefix": "/c/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
+          "autoVerify": true
         },
         {
           "action": "VIEW",
@@ -73,7 +98,29 @@
               "pathPrefix": "/c/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "https",
+              "host": "telebook.app",
+              "pathPrefix": "/u/"
+            },
+            {
+              "scheme": "https",
+              "host": "telebook.app",
+              "pathPrefix": "/c/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "VIEW",
@@ -87,7 +134,10 @@
               "host": "c"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -130,7 +180,14 @@
           "recordAudioAndroid": true
         }
       ],
-      ["expo-notifications", { "sounds": ["./assets/sounds/ringtone.wav"] }],
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/sounds/ringtone.wav"
+          ]
+        }
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "@react-native-firebase/messaging",

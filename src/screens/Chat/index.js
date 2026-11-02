@@ -170,6 +170,9 @@ export default function ChatScreen({ route, navigation }) {
     // Delete ho chuka account chat me "Deleted account" naam se rehta hai (API doc rule 13)
     const otherChatUser = !isGroup ? chatDaetils?.users?.find((u) => idOf(u) !== MY_USER_ID) : null;
     const isOtherDeleted = !!otherChatUser && (otherChatUser.isDeleted === true || otherChatUser.name === "Deleted account");
+    // Block: jisne mujhe block kiya (server `blockedMe:true` bhejta hai) ya jise maine block kiya — uski photo, online,
+    // typing aur last seen chat screen par nahi dikhte, sirf naam.
+    const hideCounterpart = !isGroup && (isBlocked || !!otherChatUser?.blockedMe);
 
     const [isSearchMode, setIsSearchMode] = useState(false);
     const [searchText, setSearchText] = useState("");
@@ -797,7 +800,7 @@ export default function ChatScreen({ route, navigation }) {
                 await Promise.all(broadcastIds.map((id) => apiService({ method: "POST", endpoint: "messages", data: { ...payload, chatId: id, clientMessageId: `${cmid}_${id}` } })));
                 setMessages((prev) => prev.filter((m) => m._id !== tempId));
             } else {
-                const res = await apiService({ method: "POST", endpoint: "messages", data: payload });
+                const res = await apiService({ method: "POST", endpoint: "messages", data: payload, timeout: 60000 });
                 if (res?.success && res?.data?.message) {
                     const sent = res.data.message;
                     // Jawab aane se pehle ✓✓ / blue ✓✓ aa chuka ho to wahi lagao
@@ -951,7 +954,7 @@ export default function ChatScreen({ route, navigation }) {
         // jab tak dobara fail na ho, "queued" sweep isse skip karega.
         upsertPending(chatId, { ...optimisticMsg, offlineQueued: false });
 
-        enqueueUpload(async () => {
+        enqueueUpload(chatId, async () => {
             try {
                 // Progress har tick par patch karne se poori list re-render hoti thi (10 images = flicker).
                 // Sirf 10% ke step par patch karo.
@@ -987,7 +990,7 @@ export default function ChatScreen({ route, navigation }) {
                     return;
                 }
 
-                const res = await apiService({ method: "POST", endpoint: "messages", data: payload });
+                const res = await apiService({ method: "POST", endpoint: "messages", data: payload, timeout: 60000 });
                 if (res?.success && res?.data?.message) {
                     const sent = res.data.message;
                     const early = pendingReceipts.current[sent?._id];
@@ -1580,12 +1583,13 @@ export default function ChatScreen({ route, navigation }) {
             <ChatHeader
                 navigation={navigation}
                 chatName={chatName}
-                chatImage={chatImage}
+                chatImage={hideCounterpart ? DEFAULT_AVATAR : chatImage}
                 isGroup={isGroup}
                 isBroadcast={isBroadcast}
                 chatDaetils={chatDaetils}
-                isTyping={isTyping}
-                isOnline={isOnline}
+                isTyping={hideCounterpart ? false : isTyping}
+                isOnline={hideCounterpart ? false : isOnline}
+                hidePresence={hideCounterpart}
                 gotouserDetails={gotouserDetails}
                 isSelectMode={isSelectMode}
                 selectedCount={selectedMsgIds.size}

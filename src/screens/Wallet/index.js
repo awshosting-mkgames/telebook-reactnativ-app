@@ -10,6 +10,7 @@ import { ThemeContext } from '../../components/ThemeContext';
 import { fetchWallet, fetchWalletTransactions } from '../../redex/slices/walletSlice';
 import { fetchPaymentConfig, getCachedPaymentConfig, canBuy } from '../../services/paymentConfigStore';
 import { handleBuyCoins } from '../../services/paymentActions';
+import GradientFill from '../../components/GradientFill';
 
 const TABS = [
     { key: 'all', label: 'All' },
@@ -98,6 +99,7 @@ export default function Wallet({ navigation }) {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
             <StatusBar backgroundColor={headerBg} barStyle="light-content" />
             <View style={[styles.header, { backgroundColor: headerBg }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>

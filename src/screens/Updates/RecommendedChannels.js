@@ -88,7 +88,7 @@ const RecommendedChannels = ({ navigation, refreshSignal = 0 }) => {
         }
     };
 
-    const renderRow = (item) => {
+    const renderRow = (item, isSponsored = false) => {
         const id = item?._id;
         const name = item?.channelName || 'Channel';
         const imageUri = mediaUrl(item?.channelIcon);
@@ -107,6 +107,12 @@ const RecommendedChannels = ({ navigation, refreshSignal = 0 }) => {
                         <View style={styles.nameRow}>
                             <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>{name}</Text>
                             {item?.verified && <Ionicons name="checkmark-circle" size={14} color="#1296f3" />}
+                            {(isSponsored || item?.isSponsored === true) && (
+                                <View style={styles.sponsoredChip}>
+                                    <Ionicons name="rocket" size={9} color="#0a8f3c" />
+                                    <Text style={styles.sponsoredChipText}>Sponsored</Text>
+                                </View>
+                            )}
                         </View>
                         {!!desc && (
                             <Text style={[styles.desc, { color: isDark ? '#777' : '#777' }]} numberOfLines={1}>{desc}</Text>
@@ -148,7 +154,7 @@ const RecommendedChannels = ({ navigation, refreshSignal = 0 }) => {
                             <View style={styles.sectionHeader}>
                                 <Text style={[styles.sectionTitle, { color: isDark ? '#d0d0d0' : '#222' }]}>Sponsored</Text>
                             </View>
-                            {sponsored.map(renderRow)}
+                            {sponsored.map((c) => renderRow(c, true))}
                         </>
                     )}
 
@@ -157,7 +163,7 @@ const RecommendedChannels = ({ navigation, refreshSignal = 0 }) => {
                             <View style={styles.sectionHeader}>
                                 <Text style={[styles.sectionTitle, { color: isDark ? '#d0d0d0' : '#222' }]}>Popular Channels</Text>
                             </View>
-                            {popular.map(renderRow)}
+                            {popular.map((c) => renderRow(c, false))}
                         </>
                     )}
 
@@ -176,6 +182,8 @@ const RecommendedChannels = ({ navigation, refreshSignal = 0 }) => {
 };
 
 const styles = StyleSheet.create({
+    sponsoredChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#e8f8ee', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, marginLeft: 6 },
+    sponsoredChipText: { color: '#0a8f3c', fontSize: 10, fontWeight: '700' },
     divider: { height: 1, marginVertical: 4 },
     sectionHeader: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
     sectionTitle: { fontSize: 16, fontWeight: '600' },

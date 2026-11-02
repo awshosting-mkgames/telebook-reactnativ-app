@@ -24,6 +24,7 @@ import apiService from '../../services/apiService';
 import { ThemeContext } from '../../components/ThemeContext';
 import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
+import GradientFill from '../../components/GradientFill';
 const BASE_URL = Config.Main_url;
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
@@ -157,6 +158,7 @@ const CreateBroadcast = ({ navigation, route }) => {
             />
             {/* ── Header ── */}
             <View style={[styles.header, { backgroundColor: theme.header || theme.primary || '#1199ff' }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation?.goBack()}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>

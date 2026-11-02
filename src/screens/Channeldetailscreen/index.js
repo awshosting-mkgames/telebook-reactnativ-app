@@ -39,6 +39,7 @@ import {
     openSafeUrl, reportChannel, shareChannelLink, showToast,
 } from '../../services/channelActions';
 import PostActions from '../Mychannelscreen/components/PostActions';
+import GradientFill from '../../components/GradientFill';
 const STORAGE_KEY = 'DOWNLOAD_DIR_URI';
 const HIT = { top: 10, bottom: 10, left: 10, right: 10 };
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -755,6 +756,7 @@ export default function ChannelDetailScreen({ navigation, route }) {
 
             {/* HEADER — baaki app ke header jaisa (avatar + naam + subscribers + menu) */}
             <View style={[sc.topBar, { backgroundColor: headerBg }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} style={sc.iconBtn} hitSlop={HIT}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>

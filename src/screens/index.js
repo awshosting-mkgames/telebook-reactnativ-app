@@ -35,3 +35,4 @@ export { default as Wallet } from './Wallet';
 export { default as PlanHistory } from './PlanHistory';
 export { default as LinkedDevices } from './LinkedDevices';
 export { default as AutoReply } from './AutoReply';
+export { default as ThemeSelect } from './ThemeSelect';

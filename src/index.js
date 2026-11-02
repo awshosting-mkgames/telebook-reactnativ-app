@@ -15,6 +15,7 @@ import { persistor, store } from './redex/store';
 import socketService from './services/socketService';
 import IncomingCallManager from './components/IncomingCallManager';
 import ActiveCallBar from './components/ActiveCallBar';
+import SuspensionGate from './components/SuspensionGate';
 import CallConfigLoader from './components/CallConfigLoader';
 import { contactSync, loadContactsFromDb } from './services/contactSync';
 import { getLastSyncedAt } from './services/contactsDb';
@@ -156,8 +157,22 @@ const ChatTabsLoader = () => {
 // Login / auth-me ke user object se `themeColor` leke theme me lagata hai.
 // Logout par user null hota hai to default color wapas aa jata hai.
 const ThemeColorSync = () => {
-    const { setBrandColor } = useContext(ThemeContext);
+    const { setBrandColor, setPremiumTheme } = useContext(ThemeContext);
     const color = useSelector((state) => state.totalappData?.user?.themeColor ?? null);
+    // Backend me save hui premium theme (user.theme) — logout/login ke baad bhi wahi aaye
+    const savedTheme = useSelector((state) => state.totalappData?.user?.theme ?? null);
+    const hasUser = useSelector((state) => !!state.totalappData?.user);
+    const hadUser = useRef(false);
+
+    useEffect(() => {
+        if (hasUser) {
+            hadUser.current = true;
+            setPremiumTheme(savedTheme);       // null/'light'/'dark' => premium hata do
+        } else if (hadUser.current) {
+            hadUser.current = false;           // logout: agle user ko purani theme na dikhe
+            setPremiumTheme(null);
+        }
+    }, [hasUser, savedTheme]);   // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         setBrandColor(isValidThemeColor(color) ? color.trim() : null);
@@ -233,6 +248,7 @@ export default function App() {
                         <IncomingCallManager />
                         <AppNavigator />
                         <ActiveCallBar />
+                        <SuspensionGate />
                         <Toast />
                     </SafeAreaProvider>
                 </PersistGate>

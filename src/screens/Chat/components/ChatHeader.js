@@ -7,10 +7,11 @@ import {
 } from 'react-native';
 import { ThemeContext } from '../../../components/ThemeContext';
 import { useNameResolver } from '../../../services/nameResolver';
+import GradientFill from '../../../components/GradientFill';
 
 const ChatHeader = ({
     navigation, chatName, chatImage, isGroup, isBroadcast,
-    isTyping, isOnline, gotouserDetails, chatDaetils,
+    isTyping, isOnline, hidePresence, gotouserDetails, chatDaetils,
     isSelectMode, selectedCount, onCancelSelect, onForwardSelected,
     onDeleteSelected, onCopySelected, onStarSelected, onReplySelected, onMoreSelected, onSelectAll, MY_USER_ID, fmtTime,
     isSearchMode, searchText, onSearchChange, onOpenSearch, onCloseSearch,
@@ -34,6 +35,7 @@ const ChatHeader = ({
     if (isSearchMode) {
         return (
             <View style={headerStyle}>
+                <GradientFill />
                 <TouchableOpacity onPress={onCloseSearch} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
@@ -61,6 +63,7 @@ const ChatHeader = ({
     if (isSelectMode) {
         return (
             <View style={headerStyle}>
+                <GradientFill />
                 <TouchableOpacity onPress={onCancelSelect} style={styles.backBtn}>
                     <Ionicons name="close" size={22} color="#fff" />
                 </TouchableOpacity>
@@ -110,7 +113,7 @@ const ChatHeader = ({
 
     // ── Normal mode ───────────────────────────────────────────────
     const otherUser = chatDaetils?.users?.find(u => u._id !== MY_USER_ID);
-    const lastSeenValue = otherUser?.lastSeen ?? null;
+    const lastSeenValue = hidePresence ? null : (otherUser?.lastSeen ?? null);
     // Phonebook me save nahi: number title ke neeche profile naam (ya "Unknown") chhote text me
     const otherName = !isGroup && !isBroadcast && otherUser ? resolveName(otherUser) : null;
     const profileSub = otherName && !otherName.isSaved ? otherName.subtitle : null;
@@ -118,6 +121,7 @@ const ChatHeader = ({
     return (
         <>
             <View style={headerStyle}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>

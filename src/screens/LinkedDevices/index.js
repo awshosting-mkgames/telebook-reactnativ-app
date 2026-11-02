@@ -12,6 +12,7 @@ import apiService from '../../services/apiService';
 import { useDispatch } from 'react-redux';
 import { getDeviceId, getDeviceInfo } from '../../services/deviceId';
 import { logoutUser } from '../../services/Logoutcall';
+import GradientFill from '../../components/GradientFill';
 
 const fmtLastActive = (iso) => {
     if (!iso) return '';
@@ -147,6 +148,7 @@ export default function LinkedDevices({ navigation }) {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
             <StatusBar backgroundColor={headerBg} barStyle="light-content" />
             <View style={[styles.header, { backgroundColor: headerBg }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>

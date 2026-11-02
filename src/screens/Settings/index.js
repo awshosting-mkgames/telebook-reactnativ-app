@@ -40,6 +40,7 @@ import {
     saveNotificationSettings,
     savePrivacy,
 } from '../../services/profileSync';
+import GradientFill from '../../components/GradientFill';
 
 // Product decision pending (local vs server vs both): scope yahin se configurable hai.
 // 'chats' | 'calls' | 'all' — backend POST settings/clear-all-data ka scope.
@@ -219,7 +220,7 @@ export default function Settings({ navigation }) {
     };
 
     const currentLangLabel = LANGUAGES.find((l) => l.code === selectedLang)?.label || 'English';
-    const privacySummary = privacy ? `Last seen: ${privacyLabel(privacy.lastSeen)} · Photo: ${privacyLabel(privacy.profilePhoto)}` : 'Last seen, profile photo, about';
+    const privacySummary = privacy ? `Last seen: ${privacyLabel(privacy.lastSeen)} · Photo: ${privacyLabel(privacy.profilePhoto)} · About: ${privacyLabel(privacy.about)} · Status: ${privacyLabel(privacy.status)}` : 'Last seen, profile photo, about';
     const notifSummary = notif
         ? (notif.messageNotifications === false && notif.groupNotifications === false ? 'Muted' : notif.sound === false ? 'Silent' : 'On')
         : 'Messages, groups, sound';
@@ -229,6 +230,8 @@ export default function Settings({ navigation }) {
             <StatusBar barStyle="light-content" backgroundColor={headerBg} />
 
             <View style={[styles.header, { backgroundColor: headerBg }]}>
+
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>
@@ -262,7 +265,7 @@ export default function Settings({ navigation }) {
                 </Section>
 
                 <Section label="APP" colors={colors}>
-                    <Item icon={isDark ? 'moon-outline' : 'sunny-outline'} color="#e67e22" title="Theme" subtitle={isDark ? 'Dark' : 'Light'} onPress={() => setSheet('theme')} colors={colors} />
+                    <Item icon={isDark ? 'moon-outline' : 'sunny-outline'} color="#e67e22" title="Theme" subtitle={theme?.premiumKey ? 'Premium gradient' : (isDark ? 'Dark' : 'Light')} onPress={() => navigation.navigate('ThemeSelect')} colors={colors} />
                     <Item icon="text-outline" color="#2c3e50" title="Font size" subtitle={({ small: 'Small', medium: 'Medium', large: 'Large' })[fontSize] || 'Medium'} onPress={() => setSheet('font')} colors={colors} />
                     <Item icon="globe-outline" color="#1abc9c" title={t('Language')} subtitle={currentLangLabel} onPress={() => setSheet('lang')} colors={colors} />
                     <Item icon="megaphone-outline" color="#27ae60" title="Broadcast Lists" subtitle="Send one message to many" onPress={() => navigation.navigate('MyBroadcastList')} colors={colors} />

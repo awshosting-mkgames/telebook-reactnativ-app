@@ -11,6 +11,7 @@ import PlanExpiryBanner from '../../components/PlanExpiryBanner';
 import { fetchPlans, fetchMyPlan } from '../../redex/slices/plansSlice';
 import { fetchPaymentConfig, getCachedPaymentConfig, canBuy } from '../../services/paymentConfigStore';
 import { handleBuyPlan } from '../../services/paymentActions';
+import GradientFill from '../../components/GradientFill';
 
 const USAGE_LABELS = {
     devices: 'Linked devices',
@@ -154,6 +155,7 @@ export default function Plans({ navigation }) {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
             <StatusBar backgroundColor={headerBg} barStyle="light-content" />
             <View style={[styles.header, { backgroundColor: headerBg }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>

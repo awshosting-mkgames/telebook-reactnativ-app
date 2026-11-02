@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { ThemeContext } from '../../components/ThemeContext';
+import GradientFill from '../../components/GradientFill';
 
 // 👉 Apna actual Privacy Policy URL yahan daal do
 const PRIVACY_URL = 'https://telebookservices.com/delete-account';
@@ -25,6 +26,7 @@ export default function Deleteaccount({ navigation }) {
         <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0D1117' : '#fff' }]}>
             <StatusBar backgroundColor={theme?.header || '#1199ff'} barStyle="light-content" />
             <View style={[styles.topBar, { backgroundColor: theme?.header || '#1199ff' }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
                 </TouchableOpacity>

@@ -52,19 +52,60 @@ export const subscribePending = (chatId, fn) => {
 };
 
 // ── Upload queue (module-level: screen unmount se nahi rukti) ──────────────
-// 3 parallel photos dheeli network par timeout/"Network Error" de rahe the (Point 12) — 2 rakho
-export const MAX_CONCURRENT_UPLOADS = 2;
-const queue = [];
+// Pehle ek hi global FIFO queue (2 slot) thi: Karan ko 10 images bhejne par saare slot unhi ke upload ko milte the
+// aur Rakesh/Shankar ko bheji image unke peeche intezaar karti thi. Ab har chat ki apni "lane" hai:
+//   - kul MAX_CONCURRENT_UPLOADS slot, par ek chat MAX_PER_CHAT se zyada nahi le sakti => dusri chat ke liye hamesha
+//     slot bacha rehta hai
+//   - jab slot khali ho to agli lane round-robin se chunte hain (10 images wali lane baaki sab ko nahi rokti)
+// Text messages is queue se guzarte hi nahi — wo seedha POST hote hain.
+export const MAX_CONCURRENT_UPLOADS = 3;
+export const MAX_PER_CHAT = 2;
+const lanes = new Map();      // laneKey -> job[]
+const laneActive = new Map(); // laneKey -> running count
 let active = 0;
+let rrIndex = 0;
+
+const pickLane = () => {
+    const keys = Array.from(lanes.keys());
+    if (!keys.length) return null;
+    for (let i = 0; i < keys.length; i += 1) {
+        const k = keys[(rrIndex + i) % keys.length];
+        if ((laneActive.get(k) || 0) < MAX_PER_CHAT && lanes.get(k).length) {
+            rrIndex = (rrIndex + i + 1) % Math.max(keys.length, 1);
+            return k;
+        }
+    }
+    return null;
+};
+
 const runNext = () => {
-    if (active >= MAX_CONCURRENT_UPLOADS) return;
-    const job = queue.shift();
-    if (!job) return;
-    active += 1;
-    job().catch(() => {}).finally(() => { active -= 1; runNext(); });
+    while (active < MAX_CONCURRENT_UPLOADS) {
+        const k = pickLane();
+        if (k == null) return;
+        const job = lanes.get(k).shift();
+        if (!lanes.get(k).length) lanes.delete(k);
+        active += 1;
+        laneActive.set(k, (laneActive.get(k) || 0) + 1);
+        Promise.resolve().then(job).catch(() => {}).finally(() => {
+            active -= 1;
+            const n = (laneActive.get(k) || 1) - 1;
+            if (n <= 0) laneActive.delete(k); else laneActive.set(k, n);
+            runNext();
+        });
+    }
+};
+
+/** enqueueUpload(chatId, job) — purana enqueueUpload(job) bhi chalta hai (default lane). */
+export const enqueueUpload = (laneKeyOrJob, maybeJob) => {
+    const job = typeof laneKeyOrJob === 'function' ? laneKeyOrJob : maybeJob;
+    const laneKey = typeof laneKeyOrJob === 'function' ? 'default' : String(laneKeyOrJob);
+    if (!lanes.has(laneKey)) lanes.set(laneKey, []);
+    lanes.get(laneKey).push(job);
     runNext();
 };
-export const enqueueUpload = (job) => { queue.push(job); runNext(); };
+
+// Test/diagnostic ke liye
+export const _uploadQueueState = () => ({ active, lanes: Array.from(lanes.entries()).map(([k, v]) => [k, v.length]) });
 
 // Reducer: store event ko messages array (newest-first) par lagao
 export const applyPendingEvent = (prev, ev) => {

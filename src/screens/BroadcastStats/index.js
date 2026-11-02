@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
 import apiService from '../../services/apiService';
 import { useNameResolver } from '../../services/nameResolver';
+import GradientFill from '../../components/GradientFill';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -144,6 +145,7 @@ export default function BroadcastStats({ route, navigation }) {
     if (loading) return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3' }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>
@@ -162,6 +164,7 @@ export default function BroadcastStats({ route, navigation }) {
 
             {/* HEADER */}
             <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3' }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>

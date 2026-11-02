@@ -12,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
+import GradientFill from '../../components/GradientFill';
 
 
 
@@ -81,6 +82,7 @@ export default function InviteAFriends({navigation}) {
 
             {/* Header */}
             <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Ionicons name="arrow-back" size={26} color="white" />
                 </TouchableOpacity>

@@ -15,6 +15,7 @@ import { contactSync } from '../../services/contactSync';
 import CreateChannelPopup from '../../components/CreateChannelPopup';
 import apiService from '../../services/apiService';
 import { useSelector, useDispatch, shallowEqual } from 'react-redux';
+import GradientFill from '../../components/GradientFill';
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
 export default function Contact({ navigation }) {
@@ -286,6 +287,7 @@ export default function Contact({ navigation }) {
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <StatusBar barStyle="light-content" backgroundColor={headerBg} />
             <View style={[styles.header, { backgroundColor: headerBg }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={26} color={theme.headerText || 'white'} />
                 </TouchableOpacity>

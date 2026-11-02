@@ -1,6 +1,7 @@
 import axios from 'axios';
 import Config from './config';
 import { APP_BUILD_HEADERS } from './appBuild';
+import { markSuspended } from './suspensionStore';
 
 
 const axiosInstance = axios.create({
@@ -56,6 +57,10 @@ axiosInstance.interceptors.response.use(
                 // Dusre device se logout (Linked Devices) ho chuka token: 401 DEVICE_LOGGED_OUT
                 if (status === 401 && error.response.data?.code === 'DEVICE_LOGGED_OUT') {
                     handleDeviceLoggedOut();
+                }
+                // Admin ne account suspend kiya: poori app par suspension screen
+                if (status === 403 && error.response.data?.code === 'ACCOUNT_SUSPENDED') {
+                    markSuspended(error.response.data?.blockReason ?? null);
                 }
             } else if (error.request) {
                 console.log("error______error.request________",error.request)

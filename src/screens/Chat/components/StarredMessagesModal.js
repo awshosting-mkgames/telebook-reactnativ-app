@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../../components/ThemeContext';
 import apiService from '../../../services/apiService';
 import { useNameResolver } from '../../../services/nameResolver';
+import GradientFill from '../../../components/GradientFill';
 
 // Is chat ke starred messages (GET /messages/starred sab chats ke deta hai — chatId se filter).
 export default function StarredMessagesModal({ visible, chatId, myUserId, onClose, onUnstar }) {
@@ -41,6 +42,7 @@ export default function StarredMessagesModal({ visible, chatId, myUserId, onClos
         <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
             <View style={[styles.root, { backgroundColor: bg }]}>
                 <View style={[styles.header, { paddingTop: insets.top + 10, backgroundColor: theme?.header ?? '#1296f3' }]}>
+                    <GradientFill />
                     <TouchableOpacity onPress={onClose} hitSlop={10}><Ionicons name="arrow-back" size={22} color="#fff" /></TouchableOpacity>
                     <Text style={styles.title}>Starred messages</Text>
                 </View>

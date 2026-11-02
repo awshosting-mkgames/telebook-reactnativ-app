@@ -2,6 +2,7 @@ import React, { createContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SystemUI from 'expo-system-ui';
 import { LightTheme, DarkTheme } from '../utils/theme';
+import { applyPremiumTheme, resolvePremiumTheme } from '../utils/premiumThemes';
 import { FONT_SIZES, patchTextFontScale, setGlobalFontScale } from '../utils/fontScale';
 
 patchTextFontScale();
@@ -17,6 +18,8 @@ export const ThemeProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [brandColor, setBrandColor] = useState(null);
     const [fontSize, setFontSizeState] = useState('medium'); // small | medium | large
+    const [premiumKey, setPremiumKeyState] = useState(null);   // 'royal-sapphire' ... | null
+    const [remoteThemes, setRemoteThemes] = useState({});        // backend Theme rows by key
 
     // Load theme from async
     useEffect(() => {
@@ -30,6 +33,8 @@ export const ThemeProvider = ({ children }) => {
                 setGlobalFontScale(savedFont);
                 setFontSizeState(savedFont);
             }
+            const savedPremium = await AsyncStorage.getItem('APP_PREMIUM_THEME');
+            if (savedPremium && resolvePremiumTheme(savedPremium)) setPremiumKeyState(savedPremium);
             const savedTheme = await AsyncStorage.getItem('APP_THEME');
             if (savedTheme === 'dark') {
                 setTheme(DarkTheme);
@@ -50,6 +55,22 @@ export const ThemeProvider = ({ children }) => {
         try { await AsyncStorage.setItem('APP_FONT_SIZE', key); } catch (e) { /* ignore */ }
     };
 
+    // Premium gradient theme: null = hata do. Backend save alag se (ThemeSelect screen).
+    const setPremiumTheme = async (key) => {
+        const k = key && resolvePremiumTheme(key) ? key : null;
+        setPremiumKeyState(k);
+        try {
+            if (k) await AsyncStorage.setItem('APP_PREMIUM_THEME', k);
+            else await AsyncStorage.removeItem('APP_PREMIUM_THEME');
+        } catch (e) { /* ignore */ }
+    };
+
+    const registerRemoteThemes = (list) => {
+        const map = {};
+        (list || []).forEach((t) => { if (t?.id) map[t.id] = t; });
+        setRemoteThemes(map);
+    };
+
     const toggleTheme = async () => {
         console.log("sadasdasdasd")
         const newTheme =
@@ -61,11 +82,15 @@ export const ThemeProvider = ({ children }) => {
 
     // Brand color sirf main / maincolor aur header par; dark theme ka header kala hi rehta hai.
     const themed = useMemo(() => {
-        if (!brandColor) return theme;
-        const next = { ...theme, main: brandColor, maincolor: brandColor };
-        if (theme.mode === 'light') next.header = brandColor;
-        return next;
-    }, [theme, brandColor]);
+        let next = theme;
+        if (brandColor) {
+            next = { ...theme, main: brandColor, maincolor: brandColor };
+            if (theme.mode === 'light') next.header = brandColor;
+        }
+        // Premium gradient theme sabse upar (brandColor ko override karti hai)
+        const p = premiumKey ? resolvePremiumTheme(premiumKey, remoteThemes[premiumKey]) : null;
+        return p ? applyPremiumTheme(next, p) : next;
+    }, [theme, brandColor, premiumKey, remoteThemes]);
 
     // Point 3: native window ka background bhi theme ke saath badlo, warna screen slide ke
     // dauran right side se safed jhalak (system day/night theme ka window colour) dikhti hai.
@@ -76,7 +101,7 @@ export const ThemeProvider = ({ children }) => {
     if (loading) return null;
 
     return (
-        <ThemeContext.Provider value={{ theme: themed, toggleTheme, setBrandColor, fontSize, setFontSize, fontScale: FONT_SIZES[fontSize] }}>
+        <ThemeContext.Provider value={{ theme: themed, toggleTheme, setBrandColor, premiumKey, setPremiumTheme, registerRemoteThemes, fontSize, setFontSize, fontScale: FONT_SIZES[fontSize] }}>
             {children}
         </ThemeContext.Provider>
     );

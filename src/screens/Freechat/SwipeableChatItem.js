@@ -12,6 +12,7 @@ import {
     View,
 } from 'react-native';
 import { badgeTextColor } from '../../services/badgeConfig';
+import { badgeImageFor } from '../../utils/badgeImages';
 
 const ACTION_WIDTH = 140;
 const SWIPE_THRESHOLD = 60;
@@ -60,6 +61,7 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
     const planBadge = !isGroup ? item?.displayUser?.planBadge : null;
     const badgeVisible = !!(showBadge && planBadge && (planBadge.listLabel || planBadge.label));
     const badgeBg = planBadge?.color || '#1199ff';
+    const badgeImg = badgeVisible ? badgeImageFor(planBadge) : null;
     const ringColor = showRing && planBadge?.color ? planBadge.color : null;
     // Phonebook me save nahi hai (sirf 1-to-1) => 'Unknown' chip
     const isUnknown = !isGroup && item?.isSaved === false;
@@ -161,7 +163,7 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                         <View style={styles.avatarWrap}>
                             {hasAvatar ? (
                                 <Image
-                                    source={{ uri: item.displayAvatar }}
+                                    source={{ uri: isBlocked ? DEFAULT_AVATAR : item.displayAvatar }}
                                     style={[styles.avatar, ringColor && { borderWidth: 2, borderColor: ringColor }]}
                                     defaultSource={{ uri: DEFAULT_AVATAR }}
                                 />
@@ -181,15 +183,19 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                             <TouchableOpacity
                                 activeOpacity={0.8}
                                 onPress={() => { rowOpen.current ? closeRow() : onPress(item); }}
-                                style={[styles.planPill, { backgroundColor: badgeBg }]}
+                                style={badgeImg ? styles.planImgWrap : [styles.planPill, { backgroundColor: badgeBg }]}
                             >
-                                <Text
-                                    style={[styles.planPillText, { color: badgeTextColor(badgeBg) }]}
-                                    numberOfLines={1}
-                                    ellipsizeMode="tail"
-                                >
-                                    {planBadge.listLabel || planBadge.label}
-                                </Text>
+                                {badgeImg ? (
+                                    <Image source={badgeImg} style={styles.planImg} resizeMode="contain" />
+                                ) : (
+                                    <Text
+                                        style={[styles.planPillText, { color: badgeTextColor(badgeBg) }]}
+                                        numberOfLines={1}
+                                        ellipsizeMode="tail"
+                                    >
+                                        {planBadge.listLabel || planBadge.label}
+                                    </Text>
+                                )}
                             </TouchableOpacity>
                         )}
                     </View>
@@ -251,6 +257,8 @@ const styles = StyleSheet.create({
     avatarCol: { width: 58, alignItems: 'center', marginRight: 12 },
     avatarWrap: { position: 'relative' },
     planPill: { marginTop: 4, maxWidth: 58, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 9 },
+    planImgWrap: { marginTop: 4 },
+    planImg: { width: 22, height: 22 },
     planPillText: { fontSize: 10, fontWeight: '700' },
     unknownChip: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, flexShrink: 0 },
     unknownChipText: { fontSize: 10, fontWeight: '600' },

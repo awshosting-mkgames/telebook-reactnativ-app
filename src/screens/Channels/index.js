@@ -1,4 +1,5 @@
 import React, { useState, useContext, useMemo, useCallback } from 'react';
+import BoostSheet from '../../components/BoostSheet';
 import {
     View,
     Text,
@@ -22,6 +23,8 @@ import { ThemeContext } from '../../components/ThemeContext';
 import CreateChannelPopup from '../../components/CreateChannelPopup';
 import apiService from '../../services/apiService';
 import Config from '../../services/config';
+import GradientFill from '../../components/GradientFill';
+import AnnouncementBoard from '../../components/AnnouncementBoard';
 
 // Icon relative path me aata hai — media host ke saath jodna hota hai.
 // Pehle Config.Main_url ki string par .MEDIA_URL lagta tha (undefined), isliye
@@ -453,7 +456,7 @@ const Channels = ({ navigation }) => {
                             </View>
                         ) : (
                             <TouchableOpacity
-                                style={[styles.sponsorBtn, { backgroundColor: isDark ? '#0d1e2e' : '#e8f4fd' }]}
+                                style={[styles.sponsorBtn, { backgroundColor: isDark ? '#0a2540' : '#e8f4fd', borderColor: isDark ? '#1e90ff' : '#bcdcf7' }]}
                                 onPress={() => openSponsorSheet(item)}
                                 disabled={boostLoadingId === id}
                                 activeOpacity={0.8}
@@ -462,8 +465,8 @@ const Channels = ({ navigation }) => {
                                     <ActivityIndicator size="small" color="#1296f3" />
                                 ) : (
                                     <>
-                                        <Ionicons name="rocket-outline" size={13} color="#1296f3" />
-                                        <Text style={styles.sponsorText}>Sponsor</Text>
+                                        <Ionicons name="rocket-outline" size={14} color={isDark ? '#fff' : '#1296f3'} />
+                                        <Text style={[styles.sponsorText, isDark && { color: '#fff' }]}>Boost</Text>
                                     </>
                                 )}
                             </TouchableOpacity>
@@ -483,6 +486,7 @@ const Channels = ({ navigation }) => {
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <StatusBar backgroundColor={headerBg} barStyle="light-content" />
             <View style={[styles.header, { backgroundColor: headerBg }]}>
+                <GradientFill />
                 {/* Ye ek tab screen hai — back arrow tabhi jab sach me wapas ja sakein */}
                 {navigation.canGoBack() && (
                     <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -515,6 +519,8 @@ const Channels = ({ navigation }) => {
 
             {activeTab === 'all' && (
                 <>
+                    {/* Admin ke announcements — channel search ke upar */}
+                    <AnnouncementBoard />
                     <View style={[styles.searchBar, { backgroundColor: isDark ? '#1e1e1e' : '#f2f2f2', borderColor: searchFocused ? headerBg : 'transparent' }]}>
                         <Ionicons name="search" size={17} color={searchFocused ? headerBg : (isDark ? '#666' : '#aaa')} />
                         <TextInput
@@ -652,61 +658,18 @@ const Channels = ({ navigation }) => {
                 />
             )}
 
-            {/* Sponsor options bottom-sheet — local ad-hoc Modal, no shared Modal component (see PROGRESS.md §3) */}
-            <Modal visible={!!boostSheet} transparent animationType="slide" onRequestClose={closeSponsorSheet}>
-                <Pressable style={styles.sheetOverlay} onPress={closeSponsorSheet}>
-                    <Pressable
-                        style={[styles.sheet, { backgroundColor: isDark ? '#1a1a1a' : '#fff' }]}
-                        onStartShouldSetResponder={() => true}
-                    >
-                        <View style={styles.sheetHandle} />
-                        <Text style={[styles.sheetTitle, { color: theme.text }]}>
-                            Sponsor {boostSheet?.channelName}
-                        </Text>
-                        <Text style={[styles.sheetSub, { color: isDark ? '#777' : '#9aa5ad' }]}>
-                            Your balance: {boostSheet?.balance ?? 0} coins
-                        </Text>
-
-                        {toArray(boostSheet?.options).length === 0 ? (
-                            <Text style={[styles.sheetEmpty, { color: isDark ? '#777' : '#9aa5ad' }]}>
-                                No boost options available right now
-                            </Text>
-                        ) : (
-                            toArray(boostSheet?.options).map((opt) => {
-                                const isPurchasingThis = boostPurchasingId === opt.id;
-                                return (
-                                    <TouchableOpacity
-                                        key={opt.id}
-                                        style={[
-                                            styles.optionRow,
-                                            { borderBottomColor: isDark ? '#2a2a2a' : '#eee' },
-                                            !opt.affordable && styles.optionRowDim,
-                                        ]}
-                                        onPress={() => pickBoostOption(opt.id)}
-                                        disabled={!!boostPurchasingId}
-                                        activeOpacity={0.75}
-                                    >
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={[styles.optionTitle, { color: theme.text }]}>
-                                                {opt.hours} {opt.hours === 1 ? 'hour' : 'hours'}
-                                            </Text>
-                                            <Text style={styles.optionCoins}>{opt.coins} coins</Text>
-                                            {!opt.affordable && (
-                                                <Text style={styles.optionInsufficient}>Insufficient coins</Text>
-                                            )}
-                                        </View>
-                                        {isPurchasingThis ? (
-                                            <ActivityIndicator color="#1296f3" />
-                                        ) : (
-                                            <Ionicons name="rocket-outline" size={18} color="#1296f3" />
-                                        )}
-                                    </TouchableOpacity>
-                                );
-                            })
-                        )}
-                    </Pressable>
-                </Pressable>
-            </Modal>
+            {/* Sponsor / Boost popup — design tokens components/BoostSheet.js me */}
+            <BoostSheet
+                visible={!!boostSheet}
+                isDark={isDark}
+                channelName={boostSheet?.channelName}
+                balance={boostSheet?.balance ?? 0}
+                options={toArray(boostSheet?.options)}
+                purchasingId={boostPurchasingId}
+                onPick={pickBoostOption}
+                onClose={closeSponsorSheet}
+                onBuyCoins={() => { closeSponsorSheet(); navigation.navigate('Wallet'); }}
+            />
         </SafeAreaView>
     );
 };
@@ -866,23 +829,37 @@ const styles = StyleSheet.create({
     },
 
     // ── Sponsor button / Sponsored badge (My Channels rows only) ──
-    sponsorBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, marginTop: 2 },
-    sponsorText: { color: '#1296f3', fontSize: 11, fontWeight: '700' },
+    sponsorBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 18, marginTop: 2, borderWidth: 1, shadowColor: '#1e90ff', shadowOpacity: 0.6, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 3 },
+    sponsorText: { color: '#1296f3', fontSize: 13, fontWeight: '700' },
     sponsoredBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, marginTop: 2, borderWidth: 1, borderColor: '#16a34a' },
     sponsoredText: { color: '#16a34a', fontSize: 10, fontWeight: '700' },
 
     // ── Sponsor options bottom-sheet ──
     sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-    sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 28 },
-    sheetHandle: { width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-    sheetTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
-    sheetSub: { fontSize: 12, textAlign: 'center', marginBottom: 14 },
+    sheet: { borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 36, minHeight: 420 },
+    sheetNeon: { backgroundColor: '#03080f', borderWidth: 1.5, borderColor: '#1e90ff', shadowColor: '#1e90ff', shadowOpacity: 0.7, shadowRadius: 18, shadowOffset: { width: 0, height: 0 }, elevation: 12 },
+    sheetLight: { backgroundColor: '#fff' },
+    sheetHandle: { width: 48, height: 5, backgroundColor: '#ddd', borderRadius: 3, alignSelf: 'center', marginBottom: 18 },
+    sheetTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 12 },
+    sheetIconBox: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e8f4fd' },
+    neonBox: { backgroundColor: '#0a2540', borderWidth: 1, borderColor: '#1e90ff' },
+    sheetTitle: { fontSize: 22, fontWeight: '700', flexShrink: 1 },
+    balanceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 18 },
+    sheetSub: { fontSize: 17 },
+    balanceVal: { color: '#f5c518', fontWeight: '700' },
     sheetEmpty: { fontSize: 13, textAlign: 'center', paddingVertical: 20 },
-    optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 0.5 },
-    optionRowDim: { opacity: 0.5 },
-    optionTitle: { fontSize: 14, fontWeight: '600' },
-    optionCoins: { fontSize: 12, color: '#1296f3', marginTop: 2 },
-    optionInsufficient: { fontSize: 11, color: '#e25555', marginTop: 2 },
+    optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 18, borderRadius: 18, marginVertical: 2 },
+    optionFeatured: { backgroundColor: '#07213b', borderWidth: 1.5, borderColor: '#1e90ff' },
+    optionFeaturedLight: { backgroundColor: '#eaf5ff', borderWidth: 1.5, borderColor: '#9ccdf5' },
+    optionTitle: { fontSize: 20, fontWeight: '700' },
+    optionCoins: { fontSize: 17, color: '#22c1ee', marginTop: 2, fontWeight: '600' },
+    optionInsufficient: { fontSize: 15, color: '#ff4d4f', marginTop: 4 },
+    optionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minWidth: 158, height: 52, borderRadius: 26, borderWidth: 1.5 },
+    optionBtnNeon: { backgroundColor: '#0a2540', borderColor: '#1e90ff', shadowColor: '#1e90ff', shadowOpacity: 0.8, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 5 },
+    optionBtnLight: { backgroundColor: '#e8f4fd', borderColor: '#9ccdf5' },
+    optionBtnLocked: { backgroundColor: 'transparent', borderColor: '#5a6772' },
+    optionBtnLockedLight: { backgroundColor: '#f2f4f6', borderColor: '#d5dade' },
+    optionBtnText: { fontSize: 19, fontWeight: '700' },
 
     emptyWrap: { alignItems: 'center', paddingTop: 70, gap: 6 },
     emptyIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },

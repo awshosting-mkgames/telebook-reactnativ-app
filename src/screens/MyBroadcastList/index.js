@@ -14,6 +14,7 @@ import apiService from '../../services/apiService';
 import { useSelector } from 'react-redux';
 import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
+import GradientFill from '../../components/GradientFill';
 const BASE_URL = Config.MEDIA_URL;
 
 
@@ -115,6 +116,7 @@ export default function MyBroadcastList({ navigation }) {
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <StatusBar backgroundColor={theme.header ?? '#1296f3'} barStyle="light-content" />
             <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3' }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
                 </TouchableOpacity>

@@ -35,6 +35,7 @@ import HeaderMenu from './HeaderMenu';
 import SwipeableChatItem from './SwipeableChatItem';
 import Config from '../../services/config';
 import { useNameResolver } from '../../services/nameResolver';
+import GradientFill from '../../components/GradientFill';
 const BASE_URL = Config.MEDIA_URL;
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
@@ -48,6 +49,7 @@ const Freechat = ({ navigation }) => {
     const dispatch = useDispatch();
 
     const isDark = theme.text === '#FFFFFF';
+    const accent = theme.premiumKey ? theme.main : '#1199ff';   // premium gradient theme ka accent
     const [activeFilter, setActiveFilter] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [menuVisible, setMenuVisible] = useState(false);
@@ -328,6 +330,7 @@ const Freechat = ({ navigation }) => {
                 onProfile={() => navigation.navigate('Settings')}
             />
             <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
+                <GradientFill />
                 <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.profileBtn} activeOpacity={0.8}>
                     <Image source={{ uri: avatarUri }} style={[styles.profileAvatar, isDark && styles.profileAvatarDark]} />
                     {totalUnread > 0 && <View style={styles.headerBadge} />}
@@ -352,8 +355,9 @@ const Freechat = ({ navigation }) => {
                         onPress={() => changeFilter(f)}
                         style={[
                             styles.filterBtn,
-                            { borderColor: activeFilter === f ? '#1199ff' : filterBorderColor },
+                            { borderColor: activeFilter === f ? accent : filterBorderColor },
                             activeFilter === f && styles.activeFilter,
+                            activeFilter === f && { backgroundColor: accent, borderColor: accent },
                         ]}
                         activeOpacity={0.75}
                     >
@@ -368,7 +372,7 @@ const Freechat = ({ navigation }) => {
             </View>
             {loading && sortedChats.length === 0 ? (
                 <View style={styles.loaderWrap}>
-                    <ActivityIndicator size="large" color="#1199ff" />
+                    <ActivityIndicator size="large" color={accent} />
                     <Text style={[styles.loadingText, { color: isDark ? '#666' : '#aaa' }]}>Loading chats...</Text>
                 </View>
             ) : (
@@ -398,7 +402,7 @@ const Freechat = ({ navigation }) => {
             )}
             <TouchableOpacity
                 onPress={() => navigation.navigate('Contact')}
-                style={styles.fab}
+                style={[styles.fab, { backgroundColor: accent }]}
                 activeOpacity={0.8}
             >
                 <Ionicons name="add" size={28} color="#fff" />
