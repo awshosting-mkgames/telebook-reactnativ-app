@@ -41,7 +41,7 @@ import { persistChatTabs, syncAllTabData } from "../../services/chatSync";
 import { apiErrorMessage, setBlocked } from "../../services/chatActions";
 import { startCall } from "../../services/callHelpers";
 import { getCachedCallsConfig } from "../../services/callConfigStore";
-import { loadCachedMessages, cacheMessages, getMemoryMessages, uncacheMessage } from "../../services/messageSync";
+import { loadCachedMessages, cacheMessages, getMemoryMessages, uncacheMessage, markMessagesDeleted } from "../../services/messageSync";
 import {
     AUTO_RETRY_DELAYS, applyPendingEvent, autoRetryAttempts, cancelledUploads, enqueueUpload, getPending, patchPending, removePending,
     registerRetry, resolvePending, subscribePending, unregisterRetry, upsertPending,
@@ -322,9 +322,14 @@ export default function ChatScreen({ route, navigation }) {
         });
         const onReadUpdate = ({ messageId, chatId: c }) => { if (!c || c === chatId) applyReceipt(messageId, "read"); };
         const onDeliveredUpdate = ({ messageId, chatId: c }) => { if (!c || c === chatId) applyReceipt(messageId, "delivered"); };
-        const onDeleted = ({ messageId }) => setMessages((prev) => prev.map((m) => m._id === messageId ? { ...m, isDeleted: true, content: "This message was deleted", attachments: [] } : m));
+        const onDeleted = ({ messageId, chatId: c }) => {
+            if (c && c !== chatId) return;
+            markMessagesDeleted(chatId, [messageId]);
+            setMessages((prev) => prev.map((m) => m._id === messageId ? { ...m, isDeleted: true, content: "This message was deleted", attachments: [] } : m));
+        };
         const onBulkDeleted = ({ messageIds, chatId: deletedChatId }) => {
             if (deletedChatId && deletedChatId !== chatId) return;
+            markMessagesDeleted(chatId, messageIds);
             setMessages((prev) => prev.map((m) =>
                 messageIds.includes(m._id)
                     ? { ...m, isDeleted: true, content: 'This message was deleted', attachments: [] }
@@ -1424,10 +1429,8 @@ export default function ChatScreen({ route, navigation }) {
                         ? { ...m, isDeleted: true, content: 'This message was deleted', attachments: [] }
                         : m
                 ));
-                // SQL cache me bhi delete reflect karo — fire-and-forget, fail ho to bhi UI na tootey
-                Promise.all(deleted.map((id) =>
-                    markMessageDeletedLocally(chatId, id, { isDeleted: true, content: 'This message was deleted', attachments: [] })
-                )).catch((e) => console.log('⚠️ markMessageDeletedLocally error:', e));
+                // Memory + SQL cache me bhi delete reflect karo (warna chat dobara kholne par blink)
+                markMessagesDeleted(chatId, deleted);
             } else {
                 // DELETE /messages/delete-for-me { messageIds } — sirf mere liye
                 if (serverIds.length) {
@@ -1435,7 +1438,12 @@ export default function ChatScreen({ route, navigation }) {
                     if (!res?.success) throw new Error(apiErrorMessage(res));
                 }
                 setMessages((prev) => prev.filter((m) => !ids.includes(m._id)));
+                // Local DB (SQL + memory) se bhi hatao — pehle sirf screen state se jata tha, cache me bacha rehta
+                // tha aur app band-khol par dikh kar phir gayab hota (blink)
+                ids.forEach((id) => uncacheMessage(chatId, id));
             }
+            // Chat list ka last-message preview bhi theek ho (background, loader nahi)
+            if (MY_USER_ID) syncAllTabData(dispatch, MY_USER_ID, { background: true });
         } catch (e) { Alert.alert("Error", e?.message || "Could not delete the message. Please try again."); }
     };
 
@@ -1506,8 +1514,10 @@ export default function ChatScreen({ route, navigation }) {
                 onPress: async () => { await deleteMessage(ids, false); cancelSelectMode(); },
             },
         ];
-        const allExpired = ids.every((id) => isDeleteWindowExpired(messages.find((m) => m._id === id)));
-        if (allMine && !allExpired) {
+        // Group owner/admin kisi ka bhi message sabke liye hata sakta hai (time-window nahi lagti)
+        const adminMod = isGroup && isGroupAdmin;
+        const allExpired = !adminMod && ids.every((id) => isDeleteWindowExpired(messages.find((m) => m._id === id)));
+        if ((allMine || adminMod) && !allExpired) {
             buttons.push({
                 text: 'Delete for Everyone', style: 'destructive',
                 onPress: async () => { await deleteMessage(ids, true); cancelSelectMode(); },
@@ -1515,7 +1525,7 @@ export default function ChatScreen({ route, navigation }) {
         }
         Alert.alert(
             'Delete Messages',
-            `Delete ${ids.length} message${ids.length > 1 ? 's' : ''}?\n\nDelete for Me removes ${ids.length > 1 ? 'them' : 'it'} only from your own view.${allMine && !allExpired ? ' Delete for Everyone removes ' + (ids.length > 1 ? 'them' : 'it') + ' for everyone in this chat.' : ''}`,
+            `Delete ${ids.length} message${ids.length > 1 ? 's' : ''}?\n\nDelete for Me removes ${ids.length > 1 ? 'them' : 'it'} only from your own view.${(allMine || adminMod) && !allExpired ? ' Delete for Everyone removes ' + (ids.length > 1 ? 'them' : 'it') + ' for everyone in this chat.' : ''}`,
             buttons
         );
     };
@@ -1768,7 +1778,8 @@ export default function ChatScreen({ route, navigation }) {
                     onDeleteForAll={handleDeleteAll}
                     onEdit={handleEdit}
                     canEdit={!isEditWindowExpired(selectedMsg)}
-                    canDeleteForAll={!isDeleteWindowExpired(selectedMsg)}
+                    canModerate={isGroup && isGroupAdmin && !(selectedMsg?.sender?._id === MY_USER_ID || selectedMsg?.sender === MY_USER_ID)}
+                    canDeleteForAll={(isGroup && isGroupAdmin) || !isDeleteWindowExpired(selectedMsg)}
                     onForward={handleForward}
                     onStar={handleStar}
                     onReact={handleReact}

@@ -7,7 +7,7 @@ const MessagePopup = ({
     visible, message, isMine, onClose,
     onReply, onDelete, onDeleteForAll, onEdit,
     onForward, onStar, onReact, onBlock, onCopy, onSelect,
-    isStarred, isSenderBlocked, theme, canEdit = true, canDeleteForAll = true,
+    isStarred, isSenderBlocked, theme, canEdit = true, canDeleteForAll = true, canModerate = false,
 }) => {
     if (!message) return null;
     const isDark = theme?.mode ? theme.mode === 'dark' : theme?.text === '#FFFFFF';
@@ -25,7 +25,7 @@ const MessagePopup = ({
         { icon: isStarred ? 'star' : 'star-outline', label: isStarred ? 'Unstar' : 'Star', color: '#f0a500', fn: onStar },
         ...(onSelect ? [{ icon: 'checkmark-circle-outline', label: 'Select', color: theme?.main ?? '#1296f3', fn: onSelect }] : []),
         { icon: 'trash-outline', label: 'Delete for Me', color: '#e67e22', fn: onDelete },
-        ...(isMine && canDeleteForAll ? [{ icon: 'trash', label: 'Delete for Everyone', color: '#e74c3c', fn: onDeleteForAll }] : []),
+        ...((isMine || canModerate) && canDeleteForAll ? [{ icon: 'trash', label: 'Delete for Everyone', color: '#e74c3c', fn: onDeleteForAll }] : []),
         ...(!isMine && onBlock ? [{ icon: isSenderBlocked ? 'checkmark-circle-outline' : 'ban-outline', label: isSenderBlocked ? 'Unblock User' : 'Block User', color: '#888', fn: onBlock }] : []),
     ];
 

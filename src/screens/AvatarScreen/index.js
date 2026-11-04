@@ -4,7 +4,8 @@ import {
     StatusBar, ScrollView, Alert,
     ActivityIndicator, Platform
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'; // RN ka SafeAreaView Android par padding nahi deta
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useHeaderMetrics } from '../../utils/headerMetrics'; // RN ka SafeAreaView Android par padding nahi deta
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -76,7 +77,7 @@ const StatusItem = ({ item, onRemove }) => {
 const AvatarScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
-    const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // status bar + 60 header
     const accent = theme.main || '#0084ff';
     const accentText = theme.accentText || '#fff';
      const dispatch  = useDispatch();
@@ -139,10 +140,10 @@ const AvatarScreen = ({ navigation }) => {
     // ─────────────────────────────────────────────────────────────────────────
     return (
         <SafeAreaView edges={['left', 'right', 'bottom']} style={[styles.container, { backgroundColor: bg }]}>
-            <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+            <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: theme.header || '#0084ff', height: undefined, paddingTop: insets.top + 12, paddingBottom: 16, overflow: 'hidden' }]}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#0084ff', height, paddingTop: top, paddingBottom: 0, overflow: 'hidden' }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -203,8 +204,8 @@ const AvatarScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        height: 80, backgroundColor: '#0084ff',
-        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16,paddingTop:25
+        backgroundColor: '#0084ff',
+        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16,
     },
     backBtn:     { marginRight: 14 },
     headerTitle: { color: '#fff', fontSize: 20, fontWeight: '700' },

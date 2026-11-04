@@ -1,7 +1,7 @@
 import { useCallback, useContext, useState } from 'react';
 import {
     ActivityIndicator, FlatList, Platform, ScrollView,
-    SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View,
+    StatusBar, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,8 @@ import { fetchPlans, fetchMyPlan } from '../../redex/slices/plansSlice';
 import { fetchPaymentConfig, getCachedPaymentConfig, canBuy } from '../../services/paymentConfigStore';
 import { handleBuyPlan } from '../../services/paymentActions';
 import GradientFill from '../../components/GradientFill';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 
 const USAGE_LABELS = {
     devices: 'Linked devices',
@@ -59,6 +61,7 @@ export default function Plans({ navigation }) {
 
     const isDark = theme?.mode === 'dark';
     const headerBg = theme?.header || '#1199ff';
+    const { top, height } = useHeaderMetrics(); // status bar + 60 header
     const accent = theme?.main || '#0084ff';
     const accentText = theme?.accentText || '#fff';
     const colors = {
@@ -154,9 +157,9 @@ export default function Plans({ navigation }) {
     const buyActive = canBuy(paymentConfig);
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar backgroundColor={headerBg} barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: headerBg }]}>
+        <SafeAreaView edges={['left', 'right', 'bottom']} style={[styles.container, { backgroundColor: colors.bg }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: headerBg }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -322,8 +325,7 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
         flexDirection: 'row', alignItems: 'center', gap: 18,
-        paddingHorizontal: 16, paddingBottom: 14,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
+        paddingHorizontal: 16, overflow: 'hidden',
     },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
 

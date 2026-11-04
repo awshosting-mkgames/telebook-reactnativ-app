@@ -7,10 +7,12 @@ import { ThemeContext } from '../../../components/ThemeContext';
 import apiService from '../../../services/apiService';
 import { useNameResolver } from '../../../services/nameResolver';
 import GradientFill from '../../../components/GradientFill';
+import { useHeaderMetrics } from '../../../utils/headerMetrics';
 
 // Is chat ke starred messages (GET /messages/starred sab chats ke deta hai — chatId se filter).
 export default function StarredMessagesModal({ visible, chatId, myUserId, onClose, onUnstar }) {
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const { theme } = useContext(ThemeContext);
     const resolveName = useNameResolver();
     const [items, setItems] = useState([]);
@@ -41,7 +43,7 @@ export default function StarredMessagesModal({ visible, chatId, myUserId, onClos
     return (
         <Modal statusBarTranslucent visible={visible} animationType="slide" onRequestClose={onClose}>
             <View style={[styles.root, { backgroundColor: bg }]}>
-                <View style={[styles.header, { paddingTop: insets.top + 10, backgroundColor: theme?.header ?? '#1296f3' }]}>
+                <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: theme?.header ?? '#1296f3' }]}>
                     <GradientFill />
                     <TouchableOpacity onPress={onClose} hitSlop={10}><Ionicons name="arrow-back" size={22} color="#fff" /></TouchableOpacity>
                     <Text style={styles.title}>Starred messages</Text>
@@ -76,7 +78,7 @@ export default function StarredMessagesModal({ visible, chatId, myUserId, onClos
 
 const styles = StyleSheet.create({
     root: { flex: 1 },
-    header: { overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingBottom: 14 },
+    header: { overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16 },
     title: { color: '#fff', fontSize: 18, fontWeight: '600' },
     empty: { textAlign: 'center', marginTop: 60, fontSize: 14, paddingHorizontal: 24 },
     row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 12, marginBottom: 8 },

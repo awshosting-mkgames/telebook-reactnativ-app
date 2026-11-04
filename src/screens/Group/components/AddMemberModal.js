@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../../components/ThemeContext';
 import GradientFill from '../../../components/GradientFill';
+import { useHeaderMetrics } from '../../../utils/headerMetrics';
 import { useSelector } from 'react-redux';
 import { handlePlanLimit } from '../../../services/planLimit';
 import { useNavigation } from '@react-navigation/native';
@@ -18,6 +19,7 @@ const AddMemberModal = ({ visible, onClose, chatId, existingMemberIds, onAdded }
 
     const { theme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const accent = theme.main || '#3498db';
     const [searchText,       setSearchText]       = useState('');
     const [selectedContacts, setSelectedContacts] = useState([]);
@@ -75,7 +77,7 @@ const AddMemberModal = ({ visible, onClose, chatId, existingMemberIds, onAdded }
             <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: theme.background }]}>
 
                 {/* Header */}
-                <View style={[styles.header, { backgroundColor: theme.header || accent, paddingTop: insets.top + 14, overflow: 'hidden' }]}>
+                <View style={[styles.header, { backgroundColor: theme.header || accent, height, paddingTop: top, paddingBottom: 0, overflow: 'hidden' }]}>
                     <GradientFill />
                     <TouchableOpacity onPress={onClose}>
                         <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -191,7 +193,7 @@ const AddMemberModal = ({ visible, onClose, chatId, existingMemberIds, onAdded }
 
 const styles = StyleSheet.create({
     container:   { flex: 1, backgroundColor: '#fff' },
-    header:      { backgroundColor: '#3498db', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 14 },
+    header:      { backgroundColor: '#3498db', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15 },
     title:       { color: '#fff', fontSize: 18, fontWeight: '700' },
     sub:         { color: 'rgba(255,255,255,0.8)', fontSize: 12 },
     checkBtn:    { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center' },

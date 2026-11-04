@@ -8,11 +8,13 @@ import { Ionicons, MaterialCommunityIcons, Octicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 
 const Community = ({ navigation }) => {
     const { t } = useTranslation();
     const { theme, toggleTheme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const accent = theme.main || '#3498db';
     const members = [
         { id: '1', name: 'You', status: 'Available', img: 'https://i.pravatar.cc/100?u=1' },
@@ -41,8 +43,9 @@ const Community = ({ navigation }) => {
 
     return (
         <SafeAreaView edges={['left', 'right', 'bottom']} style={[styles.container,{ backgroundColor: theme.background}]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
             {/* HEADER */}
-            <View style={[styles.header, { backgroundColor: theme.header || '#3498db', height: 60 + insets.top, paddingTop: insets.top, overflow: 'hidden' }]}>
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: theme.header || '#3498db' }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={24} color="white" />

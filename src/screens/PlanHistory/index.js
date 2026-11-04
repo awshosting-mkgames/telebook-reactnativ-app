@@ -7,7 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 import { ThemeContext } from '../../components/ThemeContext';
 import { fetchMyPlan, fetchPlanHistory } from '../../redex/slices/plansSlice';
 import GradientFill from '../../components/GradientFill';
@@ -21,7 +21,7 @@ const fmtDate = (iso) => {
 export default function PlanHistory({ navigation }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
-    const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // status bar + 60 header
     const dispatch = useDispatch();
     const { me, history, historyLoading, historyError, historyPagination, historyCurrent } = useSelector((s) => s.plans);
 
@@ -142,7 +142,7 @@ export default function PlanHistory({ navigation }) {
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top + 12 }]}>
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: headerBg }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
         flexDirection: 'row', alignItems: 'center', gap: 18,
-        paddingHorizontal: 16, paddingBottom: 14,
+        paddingHorizontal: 16,
         overflow: 'hidden',
     },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },

@@ -15,6 +15,7 @@ import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
 import AddWalletAmt from '../../components/AddWalletAmt';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Backend ye codes bheje to: group limit / coins kam — wallet me coins add karwao
@@ -53,6 +54,7 @@ const CreateGroup = ({ navigation, route }) => {
     const { theme } = useContext(ThemeContext);
     const isDark = theme.text === '#FFFFFF';
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
 
     const [groupName, setGroupName] = useState('');
     const [groupImage, setGroupImage] = useState(null);
@@ -145,7 +147,7 @@ const CreateGroup = ({ navigation, route }) => {
 
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
             {/* ── Header ── */}
-            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff', paddingTop: insets.top + 10 }]}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff', paddingTop: top, paddingBottom: 0, height }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -303,7 +305,7 @@ const CreateGroup = ({ navigation, route }) => {
 const styles = StyleSheet.create({
     container: { flex: 1 },
 
-    header: { backgroundColor: '#4491f2', overflow: 'hidden', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 14, elevation: 4 },
+    header: { backgroundColor: '#4491f2', overflow: 'hidden', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, elevation: 4 },
     backBtn: { padding: 4, marginRight: 10 },
     headerTitle: { flex: 1, color: '#fff', fontSize: 18, fontWeight: '600' },
     createPill: { backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, minWidth: 68, alignItems: 'center' },

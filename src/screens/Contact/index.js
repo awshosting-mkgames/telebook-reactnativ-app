@@ -17,6 +17,7 @@ import apiService from '../../services/apiService';
 import { useSelector, useDispatch, shallowEqual } from 'react-redux';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
 export default function Contact({ navigation }) {
@@ -25,6 +26,7 @@ export default function Contact({ navigation }) {
 
     const isDark = theme.mode === 'dark';
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
 
     const contacts = useSelector((state) => state.contacts?.contacts ?? [], shallowEqual);
     const loading = useSelector((state) => state.contacts?.syncing ?? false);
@@ -288,7 +290,7 @@ export default function Contact({ navigation }) {
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top, height: 56 + insets.top }]}>
+            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: top, paddingBottom: 0, height }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={26} color={theme.headerText || 'white'} />

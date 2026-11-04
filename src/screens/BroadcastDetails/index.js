@@ -31,6 +31,7 @@ import Images from '../../utils/images';
 import { appendFile } from '../../utils/uploadFile';
 import { useNameResolver } from '../../services/nameResolver';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -71,6 +72,7 @@ export default function BroadcastDetails({ route, navigation }) {
     const resolveName = useNameResolver();
     const isDark = theme.mode !== 'light';
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
 
     const contacts = useSelector((state) => state.contacts?.contacts ?? []);
     const maniAllData = useSelector((s) => s.totalappData);
@@ -364,7 +366,7 @@ export default function BroadcastDetails({ route, navigation }) {
     // ── Header har state me same rehta hai (loading me bhi) ─────────────────
     const headerBg = theme.header ?? '#1296f3';
     const Header = () => (
-        <View style={[styles.header, { backgroundColor: headerBg, height: Math.max(90, 56 + insets.top), paddingTop: insets.top, overflow: 'hidden' }]}>
+        <View style={[styles.header, { backgroundColor: headerBg, height, paddingTop: top, paddingBottom: 0, overflow: 'hidden' }]}>
             <GradientFill />
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn} hitSlop={HIT}>
                 <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
@@ -400,7 +402,7 @@ export default function BroadcastDetails({ route, navigation }) {
 
     if (loading) return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar backgroundColor={headerBg} barStyle="light-content" />
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
             <Header />
             <View style={styles.loadingBox}>
                 <ActivityIndicator color={colors.accent} size="large" />
@@ -410,7 +412,7 @@ export default function BroadcastDetails({ route, navigation }) {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar backgroundColor={headerBg} barStyle="light-content" />
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             <Header />
 
@@ -693,12 +695,10 @@ const styles = StyleSheet.create({
 
     // Header — Chat screen ke header jaisa hi (status bar ke neeche)
     header: {
-        height: 90,
         backgroundColor: '#1296f3',
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
         gap: 6,
     },
     headerBtn: { padding: 6 },

@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
 import GradientFill from '../../components/GradientFill';
+import { ImageViewer } from '../Chat/components/MediaViewers';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import apiService from '../../services/apiService';
@@ -191,6 +193,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [chatInfo, setChatInfo] = useState(null);
+    const [photoOpen, setPhotoOpen] = useState(false);   // profile photo bada dekhne ke liye
     const [mediaDetails, setMediaDetails] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -211,6 +214,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
     const [savingContact, setSavingContact] = useState(false);
     const accent = theme?.main || theme?.maincolor || '#0499FF';
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const headerBg = theme?.header || accent;
 
     // ── Toast ─────────────────────────────────────────────────────────────────
@@ -394,7 +398,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
         return (
             <View style={[styles.container, { backgroundColor: bg }]}>
                 <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
-                <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top, minHeight: 68 + insets.top }]}>
+                <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: headerBg }]}>
                     <GradientFill />
                     <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -416,7 +420,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             {/* ── Header ── gradient status bar ke neeche tak */}
-            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top, minHeight: 68 + insets.top }]}>
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: headerBg }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -433,7 +437,9 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                         <GradientFill />
                     </View>
                     <View style={styles.avatarWrap}>
-                        <Image source={{ uri: avatarUri }} style={[styles.avatar, { shadowColor: accent }]} />
+                        <TouchableOpacity activeOpacity={0.9} disabled={!otherUser?.profilePicture} onPress={() => setPhotoOpen(true)}>
+                            <Image source={{ uri: avatarUri }} style={[styles.avatar, { shadowColor: accent }]} />
+                        </TouchableOpacity>
                         {otherUser?.isOnline && <View style={styles.onlineDot} />}
                     </View>
                     <Text style={[styles.heroName, { color: txt }]}>
@@ -795,6 +801,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
             </Animated.View>
 
             {/* ── Modals ── */}
+            <ImageViewer visible={photoOpen} uri={avatarUri} onClose={() => setPhotoOpen(false)} />
             <ConfirmModal
                 visible={showBlock} onClose={() => setShowBlock(false)} onConfirm={handleBlock}
                 title={blocked ? `Unblock ${displayName}?` : `Block ${displayName}?`}
@@ -873,7 +880,7 @@ const styles = StyleSheet.create({
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     loadingText: { marginTop: 12, fontSize: 15 },
 
-    header: { minHeight: 90, backgroundColor: '#0084ff', overflow: 'hidden', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
+    header: { backgroundColor: '#0084ff', overflow: 'hidden', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
     backBtn: { marginRight: 12, padding: 2 },
     headerTitle: { flex: 1, color: '#fff', fontSize: 20, fontWeight: '700' },
     moreBtn: { padding: 4 },

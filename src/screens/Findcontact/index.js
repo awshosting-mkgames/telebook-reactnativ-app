@@ -33,6 +33,7 @@ import { useSelector } from 'react-redux';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 import Config from '../../services/config';
 
 const getAvatar = (item) =>
@@ -44,6 +45,7 @@ const FindContact = ({ navigation, route }) => {
     const { theme } = useContext(ThemeContext);
     const isDark = theme.text === '#FFFFFF';
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const accent = theme.main || '#4491f2';
     const accentText = theme.accentText || '#fff';
 
@@ -195,9 +197,10 @@ const FindContact = ({ navigation, route }) => {
 
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: theme.header || '#4491f2', paddingTop: insets.top + 10, overflow: 'hidden' }]}>
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: theme.header || '#4491f2' }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.headerBack}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -293,7 +296,7 @@ const CHIP_AVATAR = 52;
 const styles = StyleSheet.create({
     container: { flex: 1 },
 
-    header: { backgroundColor: '#4491f2', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 52, paddingBottom: 14, elevation: 4 },
+    header: { backgroundColor: '#4491f2', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, elevation: 4 },
     headerBack: { padding: 4, marginRight: 4 },
     headerCenter: { flex: 1 },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },

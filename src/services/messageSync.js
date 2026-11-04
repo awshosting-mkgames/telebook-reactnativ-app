@@ -1,4 +1,4 @@
-import { deleteCachedMessage, getAllCachedMessages, setMessagesSyncedAt, upsertMessages } from './messagesDb';
+import { deleteCachedMessage, getAllCachedMessages, markMessageDeletedLocally, setMessagesSyncedAt, upsertMessages } from './messagesDb';
 
 // Thin layer, chatSync.js jaisa — par ek chat ke messages tak scoped
 // (4 chat-list tabs ke jagah). Koi "smart merge/diff" logic yahan nahi —
@@ -49,6 +49,25 @@ export const cacheMessages = async (chatId, messages = []) => {
         await setMessagesSyncedAt(chatId, Date.now());
     } catch (error) {
         console.log('⚠️ cacheMessages error:', error);
+    }
+};
+
+const DELETED_PATCH = { isDeleted: true, content: 'This message was deleted', attachments: [] };
+
+/**
+ * "Delete for everyone" ka asar memory mirror + SQL dono me — pehle sirf SQL me hota tha, isliye chat
+ * dobara kholne par memory se purana message ek baar dikhta tha aur phir server refresh se gayab hota (blink).
+ */
+export const markMessagesDeleted = async (chatId, messageIds = []) => {
+    try {
+        const ids = new Set((messageIds || []).map(String));
+        if (!ids.size) return;
+        const key = String(chatId);
+        const list = memCache.get(key);
+        if (list) memCache.set(key, list.map((m) => (ids.has(String(m._id)) ? { ...m, ...DELETED_PATCH } : m)));
+        await Promise.all([...ids].map((id) => markMessageDeletedLocally(chatId, id, DELETED_PATCH)));
+    } catch (error) {
+        console.log('⚠️ markMessagesDeleted error:', error);
     }
 };
 

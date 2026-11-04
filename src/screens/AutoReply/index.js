@@ -12,6 +12,7 @@ import { ThemeContext } from '../../components/ThemeContext';
 import { fetchPlans } from '../../redex/slices/plansSlice';
 import apiService from '../../services/apiService';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 
 const MAX_MESSAGE = 500; // backend bhi 500 par slice karta hai
 const MIN_COOLDOWN = 1;
@@ -22,6 +23,7 @@ export default function AutoReply({ navigation }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const dispatch = useDispatch();
     const plans = useSelector((s) => s.plans?.plans) || [];
 
@@ -116,7 +118,7 @@ export default function AutoReply({ navigation }) {
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top + 12 }]}>
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: headerBg }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />

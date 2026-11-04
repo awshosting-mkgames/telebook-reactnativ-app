@@ -4,7 +4,7 @@ import {
     StatusBar, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 import { useTranslation } from 'react-i18next';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
@@ -28,14 +28,11 @@ const fmtWhen = (iso) => {
     return `${d.getDate()}/${d.getMonth() + 1}, ${time}`;
 };
 
-// Freechat header (38px avatar + 10 top + 14 bottom padding) ke barabar, taaki saare tabs ka header same height ka ho
-const HEADER_CONTENT_HEIGHT = 62;
-
 export default function Call({ navigation }) {
     const resolveName = useNameResolver();
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
-    const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // status bar + 60 header
 
     const [calls, setCalls] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -200,7 +197,7 @@ export default function Call({ navigation }) {
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
             {/* Android 15/16 me edge-to-edge force hai: status bar ke neeche header ko insets.top se hi dhakna padta hai */}
-            <View style={[styles.header, { backgroundColor: theme?.header || '#1199ff', height: HEADER_CONTENT_HEIGHT + insets.top, paddingTop: insets.top }]}>
+            <View style={[styles.header, { backgroundColor: theme?.header || '#1199ff', height, paddingTop: top, paddingBottom: 0, overflow: 'hidden' }]}>
                 <GradientFill />
                 {selectMode ? (
                     <>
@@ -229,7 +226,7 @@ export default function Call({ navigation }) {
 
             <Modal statusBarTranslucent visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
                 <Pressable style={styles.menuOverlay} onPress={() => setMenuOpen(false)}>
-                    <View style={[styles.menuBox, { backgroundColor: theme?.mode === 'dark' ? '#1f2c34' : '#fff', top: HEADER_CONTENT_HEIGHT + insets.top - 8 }]}>
+                    <View style={[styles.menuBox, { backgroundColor: theme?.mode === 'dark' ? '#1f2c34' : '#fff', top: height - 8 }]}>
                         <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuOpen(false); setSelectMode(true); setSelected(new Set()); }}>
                             <Ionicons name="checkmark-circle-outline" size={18} color={theme.main} />
                             <Text style={[styles.menuText, { color: theme.text }]}>Select calls</Text>

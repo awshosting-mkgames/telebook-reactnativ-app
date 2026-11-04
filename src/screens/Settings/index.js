@@ -9,7 +9,6 @@ import {
     Modal,
     Platform,
     Pressable,
-    SafeAreaView,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -41,6 +40,7 @@ import {
     savePrivacy,
 } from '../../services/profileSync';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 
 // Product decision pending (local vs server vs both): scope yahin se configurable hai.
 // 'chats' | 'calls' | 'all' — backend POST settings/clear-all-data ka scope.
@@ -118,6 +118,7 @@ const Section = ({ label, children, colors }) => (
 
 // ── Screen ───────────────────────────────────────────────────────────────────
 export default function Settings({ navigation }) {
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const { t } = useTranslation();
     const { theme, toggleTheme, fontSize, setFontSize } = useContext(ThemeContext);
     const dispatch = useDispatch();
@@ -226,11 +227,10 @@ export default function Settings({ navigation }) {
         : 'Messages, groups, sound';
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar barStyle="light-content" backgroundColor={headerBg} />
+        <View style={[styles.container, { backgroundColor: colors.bg }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
-            <View style={[styles.header, { backgroundColor: headerBg }]}>
-
+            <View style={[styles.header, { backgroundColor: headerBg, height, paddingTop: top, paddingBottom: 0 }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -471,7 +471,7 @@ export default function Settings({ navigation }) {
                     </Pressable>
                 </Pressable>
             </Modal>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -479,8 +479,7 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
         flexDirection: 'row', alignItems: 'center', gap: 18,
-        paddingHorizontal: 16, paddingBottom: 14,
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
+        paddingHorizontal: 16, overflow: 'hidden',
     },
     headerTitle: { color: '#fff', fontSize: 20, fontWeight: '700' },
     scroll: { paddingBottom: 40 },

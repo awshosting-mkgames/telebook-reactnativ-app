@@ -1,13 +1,14 @@
 // components/ChannelListHeader.js
 import React, { useContext } from 'react';
 import {
-    View, Text, StyleSheet, Image, TouchableOpacity, Platform, StatusBar,
+    View, Text, StyleSheet, Image, TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { ThemeContext } from '../../../components/ThemeContext';
 import GradientFill from '../../../components/GradientFill';
 import Config from '../../../services/config';
+import { useHeaderMetrics } from '../../../utils/headerMetrics';
 
 const getImg = (path) => {
     if (!path) return null;
@@ -29,10 +30,11 @@ export default function ChannelListHeader({
     const { t } = useTranslation();
 
     const { theme } = useContext(ThemeContext);
+    const { top, height } = useHeaderMetrics(); // status bar + 60 header
     const isLight = theme?.mode === 'light';
     const hdr = theme?.header || '#1199ff';
     const accent = theme?.main || '#1296f3';
-    const styles = getStyles(isLight, hdr, accent);
+    const styles = getStyles(isLight, hdr, accent, top);
 
     const channelName = channel?.channelName || channel?.name || 'My Channel';
     const iconUrl = getImg(channel?.channelIcon || channel?.avatar);
@@ -44,8 +46,10 @@ export default function ChannelListHeader({
         <View style={styles.headerBlock}>
 
             {/* Blue Banner */}
-            <View style={[styles.banner, { backgroundColor: hdr, overflow: 'hidden' }]}>
+            <View style={[styles.banner, { backgroundColor: hdr, overflow: 'hidden', height: height + 110 }]}>
                 <GradientFill />
+                {/* top row: status bar ke neeche exact 60 body, icons usme vertically centre */}
+                <View style={[styles.topBar, { top, height: 60 }]} pointerEvents="box-none">
                 <TouchableOpacity style={styles.backBtn} onPress={onBack}>
                     <Ionicons name="arrow-back" size={20} color="#fff" />
                 </TouchableOpacity>
@@ -72,6 +76,7 @@ export default function ChannelListHeader({
                     >
                         <Ionicons name="trash-outline" size={20} color="#fff" />
                     </TouchableOpacity>
+                </View>
                 </View>
 
                 <View style={styles.iconOuter}>
@@ -132,17 +137,15 @@ export default function ChannelListHeader({
     );
 }
 
-const getStyles = (isLight, hdr = '#1199ff', accent = '#1296f3') => StyleSheet.create({
+const getStyles = (isLight, hdr = '#1199ff', accent = '#1296f3', top = 0) => StyleSheet.create({
     headerBlock: { backgroundColor: isLight ? '#fff' : '#1a1d23', marginBottom: 10 },
 
     banner: { height: 170, backgroundColor: hdr, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 44 },
-    backBtn: { position: 'absolute', top: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 8 : 52, left: 16, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 20, padding: 8 },
+    topBar: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
+    backBtn: { backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 20, padding: 8 },
 
     // ✅ edit + delete ek row mein, right side
     topRightRow: {
-        position: 'absolute',
-        top: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 8 : 52,
-        right: 16,
         flexDirection: 'row',
         gap: 10,
     },

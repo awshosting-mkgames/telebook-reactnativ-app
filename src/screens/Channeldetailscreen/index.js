@@ -40,6 +40,7 @@ import {
 } from '../../services/channelActions';
 import PostActions from '../Mychannelscreen/components/PostActions';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 const STORAGE_KEY = 'DOWNLOAD_DIR_URI';
 const HIT = { top: 10, bottom: 10, left: 10, right: 10 };
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -542,6 +543,7 @@ export default function ChannelDetailScreen({ navigation, route }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
 
     // Accent/header-blue theme se follow kare
     const palBase = PALETTES[theme?.mode] ?? PALETTES.light;
@@ -759,7 +761,7 @@ export default function ChannelDetailScreen({ navigation, route }) {
             <StatusBar translucent backgroundColor="transparent" barStyle={pal.statusBar} />
 
             {/* HEADER — baaki app ke header jaisa (avatar + naam + subscribers + menu) */}
-            <View style={[sc.topBar, { backgroundColor: headerBg, paddingTop: insets.top, height: 56 + insets.top }]}>
+            <View style={[sc.topBar, { height, paddingTop: top, paddingBottom: 0, backgroundColor: headerBg }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} style={sc.iconBtn} hitSlop={HIT}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -1081,7 +1083,6 @@ const sc = StyleSheet.create({
 
     // Header — Chat/Broadcast screens jaisa
     topBar: {
-        height: 90,
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,

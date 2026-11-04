@@ -15,6 +15,7 @@ import { useSelector } from 'react-redux';
 import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 const BASE_URL = Config.MEDIA_URL;
 
 
@@ -24,6 +25,7 @@ export default function MyBroadcastList({ navigation }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const maniAllData = useSelector((s) => s.totalappData);
     const MY_USER_ID = maniAllData?.userData?._id ?? '';
 
@@ -116,7 +118,7 @@ export default function MyBroadcastList({ navigation }) {
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
             {/* gradient status bar ke neeche tak */}
-            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3', paddingTop: insets.top, height: 60 + insets.top }]}>
+            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3', paddingTop: top, paddingBottom: 0, height }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -149,7 +151,7 @@ export default function MyBroadcastList({ navigation }) {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        height: 90, backgroundColor: '#1296f3', flexDirection: 'row', overflow: 'hidden',
+        backgroundColor: '#1296f3', flexDirection: 'row', overflow: 'hidden',
         alignItems: 'center', paddingHorizontal: 16, gap: 12,
     },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '600', flex: 1 },

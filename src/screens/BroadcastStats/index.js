@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import apiService from '../../services/apiService';
 import { useNameResolver } from '../../services/nameResolver';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -28,6 +29,7 @@ export default function BroadcastStats({ route, navigation }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const resolveName = useNameResolver();
 
     const [stats,   setStats]   = useState(null);
@@ -147,7 +149,7 @@ export default function BroadcastStats({ route, navigation }) {
     if (loading) return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3', paddingTop: insets.top, height: 60 + insets.top }]}>
+            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3', paddingTop: top, paddingBottom: 0, height }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -166,7 +168,7 @@ export default function BroadcastStats({ route, navigation }) {
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             {/* HEADER */}
-            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3', paddingTop: insets.top, height: 60 + insets.top }]}>
+            <View style={[styles.header, { backgroundColor: theme.header ?? '#1296f3', paddingTop: top, paddingBottom: 0, height }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -298,7 +300,7 @@ export default function BroadcastStats({ route, navigation }) {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        height: 90, backgroundColor: '#1296f3', flexDirection: 'row', overflow: 'hidden',
+        backgroundColor: '#1296f3', flexDirection: 'row', overflow: 'hidden',
         alignItems: 'center', paddingHorizontal: 16,
         justifyContent: 'space-between',
     },

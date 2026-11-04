@@ -6,13 +6,14 @@ import {
     Animated,
     Image,
     PanResponder,
+    Pressable,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
 import { badgeTextColor } from '../../services/badgeConfig';
-import { badgeStyleFor } from '../../utils/badgeImages';
+import { badgeImageFor, BADGE_ASPECT } from '../../utils/badgeImages';
 
 const ACTION_WIDTH = 140;
 const SWIPE_THRESHOLD = 60;
@@ -45,7 +46,7 @@ const getInitials = (name = '') => name.split(' ').slice(0, 2).map(w => w[0]).jo
 const AVATAR_COLORS = ['#1199ff', '#25D366', '#FF9500', '#FF3B30', '#AF52DE', '#5AC8FA'];
 const avatarColor = (name = '') => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
 
-export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBlock, onLongPress, isPinned, isBlocked, showBadge = false, showRing = false }) {
+export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBlock, onLongPress, onAvatarPress, isPinned, isBlocked, showBadge = false, showRing = false }) {
     const translateX = useRef(new Animated.Value(0)).current;
     const rowOpen = useRef(false);
 
@@ -61,7 +62,7 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
     const planBadge = !isGroup ? item?.displayUser?.planBadge : null;
     const badgeVisible = !!(showBadge && planBadge && (planBadge.listLabel || planBadge.label));
     const badgeBg = planBadge?.color || theme.main || '#1199ff';
-    const badgeSt = badgeVisible ? badgeStyleFor(planBadge) : null;
+    const badgeImg = badgeVisible ? badgeImageFor(planBadge) : null;
     const ringColor = showRing && planBadge?.color ? planBadge.color : null;
     // Phonebook me save nahi hai (sirf 1-to-1) => 'Unknown' chip
     const isUnknown = !isGroup && item?.isSaved === false;
@@ -160,7 +161,8 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                     activeOpacity={0.75} >
                     {/* Avatar + (optional) plan badge apni alag line me, naam se judi nahi */}
                     <View style={styles.avatarCol}>
-                        <View style={styles.avatarWrap}>
+                        {/* Avatar tap = profile photo bada popup (baaki row tap = chat khulti hai) */}
+                        <Pressable style={styles.avatarWrap} onPress={() => { rowOpen.current ? closeRow() : onAvatarPress?.(item); }} hitSlop={4}>
                             {hasAvatar ? (
                                 <Image
                                     source={{ uri: isBlocked ? DEFAULT_AVATAR : item.displayAvatar }}
@@ -178,23 +180,21 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                                     <Ionicons name="pin" size={9} color="#fff" />
                                 </View>
                             )}
-                        </View>
+                        </Pressable>
                         {badgeVisible && (
                             <TouchableOpacity
                                 activeOpacity={0.8}
                                 onPress={() => { rowOpen.current ? closeRow() : onPress(item); }}
-                                style={badgeSt
-                                    ? [styles.planPill, styles.planPillRow, { backgroundColor: badgeSt.bg, borderColor: badgeSt.border, borderWidth: 1.5 }]
-                                    : [styles.planPill, { backgroundColor: badgeBg }]}
+                                style={badgeImg ? styles.planImgWrap : [styles.planPill, { backgroundColor: badgeBg }]}
                             >
-                                {badgeSt && <Image source={badgeSt.icon} style={styles.planIcon} resizeMode="contain" />}
-                                <Text
-                                    style={[styles.planPillText, { color: badgeSt ? badgeSt.text : badgeTextColor(badgeBg) }]}
-                                    numberOfLines={1}
-                                    ellipsizeMode="tail"
-                                >
-                                    {badgeSt ? badgeSt.name : (planBadge.listLabel || planBadge.label)}
-                                </Text>
+                                {badgeImg ? (
+                                    // Poora badge artwork (icon + naam image me hi hai) — na border, na alag text
+                                    <Image source={badgeImg} style={styles.planImg} resizeMode="contain" />
+                                ) : (
+                                    <Text style={[styles.planPillText, { color: badgeTextColor(badgeBg) }]} numberOfLines={1} ellipsizeMode="tail">
+                                        {planBadge.listLabel || planBadge.label}
+                                    </Text>
+                                )}
                             </TouchableOpacity>
                         )}
                     </View>
@@ -203,20 +203,20 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                     <View style={styles.chatContent}>
                         <View style={styles.chatTopRow}>
                             <View style={{ flex: 1, marginRight: 8 }}>
-                            <View style={styles.nameRow}>
-                                {isGroup && (
-                                    <View style={[styles.groupTag, theme.main && { backgroundColor: theme.main + '22' }]}>
-                                        <Ionicons name="people" size={11} color={theme.main || '#1199ff'} />
-                                    </View>
+                                <View style={styles.nameRow}>
+                                    {isGroup && (
+                                        <View style={[styles.groupTag, theme.main && { backgroundColor: theme.main + '22' }]}>
+                                            <Ionicons name="people" size={11} color={theme.main || '#1199ff'} />
+                                        </View>
+                                    )}
+                                    <Text style={[styles.name, { color: theme.text || '#111' }]} numberOfLines={1}>
+                                        {item.displayName}
+                                    </Text>
+                                    {isBlocked && <Ionicons name="ban" size={13} color="#FF3B30" />}
+                                </View>
+                                {isUnknown && !!item.displaySub && (
+                                    <Text style={[styles.unknownChipText, { color: subColor }]} numberOfLines={1}>{item.displaySub}</Text>
                                 )}
-                                <Text style={[styles.name, { color: theme.text || '#111' }]} numberOfLines={1}>
-                                    {item.displayName}
-                                </Text>
-                                {isBlocked && <Ionicons name="ban" size={13} color="#FF3B30" />}
-                            </View>
-                            {isUnknown && !!item.displaySub && (
-                                <Text style={[styles.unknownChipText, { color: subColor }]} numberOfLines={1}>{item.displaySub}</Text>
-                            )}
                             </View>
                             <Text style={[styles.time, { color: subColor }, unread > 0 && styles.timeUnread, unread > 0 && { color: theme.main }]}>{timeStr}</Text>
                         </View>
@@ -256,8 +256,8 @@ const styles = StyleSheet.create({
     avatarCol: { width: 58, alignItems: 'center', marginRight: 12 },
     avatarWrap: { position: 'relative' },
     planPill: { marginTop: 4, maxWidth: 66, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 9 },
-    planPillRow: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 10 },
-    planIcon: { width: 11, height: 11 },
+    planImgWrap: { marginTop: 4, alignItems: 'center' },
+    planImg: { width: 42, height: 42 / BADGE_ASPECT },
     planPillText: { fontSize: 9, fontWeight: '800', flexShrink: 1 },
     unknownChip: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, flexShrink: 0 },
     unknownChipText: { fontSize: 10, fontWeight: '600' },

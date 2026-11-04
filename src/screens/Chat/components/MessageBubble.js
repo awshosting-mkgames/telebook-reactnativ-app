@@ -62,8 +62,9 @@ const DownloadBadge = ({ dl, size, label }) => (
     </View>
 );
 
-// Image: download ke baad hi dikhti/khulti hai; apni bheji hui auto-cache hoti hai.
-const ImageAtt = memo(({ uri, size, auto, style, wrapStyle, pending, guard, onOpen, onLongPress }) => {
+// Image: dusron ki bheji hui image apne aap download NAHI hoti — thumbnail (server de to) + download button
+// dikhta hai, tap par download hoke local save hoti hai (phir offline bhi khulti hai). Apni bheji hui auto-cache.
+const ImageAtt = memo(({ uri, thumbUri, size, auto, style, wrapStyle, pending, guard, onOpen, onLongPress }) => {
     const dl = useMediaDownload(uri, { auto });
     return (
         <Pressable
@@ -72,9 +73,15 @@ const ImageAtt = memo(({ uri, size, auto, style, wrapStyle, pending, guard, onOp
             onLongPress={onLongPress}
             delayLongPress={200}
         >
-            {dl.ready
-                ? <Image source={{ uri: dl.localUri }} style={style} resizeMode="cover" />
-                : <View style={[style, { backgroundColor: '#2b2b2b' }]} />}
+            {dl.ready ? (
+                <Image source={{ uri: dl.localUri }} style={style} resizeMode="cover" />
+            ) : thumbUri ? (
+                <Image source={{ uri: thumbUri }} style={style} resizeMode="cover" blurRadius={3} />
+            ) : (
+                <View style={[style, { backgroundColor: '#2b2b2b', alignItems: 'center', justifyContent: 'center' }]}>
+                    <Ionicons name="image-outline" size={34} color="rgba(255,255,255,0.35)" />
+                </View>
+            )}
             {pending ? pending.overlay : (!dl.ready && dl.checked ? <DownloadBadge dl={dl} size={size} /> : null)}
         </Pressable>
     );
@@ -315,8 +322,9 @@ const MessageBubble = ({
                                     <ImageAtt
                                         key={i}
                                         uri={getFullUrl(att.url)}
+                                        thumbUri={att.thumbnailUrl ? getFullUrl(att.thumbnailUrl) : undefined}
                                         size={fmtSize(att.fileSize)}
-                                        auto
+                                        auto={isMine}
                                         style={styles.msgImage}
                                         wrapStyle={styles.mediaWrap}
                                         pending={pendingProps}

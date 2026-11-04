@@ -8,7 +8,6 @@ import {
     Image,
     Keyboard,
     Platform,
-    SafeAreaView,
     StatusBar,
     StyleSheet,
     Text,
@@ -33,9 +32,13 @@ import apiService from '../../services/apiService';
 import ContextMenuPopup from './ContextMenuPopup';
 import HeaderMenu from './HeaderMenu';
 import SwipeableChatItem from './SwipeableChatItem';
+import ProfilePreviewModal from './ProfilePreviewModal';
+import { startCall } from '../../services/callHelpers';
 import Config from '../../services/config';
 import { useNameResolver } from '../../services/nameResolver';
 import GradientFill from '../../components/GradientFill';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 const BASE_URL = Config.MEDIA_URL;
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
@@ -45,6 +48,7 @@ const resolveAvatar = (path, fallback) => (!path ? fallback : BASE_URL + path);
 
 const Freechat = ({ navigation }) => {
     const { theme } = useContext(ThemeContext);
+    const { top, height } = useHeaderMetrics(); // status bar + 60 header
     const resolveName = useNameResolver();
     const dispatch = useDispatch();
 
@@ -195,6 +199,16 @@ const Freechat = ({ navigation }) => {
         });
     };
 
+    // Avatar tap: profile photo popup (WhatsApp jaisa)
+    const [previewItem, setPreviewItem] = useState(null);
+    const previewThen = (fn) => () => { const it = previewItem; setPreviewItem(null); if (it) fn(it); };
+    const callFromPreview = (type) => previewThen((it) => {
+        const calleeId = it.displayUser?._id;
+        if (!calleeId) return;
+        startCall({ navigation, calleeId, type, remoteUser: { _id: calleeId, name: it.displayName, profilePicture: it.displayAvatar } });
+    });
+    const openInfoFromPreview = previewThen((it) => navigation.navigate(it.isGroupChat ? 'Group' : 'ChatUserDetailScreen', { chatId: it._id }));
+
     const handleLongPress = (item) => {
         setMenuItem(item);
         setMenuVisible(true);
@@ -247,6 +261,7 @@ const Freechat = ({ navigation }) => {
             onDelete={handleDelete}
             onBlock={handleBlock}
             onLongPress={handleLongPress}
+            onAvatarPress={setPreviewItem}
             isPinned={isChatPinned(item)}
             isBlocked={isChatBlocked(item)}
             showBadge={activeFilter === 'All' ? placements.home : placements.chatList}
@@ -310,8 +325,8 @@ const Freechat = ({ navigation }) => {
     const emptyIconColor = isDark ? '#444' : '#ccc';
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor={theme.header || '#1199ff'} barStyle="light-content" />
+        <SafeAreaView edges={['left', 'right', 'bottom']} style={[styles.container, { backgroundColor: theme.background }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
             <ContextMenuPopup
                 visible={menuVisible}
                 item={menuItem}
@@ -329,7 +344,16 @@ const Freechat = ({ navigation }) => {
                 syncing={syncing}
                 onProfile={() => navigation.navigate('Settings')}
             />
-            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff' }]}>
+            <ProfilePreviewModal
+                item={previewItem}
+                theme={theme}
+                onClose={() => setPreviewItem(null)}
+                onMessage={previewThen(gotoChatPage)}
+                onCall={callFromPreview('audio')}
+                onVideo={callFromPreview('video')}
+                onInfo={openInfoFromPreview}
+            />
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: theme.header || '#1199ff' }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.profileBtn} activeOpacity={0.8}>
                     <Image source={{ uri: avatarUri }} style={[styles.profileAvatar, isDark && styles.profileAvatarDark]} />
@@ -424,7 +448,7 @@ const styles = StyleSheet.create({
     emptyTitle: { fontSize: 17, fontWeight: '600' },
     emptySubtitle: { fontSize: 13 },
 
-    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 14, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 10, gap: 8 },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, overflow: 'hidden', gap: 8 },
     profileBtn: { position: 'relative' },
     profileAvatar: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: 'rgba(255,255,255,0.6)', backgroundColor: '#cce5ff' },
     profileAvatarDark: { borderWidth: 0 },

@@ -11,6 +11,7 @@ import { fetchWallet, fetchWalletTransactions } from '../../redex/slices/walletS
 import { fetchPaymentConfig, getCachedPaymentConfig, canBuy } from '../../services/paymentConfigStore';
 import { handleBuyCoins } from '../../services/paymentActions';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 
 const TABS = [
     { key: 'all', label: 'All' },
@@ -35,6 +36,7 @@ const fmtDate = (iso) => {
 export default function Wallet({ navigation }) {
     const { theme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const dispatch = useDispatch();
     const { wallet, walletLoading, transactions, txLoading, txPagination, txType } = useSelector((s) => s.wallet);
 
@@ -99,7 +101,7 @@ export default function Wallet({ navigation }) {
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top + 12 }]}>
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: headerBg }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />

@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 
 
 
@@ -20,6 +21,7 @@ export default function InviteAFriends({navigation}) {
      const { t } = useTranslation();
     const { theme, toggleTheme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const contacts = [
         { id: '1', name: 'Alexander', phone: '+44 1836 822222' },
         { id: '2', name: 'Kenny', phone: '+44 1975 985465' },
@@ -82,7 +84,7 @@ export default function InviteAFriends({navigation}) {
              <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff', paddingTop: insets.top, height: 56 + insets.top }]}>
+            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff', paddingTop: top, paddingBottom: 0, height }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Ionicons name="arrow-back" size={26} color="white" />
@@ -109,7 +111,6 @@ const styles = StyleSheet.create({
     header: {
         backgroundColor: '#4491f2',
         overflow: 'hidden',
-        height: 90,
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 15,

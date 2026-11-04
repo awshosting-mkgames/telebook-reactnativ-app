@@ -13,10 +13,15 @@ const GroupMedia = ({ mediaDetails, theme, onMediaPress }) => {
         <View style={styles.section}>
             {/* Header */}
             <View style={styles.rowBetween}>
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>Media, links & docs</Text>
+                <View style={styles.row}>
+                    <View style={[styles.titleIcon, { backgroundColor: (theme.main || '#3498db') + '18' }]}>
+                        <Ionicons name="images" size={16} color={theme.main || '#3498db'} />
+                    </View>
+                    <Text style={[styles.sectionTitle, { color: theme.text }]}>Media, links & docs</Text>
+                </View>
                 <View style={styles.row}>
                     <Text style={styles.grayText}>{mediaDetails?.total || 0}</Text>
-                    <Ionicons name="chevron-forward" size={16} color={theme.text} />
+                    <Ionicons name="chevron-forward" size={16} color="#9f9f9f" />
                 </View>
             </View>
 
@@ -65,7 +70,7 @@ const GroupMedia = ({ mediaDetails, theme, onMediaPress }) => {
                     ))
                 ) : (
                     <View style={styles.noMedia}>
-                        <Ionicons name="images-outline" size={28} color="#ccc" />
+                        <Ionicons name="images-outline" size={22} color="#b0b0b0" />
                         <Text style={styles.noMediaText}>No media yet</Text>
                     </View>
                 )}
@@ -75,20 +80,21 @@ const GroupMedia = ({ mediaDetails, theme, onMediaPress }) => {
 };
 
 const styles = StyleSheet.create({
-    section:      { padding: 15 },
+    section:      { padding: 16 },
     rowBetween:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    row:          { flexDirection: 'row', alignItems: 'center' },
-    sectionTitle: { fontSize: 17, fontWeight: '500' },
-    grayText:     { color: '#9f9f9f', fontSize: 14 },
-    statsRow:     { flexDirection: 'row', marginTop: 8, gap: 12 },
+    row:          { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    titleIcon:    { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
+    sectionTitle: { fontSize: 16, fontWeight: '700' },
+    grayText:     { color: '#9f9f9f', fontSize: 14, fontWeight: '600' },
+    statsRow:     { flexDirection: 'row', marginTop: 10, gap: 14 },
     stat:         { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    statText:     { fontSize: 13, color: '#3498db' },
+    statText:     { fontSize: 13, fontWeight: '600' },
     thumbRow:     { marginTop: 12, flexDirection: 'row' },
-    thumb:        { width: 72, height: 72, borderRadius: 10, marginRight: 6, backgroundColor: '#eee' },
-    moreOverlay:  { position: 'absolute', top: 0, left: 0, width: 72, height: 72, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    thumb:        { width: 80, height: 80, borderRadius: 12, marginRight: 8, backgroundColor: '#e6e6e6' },
+    moreOverlay:  { position: 'absolute', top: 0, left: 0, width: 80, height: 80, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     moreText:     { color: '#fff', fontSize: 16, fontWeight: '700' },
-    noMedia:      { width: 150, height: 72, borderRadius: 10, backgroundColor: '#f5f5f5', justifyContent: 'center', alignItems: 'center' },
-    noMediaText:  { fontSize: 12, color: '#ccc', marginTop: 4 },
+    noMedia:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, height: 56, borderRadius: 14, backgroundColor: 'rgba(128,128,128,0.10)' },
+    noMediaText:  { fontSize: 13, color: '#9f9f9f' },
 });
 
 export default GroupMedia;

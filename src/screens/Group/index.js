@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import GradientFill from '../../components/GradientFill';
+import { ImageViewer } from '../Chat/components/MediaViewers';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 import { useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
 import apiService from '../../services/apiService';
@@ -32,7 +34,11 @@ export default function GroupScreen({ navigation, route }) {
     const { chatId } = route.params;
     const { theme }  = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const headerBg = theme.header || theme.main || '#3498db';
+    const dark = theme.mode === 'dark';
+    const pageBg = dark ? '#0b0b0b' : (theme.chatTint || '#F1F3F8');
+    const cardBg = dark ? '#1a1a1a' : '#FFFFFF';
 
     const maniAllData = useSelector((state) => state.totalappData);
     const MY_USER_ID  = maniAllData?.userId ?? '';
@@ -42,6 +48,7 @@ export default function GroupScreen({ navigation, route }) {
     const [loading,         setLoading]         = useState(true);
     const [showAllMembers,  setShowAllMembers]  = useState(false);
     const [editNameVisible,  setEditNameVisible]  = useState(false);
+    const [photoOpen,         setPhotoOpen]         = useState(false);
     const [mediaSliderIdx,   setMediaSliderIdx]   = useState(null);
     const [addMemberVisible, setAddMemberVisible] = useState(false);
 
@@ -81,6 +88,7 @@ export default function GroupScreen({ navigation, route }) {
 
     // 1. Rename group
     const handleSaveName = async (newName) => {
+        if (!(groupDetails?.canManage ?? groupDetails?.isAdmin)) return;   // sirf owner/admin (server bhi rokta hai)
         try {
             const res = await apiService({
                 method:   'PUT',
@@ -98,6 +106,7 @@ export default function GroupScreen({ navigation, route }) {
 
     // 2. Change group image
     const handleChangeImage = async () => {
+        if (!(groupDetails?.canManage ?? groupDetails?.isAdmin)) return;
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') return Alert.alert('Permission chahiye', 'Gallery allow karo');
 
@@ -312,7 +321,8 @@ export default function GroupScreen({ navigation, route }) {
     };
 
     // ── Derived ───────────────────────────────────────────────────────────────
-    const isAdmin      = groupDetails?.isAdmin ?? false;
+    const isAdmin      = groupDetails?.isAdmin ?? false;          // owner (group delete, admin banana)
+    const canManage    = groupDetails?.canManage ?? isAdmin;      // owner YA promoted admin (member add/remove, lock)
     const isLocked     = groupDetails?.isLocked ?? false;
     const existingIds  = (groupDetails?.members || []).map(m => m._id);
     const mediaImages  = mediaDetails?.images?.items || [];
@@ -320,8 +330,9 @@ export default function GroupScreen({ navigation, route }) {
     // ── Loading ───────────────────────────────────────────────────────────────
     if (loading) {
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-                <View style={[styles.header, { backgroundColor: headerBg }]}>
+            <SafeAreaView edges={['bottom']} style={[styles.container, { backgroundColor: theme.background }]}>
+                <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+                <View style={[styles.header, { backgroundColor: headerBg, paddingTop: top, paddingBottom: 0, height }]}>
                     <GradientFill />
                     <TouchableOpacity onPress={() => navigation.goBack()}>
                         <Ionicons name="arrow-back" size={24} color="white" />
@@ -339,13 +350,14 @@ export default function GroupScreen({ navigation, route }) {
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             {/* Top bar: gradient status bar ke neeche tak, left se right poora */}
-            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top, height: 60 + insets.top }]}>
+            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: top, paddingBottom: 0, height }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Group Info</Text>
             </View>
+            <ImageViewer visible={photoOpen} uri={getImageUrl(groupDetails?.groupIcon)} onClose={() => setPhotoOpen(false)} />
             <EditNamePopup
                 visible={editNameVisible}
                 currentName={groupDetails?.chatName}
@@ -366,44 +378,52 @@ export default function GroupScreen({ navigation, route }) {
                 existingMemberIds={existingIds}
                 onAdded={fetchGroupDetails}
             />
-            <ScrollView showsVerticalScrollIndicator={false}>
-                <GroupHeader
-                    groupDetails={groupDetails}
-                    theme={theme}
-                    onImagePress={handleChangeImage}
-                    onNamePress={() => setEditNameVisible(true)}
-                    onAddMember={() => setAddMemberVisible(true)}
-                    IspermissonasAdmin={checkUserRole(groupDetails,MY_USER_ID)}
-                />
-                <View style={[styles.divider, { backgroundColor: theme.dividerColor }]} />
-                <GroupMedia
-                    mediaDetails={mediaDetails}
-                    theme={theme}
-                    onMediaPress={(idx) => setMediaSliderIdx(idx)}
-                />
-                <View style={[styles.divider, { backgroundColor: theme.dividerColor }]} />
-                <GroupMembers
-                    groupDetails={groupDetails}
-                    theme={theme}
-                    MY_USER_ID={MY_USER_ID}
-                    showAllMembers={showAllMembers}
-                    setShowAllMembers={setShowAllMembers}
-                    onAddMember={() => setAddMemberVisible(true)}
-                    onRemoveMember={handleRemoveMember}
-                    onAddAdmin={handleAddAdmin}
-                    onRemoveAdmin={handleRemoveAdmin}
-                />
-                <View style={[styles.divider, { backgroundColor: theme.dividerColor }]} />
-                <GroupFooter
-                    theme={theme}
-                    isAdmin={isAdmin}
-                    isLocked={isLocked}
-                    onExitGroup={handleExitGroup}
-                    onDeleteGroup={handleDeleteGroup}
-                    onPriveChat={onPriveChat}
-                    onToggleLock={handleToggleLock}
-                />
-
+            <ScrollView showsVerticalScrollIndicator={false} style={{ backgroundColor: pageBg }} contentContainerStyle={styles.scrollPad}>
+                <View style={[styles.card, { backgroundColor: cardBg }]}>
+                    <GroupHeader
+                        groupDetails={groupDetails}
+                        theme={theme}
+                        onImagePress={handleChangeImage}
+                        onViewImage={() => setPhotoOpen(true)}
+                        onNamePress={() => setEditNameVisible(true)}
+                        onAddMember={() => setAddMemberVisible(true)}
+                        canManage={canManage}
+                        isLocked={isLocked}
+                        onToggleLock={handleToggleLock}
+                    />
+                </View>
+                <View style={[styles.card, { backgroundColor: cardBg }]}>
+                    <GroupMedia
+                        mediaDetails={mediaDetails}
+                        theme={theme}
+                        onMediaPress={(idx) => setMediaSliderIdx(idx)}
+                    />
+                </View>
+                <View style={[styles.card, { backgroundColor: cardBg }]}>
+                    <GroupMembers
+                        groupDetails={groupDetails}
+                        theme={theme}
+                        MY_USER_ID={MY_USER_ID}
+                        showAllMembers={showAllMembers}
+                        setShowAllMembers={setShowAllMembers}
+                        onAddMember={() => setAddMemberVisible(true)}
+                        onRemoveMember={handleRemoveMember}
+                        onAddAdmin={handleAddAdmin}
+                        onRemoveAdmin={handleRemoveAdmin}
+                    />
+                </View>
+                <View style={[styles.card, { backgroundColor: cardBg }]}>
+                    <GroupFooter
+                        theme={theme}
+                        isAdmin={isAdmin}
+                        canManage={canManage}
+                        isLocked={isLocked}
+                        onExitGroup={handleExitGroup}
+                        onDeleteGroup={handleDeleteGroup}
+                        onPriveChat={onPriveChat}
+                        onToggleLock={handleToggleLock}
+                    />
+                </View>
             </ScrollView>
         </View>
     );
@@ -411,9 +431,10 @@ export default function GroupScreen({ navigation, route }) {
 
 const styles = StyleSheet.create({
     container:   { flex: 1 },
-    header:      { height: 60, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 14 },
+    header:      { overflow: 'hidden', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 14 },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
     loaderWrap:  { flex: 1, justifyContent: 'center', alignItems: 'center' },
     loaderText:  { marginTop: 12, fontSize: 15, color: '#555' },
-    divider:     { height: 8, backgroundColor: '#f6f6f6', marginVertical: 5 },
+    scrollPad:   { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 32, gap: 12 },
+    card:        { borderRadius: 20, overflow: 'hidden', elevation: 1, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
 });

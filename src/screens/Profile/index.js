@@ -26,7 +26,7 @@ import { APP_LINK_HOST } from '../../navigation/deepLinks';
 import { useDispatch, useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
 import GradientFill from '../../components/GradientFill';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 import Config from '../../services/config';
 import { fetchMyPlan } from '../../redex/slices/plansSlice';
 import { useBadgePlacements } from '../../services/badgeConfig';
@@ -126,7 +126,7 @@ const EditSheet = ({ field, value, onClose, onSave, isDark }) => {
 const ProfileScreen = ({ navigation }) => {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
-    const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // status bar + 60 header
     const dispatch = useDispatch();
     // Redux hi source of truth — local copy nahi, isliye kahin aur se update ho to yahan bhi dikhe
     const user = useSelector((state) => state.totalappData?.user) || {};
@@ -249,7 +249,7 @@ const ProfileScreen = ({ navigation }) => {
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             {/* gradient status bar ke neeche tak */}
-            <View style={[styles.header, { backgroundColor: theme.header || theme.main, paddingTop: insets.top + 12 }]}>
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: theme.header || theme.main }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn} hitSlop={10}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
         backgroundColor: '#0084ff', overflow: 'hidden', flexDirection: 'row', alignItems: 'center',
-        paddingHorizontal: 16, paddingBottom: 14,
+        paddingHorizontal: 16,
     },
     backBtn: { marginRight: 14 },
     headerTitle: { color: '#fff', fontSize: 20, fontWeight: '700' },

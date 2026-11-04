@@ -4,6 +4,7 @@ import { useDispatch, useSelector, useStore } from 'react-redux';
 import { updateChatLastMessage } from '../redex/slices/chatListSlice';
 import { persistChatTabs, processChat, syncAllTabData } from '../services/chatSync';
 import socketService from '../services/socketService';
+import { markMessagesDeleted } from '../services/messageSync';
 
 // Chat list ka socket listener app ke root par (src/index.js), kisi screen par nahi.
 // Pehle ye Freechat screen me tha — Chats tab mount na ho (lazy tab) to list update
@@ -56,9 +57,20 @@ const ChatListSocketSync = () => {
             if (!wasInList && !canBuildLocally) scheduleBackgroundSync();
         };
 
+        // Kisi ne message sabke liye delete kiya: local cache (SQL + memory) me mark karo — chahe chat screen
+        // khuli ho ya na ho — aur chat list ka preview server se taza karo.
+        const handleDeleted = (payload) => {
+            const chatId = payload?.chatId;
+            const ids = payload?.messageIds ?? (payload?.messageId ? [payload.messageId] : []);
+            if (chatId && ids.length) markMessagesDeleted(chatId, ids);
+            scheduleBackgroundSync();
+        };
+
         const GROUP_EVENTS = ['added-to-group', 'removed-from-group', 'group-updated'];
 
         socketService.on('message-received', handleNewMessage);
+        socketService.on('messages-deleted', handleDeleted);
+        socketService.on('message-deleted', handleDeleted);
         GROUP_EVENTS.forEach((event) => socketService.on(event, scheduleBackgroundSync));
 
         const appStateSub = AppState.addEventListener('change', (next) => {
@@ -71,6 +83,8 @@ const ChatListSocketSync = () => {
             if (timer) clearTimeout(timer);
             appStateSub.remove();
             socketService.off('message-received', handleNewMessage);
+            socketService.off('messages-deleted', handleDeleted);
+            socketService.off('message-deleted', handleDeleted);
             GROUP_EVENTS.forEach((event) => socketService.off(event, scheduleBackgroundSync));
         };
     }, [myUserId, token, dispatch, store]);

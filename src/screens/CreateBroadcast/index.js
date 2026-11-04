@@ -28,6 +28,7 @@ import { ThemeContext } from '../../components/ThemeContext';
 import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 const BASE_URL = Config.Main_url;
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
@@ -41,6 +42,7 @@ const CreateBroadcast = ({ navigation, route }) => {
 
     const { theme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const isDark = theme.mode === 'dark';
 
     const [groupName, setGroupName] = useState('');
@@ -159,12 +161,9 @@ const CreateBroadcast = ({ navigation, route }) => {
             style={[styles.container, { backgroundColor: theme.background }]}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-            <StatusBar
-                barStyle="light-content"
-                backgroundColor={theme.header || '#1199ff'}
-            />
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
             {/* ── Header ── */}
-            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff', paddingTop: insets.top + 10, overflow: 'hidden' }]}>
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: theme.header || '#1199ff' }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation?.goBack()}>
                     <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -340,8 +339,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 15,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 52,
-        paddingBottom: 14,
         elevation: 4,
     },
     headerTitle: { flex: 1, color: '#fff', fontSize: 20, fontWeight: '600', marginLeft: 16 },

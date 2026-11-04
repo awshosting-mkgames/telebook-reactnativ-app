@@ -9,7 +9,7 @@ import {
     View,
 } from 'react-native';
 import { useSelector } from 'react-redux';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 import { ThemeContext } from '../../components/ThemeContext';
 import RecommendedChannels from './RecommendedChannels';
 import StatusSection from './StatusSection';
@@ -18,7 +18,7 @@ import GradientFill from '../../components/GradientFill';
 export default function Updates({ navigation }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
-    const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // status bar + 60 header
 
     const maniAllData = useSelector((state) => state.totalappData);
     const MY_USER_ID = maniAllData?.userId ?? '';
@@ -41,7 +41,7 @@ export default function Updates({ navigation }) {
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: theme.header || '#1199ff', paddingTop: insets.top, height: 56 + insets.top }]}>
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: theme.header || '#1199ff' }]}>
                 <GradientFill />
                 <Text style={[styles.headerTitle, { color: theme.headerText || '#fff' }]}>{t('Updates')}</Text>
             </View>
@@ -73,7 +73,7 @@ export default function Updates({ navigation }) {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
-        height: 90, backgroundColor: '#1296f3', overflow: 'hidden',
+        backgroundColor: '#1296f3', overflow: 'hidden',
         flexDirection: 'row', alignItems: 'center',
         paddingHorizontal: 16,
     },

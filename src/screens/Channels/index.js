@@ -8,7 +8,6 @@ import {
     TextInput,
     TouchableOpacity,
     Image,
-    SafeAreaView,
     StatusBar,
     Platform,
     ActivityIndicator,
@@ -24,6 +23,7 @@ import CreateChannelPopup from '../../components/CreateChannelPopup';
 import apiService from '../../services/apiService';
 import Config from '../../services/config';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 import AnnouncementBoard from '../../components/AnnouncementBoard';
 
 // Icon relative path me aata hai — media host ke saath jodna hota hai.
@@ -96,6 +96,7 @@ const TABS = [
 const Channels = ({ navigation }) => {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const isDark = theme.text === '#FFFFFF';
 
     const [activeTab, setActiveTab] = useState('all');
@@ -487,9 +488,9 @@ const Channels = ({ navigation }) => {
     const createBtnBg = isDark ? '#0d1e2e' : '#e8f4fd';
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar backgroundColor={headerBg} barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: headerBg }]}>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: headerBg }]}>
                 <GradientFill />
                 {/* Ye ek tab screen hai — back arrow tabhi jab sach me wapas ja sakein */}
                 {navigation.canGoBack() && (
@@ -674,7 +675,7 @@ const Channels = ({ navigation }) => {
                 onClose={closeSponsorSheet}
                 onBuyCoins={() => { closeSponsorSheet(); navigation.navigate('Wallet'); }}
             />
-        </SafeAreaView>
+        </View>
     );
 };
 
@@ -686,12 +687,11 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     header: {
-        height: 90,
         backgroundColor: '#1296f3',
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+        overflow: 'hidden',
     },
     headerTitle: {
         color: '#fff',

@@ -7,8 +7,8 @@ import {
 } from 'react-native';
 import { ThemeContext } from '../../../components/ThemeContext';
 import { useNameResolver } from '../../../services/nameResolver';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GradientFill from '../../../components/GradientFill';
+import { useHeaderMetrics } from '../../../utils/headerMetrics';
 
 const ChatHeader = ({
     navigation, chatName, chatImage, isGroup, isBroadcast,
@@ -26,10 +26,10 @@ const ChatHeader = ({
     const isDark = theme?.mode ? theme.mode === 'dark' : theme?.text === '#FFFFFF';
     // Header colour theme token se (dark me neutral dark, light me wahi blue)
     const headerBg = theme?.header ?? '#1296f3';
-    const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const accent = theme?.main ?? '#1296f3';
     // Status bar ke neeche tak gradient/colour (paddingTop = safe-area top)
-    const headerStyle = [styles.header, { backgroundColor: headerBg, paddingTop: insets.top, height: 68 + insets.top }];
+    const headerStyle = [styles.header, { backgroundColor: headerBg, paddingTop: top, paddingBottom: 0, height }];
 
     const menuBg = isDark ? '#1f2c34' : '#ffffff';
     const menuText = isDark ? '#e9edef' : '#222222';
@@ -241,7 +241,7 @@ const ChatHeader = ({
 };
 
 const styles = StyleSheet.create({
-    header: { height: 90, overflow: 'hidden', backgroundColor: '#1296f3', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0, gap: 8 },
+    header: { overflow: 'hidden', backgroundColor: '#1296f3', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 },
     backBtn: { padding: 4 },
     headerActionBtn: { padding: 8 },
     avatarWrap: { position: 'relative' },

@@ -145,6 +145,7 @@
       "favicon": "./assets/Logo.png"
     },
     "plugins": [
+      "./plugins/withNotifeeRepo",
       [
         "expo-splash-screen",
         {

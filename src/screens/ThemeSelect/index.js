@@ -1,6 +1,6 @@
 import { useCallback, useContext, useState } from 'react';
 import {
-    ActivityIndicator, Alert, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View,
+    ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { useDispatch } from 'react-redux';
 import Toast from 'react-native-toast-message';
 import { ThemeContext } from '../../components/ThemeContext';
 import GradientFill from '../../components/GradientFill';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 import apiService from '../../services/apiService';
 import { updateUserData } from '../../redex/slices/totalappDataSlice';
 import { handlePlanLimit } from '../../services/planLimit';
@@ -41,6 +42,7 @@ const Preview = ({ p }) => (
 export default function ThemeSelect({ navigation }) {
     const { theme, premiumKey, setPremiumTheme, registerRemoteThemes, toggleTheme } = useContext(ThemeContext);
     const dispatch = useDispatch();
+    const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const isDark = theme?.mode === 'dark';
 
     const [loading, setLoading] = useState(true);
@@ -103,9 +105,9 @@ export default function ThemeSelect({ navigation }) {
     const remote = (info?.themes || []).filter((t) => PREMIUM_THEMES[t.id]);
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-            <StatusBar backgroundColor={theme.header} barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: theme.header }]}>
+        <View style={[styles.container, { backgroundColor: colors.bg }]}>
+            <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: theme.header }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -204,13 +206,13 @@ export default function ThemeSelect({ navigation }) {
                     </>
                 )}
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 16, paddingVertical: 16, overflow: 'hidden' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 16, overflow: 'hidden' },
     headerTitle: { color: '#fff', fontSize: 19, fontWeight: '700' },
     body: { padding: 16, paddingBottom: 40 },
     section: { fontSize: 12, fontWeight: '700', letterSpacing: 0.6, marginTop: 4, marginBottom: 8 },

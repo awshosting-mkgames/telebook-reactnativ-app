@@ -6,7 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import Toast from 'react-native-toast-message';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
 import { ThemeContext } from '../../components/ThemeContext';
 import apiService from '../../services/apiService';
 import { useDispatch } from 'react-redux';
@@ -23,7 +23,7 @@ const fmtLastActive = (iso) => {
 export default function LinkedDevices({ navigation }) {
     const { t } = useTranslation();
     const { theme } = useContext(ThemeContext);
-    const insets = useSafeAreaInsets();
+    const { top, height } = useHeaderMetrics(); // status bar + 60 header
     const dispatch = useDispatch();
 
     const [devices, setDevices] = useState([]);
@@ -148,7 +148,7 @@ export default function LinkedDevices({ navigation }) {
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
             <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
-            <View style={[styles.header, { backgroundColor: headerBg, paddingTop: insets.top + 12 }]}>
+            <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: headerBg }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10}>
                     <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
         flexDirection: 'row', alignItems: 'center', gap: 18,
-        paddingHorizontal: 16, paddingBottom: 14,
+        paddingHorizontal: 16,
         overflow: 'hidden',
     },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
