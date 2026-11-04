@@ -18,6 +18,8 @@ import { useSelector, useDispatch, shallowEqual } from 'react-redux';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GradientFill from '../../components/GradientFill';
 import { useHeaderMetrics } from '../../utils/headerMetrics';
+import { APP_DOWNLOAD_URL } from '../../navigation/deepLinks';
+import { getShareText } from '../../services/systemConfig';
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
 export default function Contact({ navigation }) {
@@ -96,7 +98,7 @@ export default function Contact({ navigation }) {
             await Share.share({
                 title: 'App Install',
                 message:
-                    'Hey! Install the Telebook app and start using it. Download it from this link: https://telebookservices.com/download',
+                    getShareText('Hey! Install the Telebook app and start using it. Download it from this link:', APP_DOWNLOAD_URL),
             });
         } catch (err) {
             console.log('Share error:', err);

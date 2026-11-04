@@ -12,7 +12,7 @@ import { NativeModules, Platform, Vibration } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 const { RingtoneModule } = NativeModules;
-const RING_ASSET = require('../../assets/sounds/ringtone.wav');
+const RING_ASSET = require('../../assets/sounds/ringtone_telebook.mp3');
 export const CALL_VIBE_PATTERN = [0, 800, 1200]; // 0.8s buzz, 1.2s pause — repeat (notification channel bhi yahi)
 const VIBE_PATTERN = CALL_VIBE_PATTERN;
 
@@ -59,7 +59,7 @@ export function stopRingtone() {
 
 // ── Ringback (caller ko "ring ho rahi hai" ki awaaz) ─────────────────────────
 // Outgoing call me jab tak samne wala utha nahi leta, caller ko tu-tu tone sunayi deni chahiye.
-const RINGBACK_ASSET = require('../../assets/sounds/ringback.wav');
+const RINGBACK_ASSET = require('../../assets/sounds/ringtone_telebook.mp3');
 let ringbackPlayer = null;
 let ringbackWanted = false;
 

@@ -39,6 +39,10 @@ const getDb = () => {
         dbPromise = (async () => {
             const db = await SQLite.openDatabaseAsync(DB_NAME);
             await db.execAsync(SCHEMA);
+            // Delta-sync meta (purane installs me columns nahi hain — ek-ek karke, "duplicate column" error ignore)
+            for (const col of ['server_cursor TEXT', 'history_complete INTEGER DEFAULT 0', 'backfill_before TEXT']) {
+                try { await db.execAsync(`ALTER TABLE messages_meta ADD COLUMN ${col}`); } catch (e) { /* already added */ }
+            }
             return db;
         })();
     }
@@ -150,6 +154,32 @@ export const setMessagesSyncedAt = (chatId, timestamp) => serializeDbWrite(async
     );
 });
 
+/**
+ * Chat ka sync state: server_cursor = delta-sync ka `since` (SERVER ka waqt, phone ka clock nahi),
+ * history_complete = poori purani history phone me aa chuki, backfill_before = purane messages ka crawl kahan tak pahuncha
+ * (app kill hone par wahin se aage).
+ */
+export const getSyncState = async (chatId) => {
+    if (!chatId) return { cursor: null, historyComplete: false, backfillBefore: null };
+    const db = await getDb();
+    const row = await db.getFirstAsync(
+        'SELECT server_cursor, history_complete, backfill_before FROM messages_meta WHERE chat_id = ?', [String(chatId)]
+    );
+    return { cursor: row?.server_cursor ?? null, historyComplete: !!row?.history_complete, backfillBefore: row?.backfill_before ?? null };
+};
+
+export const setSyncState = (chatId, patch = {}) => serializeDbWrite(async () => {
+    if (!chatId) return;
+    const db = await getDb();
+    await db.runAsync('INSERT OR IGNORE INTO messages_meta (chat_id, last_synced_at) VALUES (?, ?)', [String(chatId), Date.now()]);
+    const sets = []; const vals = [];
+    if ('cursor' in patch) { sets.push('server_cursor = ?'); vals.push(patch.cursor); }
+    if ('historyComplete' in patch) { sets.push('history_complete = ?'); vals.push(patch.historyComplete ? 1 : 0); }
+    if ('backfillBefore' in patch) { sets.push('backfill_before = ?'); vals.push(patch.backfillBefore); }
+    if (!sets.length) return;
+    await db.runAsync(`UPDATE messages_meta SET ${sets.join(', ')} WHERE chat_id = ?`, [...vals, String(chatId)]);
+});
+
 /** Local delete-mark — row maujood ho to usme patch merge karke wapas likho, warna no-op. */
 export const markMessageDeletedLocally = (chatId, messageId, patch) => serializeDbWrite(async () => {
     if (!chatId || !messageId) return;
@@ -168,11 +198,42 @@ export const markMessageDeletedLocally = (chatId, messageId, patch) => serialize
     );
 });
 
+/**
+ * Bulk delete-for-everyone: ek transaction me, aur jo ids is chat ke SQL me hain hi nahi unko bhi chhodte hain.
+ * Return: un rows ke purane attachments (local media cache saaf karne ke liye).
+ */
+export const markMessagesDeletedBatch = (chatId, messageIds = [], patch) => serializeDbWrite(async () => {
+    const urls = [];
+    if (!chatId || !messageIds.length) return urls;
+    const db = await getDb();
+    await db.withTransactionAsync(async () => {
+        for (const id of messageIds) {
+            const row = await db.getFirstAsync('SELECT data FROM messages WHERE chat_id = ? AND message_id = ?', [String(chatId), String(id)]);
+            if (!row) continue;
+            const parsed = safeParse(row.data);
+            if (!parsed) continue;
+            (parsed.attachments || []).forEach((a) => { if (a?.url) urls.push(a.url); if (a?.thumbnailUrl) urls.push(a.thumbnailUrl); });
+            await db.runAsync('UPDATE messages SET data = ?, updated_at = ? WHERE chat_id = ? AND message_id = ?',
+                [JSON.stringify({ ...parsed, ...patch }), Date.now(), String(chatId), String(id)]);
+        }
+    });
+    return urls;
+});
+
 /** Ek message row hatao (temp/failed row ko jab asli sent message mil jaye, taaki duplicate na bane). */
 export const deleteCachedMessage = (chatId, messageId) => serializeDbWrite(async () => {
     if (!chatId || !messageId) return;
     const db = await getDb();
     await db.runAsync('DELETE FROM messages WHERE chat_id = ? AND message_id = ?', [String(chatId), String(messageId)]);
+});
+
+/** Ek transaction me kai rows hatao (delete-for-me delta). */
+export const deleteCachedMessages = (chatId, messageIds = []) => serializeDbWrite(async () => {
+    if (!chatId || !messageIds.length) return;
+    const db = await getDb();
+    await db.withTransactionAsync(async () => {
+        for (const id of messageIds) await db.runAsync('DELETE FROM messages WHERE chat_id = ? AND message_id = ?', [String(chatId), String(id)]);
+    });
 });
 
 /** Ek chat ke saare cached messages hata do (abhi kahin use nahi, symmetry/future ke liye). */

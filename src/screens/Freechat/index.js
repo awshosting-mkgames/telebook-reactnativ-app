@@ -18,6 +18,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import Toast from 'react-native-toast-message';
 import { ThemeContext } from '../../components/ThemeContext';
 import SearchBar from '../../components/SearchBar';
+import AnnouncementBoard from '../../components/AnnouncementBoard';
 import { searchUsersPaged } from '../../components/searchUserByPhone';
 import { useBadgePlacements } from '../../services/badgeConfig';
 import {
@@ -314,9 +315,6 @@ const Freechat = ({ navigation }) => {
         );
     };
 
-    const avatarUri = userData?.profilePicture
-        ? resolveAvatar(userData.profilePicture, DEFAULT_AVATAR)
-        : DEFAULT_AVATAR;
     const totalUnread = chats.reduce((sum, c) => sum + (c.unreadCount || c.unseenCount || 0), 0);
 
     const filterBorderColor = isDark ? '#3a3a3a' : '#e0e0e0';
@@ -356,11 +354,11 @@ const Freechat = ({ navigation }) => {
             <View style={[styles.header, { height, paddingTop: top, paddingBottom: 0, backgroundColor: theme.header || '#1199ff' }]}>
                 <GradientFill />
                 <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.profileBtn} activeOpacity={0.8}>
-                    <Image source={{ uri: avatarUri }} style={[styles.profileAvatar, isDark && styles.profileAvatarDark]} />
+                    <Image source={require('../../../assets/icon.png')} style={[styles.profileAvatar, isDark && styles.profileAvatarDark]} />
                     {totalUnread > 0 && <View style={[styles.headerBadge, { borderColor: theme.header || '#1199ff' }]} />}
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>
-                    <Text style={[styles.headerTitle, { color: theme.headerText || '#fff' }]}>{userData?.name || userData?.mobile || 'Chats'}</Text>
+                    <Text style={[styles.headerTitle, { color: theme.headerText || '#fff' }]}>Telebook</Text>
                 </View>
                 <TouchableOpacity onPress={() => setHeaderMenu(true)} style={styles.threeDotBtn} activeOpacity={0.7}>
                     <Ionicons name="ellipsis-vertical" size={22} color="#fff" />
@@ -372,6 +370,8 @@ const Freechat = ({ navigation }) => {
                 placeholder="Search by name or number..."
                 theme={theme}
             />
+            {/* Admin announcements — search ke neeche; search karte waqt chhupa do taaki list ko jagah mile */}
+            {!searchQuery ? <AnnouncementBoard /> : null}
             <View style={styles.filterRow}>
                 {filters.map((f) => (
                     <TouchableOpacity

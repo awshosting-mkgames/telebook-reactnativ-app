@@ -26,7 +26,8 @@
       "Bash(keytool -list -v -keystore android/app/telebook.jks -storepass android)",
       "Bash(eas build:view be83e8f0-d37f-42fb-b46b-0d47af85e620)",
       "Bash(~/Library/Android/sdk/build-tools/36.0.0/aapt2 dump *)",
-      "Bash(eas build:version:get -p android)"
+      "Bash(eas build:version:get -p android)",
+      "Bash(awk -F: '{print $1}')"
     ]
   }
 }

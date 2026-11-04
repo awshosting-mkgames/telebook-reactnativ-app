@@ -17,6 +17,7 @@ import { playRingback, playRingtone, stopRingback, stopRingtone } from '../servi
 import { cancelIncomingCallNotification } from './notification';
 import { useNameResolver } from '../services/nameResolver';
 import { setPipEnabled, usePipMode } from '../services/pip';
+import { setCallStripHeight } from '../services/callStripStore';
 
 const fmt = (secs) => `${Math.floor(secs / 60).toString().padStart(2, '0')}:${Math.floor(secs % 60).toString().padStart(2, '0')}`;
 const LIVE_PHASES = ['ringing', 'connecting', 'ongoing'];
@@ -72,6 +73,12 @@ function FloatingVideo({ call, top, onOpen, onEnd, fullscreen = false }) {
 //  1. Call chalte waqt kisi bhi dusre page par "Ongoing call" mini bar, tap par call screen wapas.
 //  2. Call screen band hone par bhi call ke socket events (accepted/ended) sambhalna, taaki
 //     minimize hone par call na toote aur dusre side ke hangup par sahi se saaf ho.
+// Strip hatne par (unmount) height 0 — app content wapas upar
+const StripCleanup = () => {
+    useEffect(() => () => setCallStripHeight(0), []);
+    return null;
+};
+
 export default function ActiveCallBar() {
     const resolveName = useNameResolver();
     const insets = useSafeAreaInsets();
@@ -280,7 +287,12 @@ export default function ActiveCallBar() {
 
     return (
         <>
-            <View style={[styles.wrap, { paddingTop: insets.top + 6 }]} pointerEvents="box-none">
+            <View
+                style={[styles.wrap, { paddingTop: insets.top + 6 }]}
+                pointerEvents="box-none"
+                onLayout={(e) => setCallStripHeight(e.nativeEvent.layout.height)}
+            >
+                <StripCleanup />
                 <TouchableOpacity style={styles.bar} activeOpacity={0.85} onPress={openCall}>
                     <Ionicons name={call.type === 'video' ? 'videocam' : 'call'} size={18} color="#fff" />
                     <Text style={styles.text} numberOfLines={1}>Ongoing {call.type} call · {name} · {label}</Text>

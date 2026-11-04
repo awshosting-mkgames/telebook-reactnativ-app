@@ -13,7 +13,8 @@ import { WebView } from 'react-native-webview';
 import { getUiColors, PRIMARY } from '../utils/uiColors';
 import { ThemeContext } from './ThemeContext';
 
-export default function WebPageScreen({ navigation, title, url }) {
+// `html` (optional): url ki jagah seedha HTML dikhane ke liye (system-config ka HTML content)
+export default function WebPageScreen({ navigation, title, url, html }) {
     const { theme } = useContext(ThemeContext);
     const c = getUiColors(theme);
     const insets = useSafeAreaInsets();
@@ -40,7 +41,7 @@ export default function WebPageScreen({ navigation, title, url }) {
             <View style={[styles.webviewWrap, { paddingBottom: insets.bottom }]}>
                 <WebView
                     ref={webRef}
-                    source={{ uri: url }}
+                    source={html ? { html } : { uri: url }}
                     style={[styles.webview, { backgroundColor: c.bg }]}
                     onLoadStart={() => setLoading(true)}
                     onLoadEnd={() => setLoading(false)}

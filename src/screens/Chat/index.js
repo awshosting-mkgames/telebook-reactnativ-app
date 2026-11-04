@@ -18,6 +18,7 @@ import {
     Animated,
     AppState,
     BackHandler,
+    Dimensions,
     ImageBackground,
     Keyboard,
     KeyboardAvoidingView,
@@ -41,17 +42,19 @@ import { persistChatTabs, syncAllTabData } from "../../services/chatSync";
 import { apiErrorMessage, setBlocked } from "../../services/chatActions";
 import { startCall } from "../../services/callHelpers";
 import { getCachedCallsConfig } from "../../services/callConfigStore";
-import { loadCachedMessages, cacheMessages, getMemoryMessages, uncacheMessage, markMessagesDeleted } from "../../services/messageSync";
+import {
+    loadCachedMessages, cacheMessages, getMemoryMessages, uncacheMessage, markMessagesDeleted, syncChat, detachSync, isTombstoned,
+    clearChatCache, removeMessagesLocally,
+} from "../../services/messageSync";
+import { getMessagesPage, getSyncState } from "../../services/messagesDb";
 import {
     AUTO_RETRY_DELAYS, applyPendingEvent, autoRetryAttempts, cancelledUploads, enqueueUpload, getPending, patchPending, removePending,
     registerRetry, resolvePending, subscribePending, unregisterRetry, upsertPending,
 } from "../../services/pendingMedia";
-import { markMessageDeletedLocally } from "../../services/messagesDb";
 import Images from "../../utils/images";
 
 import AttachSheet from "./components/AttachSheet";
 import ReactionBar from "./components/ReactionBar";
-import StarredMessagesModal from "./components/StarredMessagesModal";
 import ChatHeader from "./components/ChatHeader";
 import ForwardContactModal from "./components/ForwardContactModal";
 import { ImageViewer, VideoModal } from "./components/MediaViewers";
@@ -87,6 +90,35 @@ const sameMsg = (a, b) => a === b || (
 const stabilizeList = (prev, next) => {
     const old = new Map(prev.map((m) => [m._id, m]));
     const out = next.map((m) => { const o = old.get(m._id); return o && sameMsg(o, m) ? o : m; });
+    return out.length === prev.length && out.every((m, i) => m === prev[i]) ? prev : out;
+};
+
+// Background sync / cache ke batch ko list me MERGE karo (kabhi replace nahi) — existing rows ki identity bachi rehti hai
+// (sirf badle hue re-render), naye/purane rows sahi jagah, aur order stable => inverted list me scroll position nahi hilti.
+// addOnly: cache se aaye rows sirf jodo (state me pehle se maujood — jaise pending upload — ko overwrite mat karo).
+// Delete-for-everyone wali row ko koi purana (undeleted) batch wapas zinda nahi kar sakta.
+const mergeBatch = (chatId, prev, incoming, { addOnly = false } = {}) => {
+    const upd = new Map();
+    incoming.forEach((m) => { if (m?._id && (m.isDeleted || !isTombstoned(chatId, m._id))) upd.set(m._id, m); });
+    if (!upd.size) return prev;
+    const prevIds = new Set(prev.map((m) => m._id));
+    let out = prev;
+    if (!addOnly) {
+        out = prev.map((m) => {
+            const f = upd.get(m._id);
+            if (!f || m.isOptimistic) return m;
+            if (m.isDeleted && !f.isDeleted) return m;
+            return sameMsg(m, f) ? m : f;
+        });
+    }
+    const adds = [...upd.values()].filter((m) => !prevIds.has(m._id));
+    if (adds.length) {
+        adds.sort(byNewest);
+        const last = out[out.length - 1];
+        const lastT = last ? new Date(last.createdAt || 0).getTime() : Infinity;
+        // Common case (purani history crawl): sab naye rows list ke aakhir se bhi purane => bas jod do, sort nahi
+        out = new Date(adds[0].createdAt || 0).getTime() <= lastT ? [...out, ...adds] : [...out, ...adds].sort(byNewest);
+    }
     return out.length === prev.length && out.every((m, i) => m === prev[i]) ? prev : out;
 };
 
@@ -144,6 +176,11 @@ export default function ChatScreen({ route, navigation }) {
     const [replyMsg, setReplyMsg] = useState(null);
     const [editMsg, setEditMsg] = useState(null);
     const [selectedMsg, setSelectedMsg] = useState(null);
+    // Long-press par pressed bubble ki window position: reaction bar / popup message ke paas (selAnchor.id = kis message ka)
+    const [selAnchor, setSelAnchor] = useState(null);
+    const [popupAnchor, setPopupAnchor] = useState(null);
+    const rootRef = useRef(null);
+    const rootYRef = useRef(0);
     const [showPopup, setShowPopup] = useState(false);
     const [showEmoji, setShowEmoji] = useState(false);
     const [showAttach, setShowAttach] = useState(false);
@@ -158,10 +195,10 @@ export default function ChatScreen({ route, navigation }) {
     const [forwardMsgIds, setForwardMsgIds] = useState([]);
     const [isSelectMode, setIsSelectMode] = useState(false);
     const [selectedMsgIds, setSelectedMsgIds] = useState(new Set());
-    const [currentPage, setCurrentPage] = useState(1);
-    const [hasMore, setHasMore] = useState(false);
-    const [loadingMore, setLoadingMore] = useState(false);
-    const LIMIT = 50;
+    // Purani history ab page-by-page nahi: phone ka SQLite source of truth hai aur background sync (messageSync.syncChat)
+    // saari history khud laata hai. historyComplete = poori history phone me; backfilling = abhi sync chal raha.
+    const [historyComplete, setHistoryComplete] = useState(false);
+    const [backfilling, setBackfilling] = useState(false);
     const isBlocked = !isGroup && !!otherUserId && blockedIds.includes(otherUserId);
     // Locked group me sirf admin likh sakte hain (owner = groupAdmin, promoted = admins)
     const isGroupAdmin = [...(chatDaetils?.groupAdmin ?? []), ...(chatDaetils?.admins ?? [])].some((u) => idOf(u) === MY_USER_ID);
@@ -182,7 +219,6 @@ export default function ChatScreen({ route, navigation }) {
     const [searchScrollNonce, setSearchScrollNonce] = useState(0);  // same id dobara tap ho to bhi re-trigger
     const searchTimer = useRef(null);
 
-    const isPaginating = useRef(false);
     const flatRef = useRef();
     const typingTimer = useRef();
     const recordTimer = useRef();
@@ -405,40 +441,38 @@ export default function ChatScreen({ route, navigation }) {
         if (otherUserId && !isGroup) socketService.emit("get-user-status", { userId: otherUserId });
     }, [otherUserId, isGroup]);
 
-    // Offline-first, race-free: pehle SQL cache ka wait karo (await — do alag
-    // effects nahi, jisme fetchMessages() apna setLoading(true) cache resolve
-    // hone se PEHLE hi chala deta tha, isliye spinner cache maujood hone ke
-    // bawajood bhi har baar flash hota tha). Cache mila to turant dikhao aur
-    // fetchMessages ko silent (bina spinner) background-sync ki tarah chalao;
-    // cache khaali ho (sach me pehli baar ye chat khuli hai) tabhi spinner
-    // genuinely zaroori hai.
+    // Offline-first: SQLite hi source of truth. Memory mirror ho to pehle frame me hi saare messages; warna SQL se
+    // pehle newest 300 (jaldi pehla frame), phir poora cache (koi cap nahi) list me jud jata hai. Uske baad
+    // background sync (delta / newest + silent purani history) — user ko scroll/refresh karke "agle 60" nahi maangne.
     useEffect(() => {
         let cancelled = false;
         (async () => {
-            const cached = await loadCachedMessages(chatId);
+            const hadMemory = messagesRef.current.some((m) => !m.isOptimistic);
+            const fromCache = (rows) => rows.map((m) => ({ ...m, status: cachedStatus(m) }));
+            let cachedCount = hadMemory ? messagesRef.current.length : 0;
+            try {
+                getSyncState(chatId).then((st) => { if (!cancelled && st.historyComplete) setHistoryComplete(true); }).catch(() => { });
+                if (!hadMemory) {
+                    const first = await getMessagesPage(chatId, { limit: 300 });
+                    if (cancelled) return;
+                    cachedCount = first.length;
+                    if (first.length) setMessages((prev) => mergeBatch(chatId, prev, fromCache(first), { addOnly: true }).slice().sort(byNewest));
+                    setCacheReady(true);
+                    if (first.length) setLoading(false);
+                    if (first.length >= 300) {
+                        const all = await loadCachedMessages(chatId);   // poora cache (memory mirror bhi bharta hai)
+                        if (cancelled) return;
+                        cachedCount = all.length;
+                        setMessages((prev) => mergeBatch(chatId, prev, fromCache(all), { addOnly: true }));
+                    }
+                }
+            } catch (e) { console.log("cache load error:", e); }
             if (cancelled) return;
             setCacheReady(true);
-            if (cached.length) {
-                // Pending upload bubbles (store se) pehle se state me ho sakte hain — cache unke saath
-                // merge karo (pehle `prev.length ? prev` cache ko poora skip kar deta tha) aur
-                // createdAt se sort karo taaki aaj ke messages purane media ke upar na aayein.
-                setMessages((prev) => {
-                    if (prev.some((m) => !m.isOptimistic)) return prev;
-                    const have = new Set(prev.map((m) => m._id));
-                    const fromCache = cached.filter((m) => !have.has(m._id)).map((m) => ({ ...m, status: cachedStatus(m) }));
-                    return [...prev, ...fromCache].sort(byNewest);
-                });
-                setLoading(false);
-                // Server ka pagination jawab aane se pehle (ya offline) hasMore false rehne se
-                // "Start of conversation" jhoota dikhta tha aur purani history tak pahunch nahi
-                // paate the (Point 14). Cache me ek poora page ya zyada ho to maan lo aur hai.
-                setHasMore((h) => h || cached.length >= LIMIT);
-                fetchMessages({ silent: true });
-            } else {
-                fetchMessages({ silent: false });
-            }
+            if (cachedCount) setLoading(false);
+            startSync();
         })();
-        return () => { cancelled = true; };
+        return () => { cancelled = true; detachSync(chatId, syncHandlersRef.current); };
     }, [chatId]);
     // isGroup baad me pata chale (GET /messages ke chatDetails se) to sahi endpoint se dobara
     useEffect(() => { fetchChatDetails(); }, [isGroup]);
@@ -475,116 +509,54 @@ export default function ChatScreen({ route, navigation }) {
         } catch (e) { console.error("Chat details error:", e); }
     };
 
-    // silent=true: cache se pehle hi kuch dikh chuka hai, isliye yahan background
-    // sync hai — spinner ki zaroorat nahi (yehi asli fix hai cache-hone-ke-bawajood
-    // har baar spinner flash hone ka).
-    // Safety net (Point 9): meri bheji hui, server-confirmed media jo local list me hai par
-    // server ke page-1 jawab me abhi nahi aayi (replication/lag ya list ke beech me aayi) —
-    // blind replace unhe gayab kar deta tha aur wo app restart par hi wapas aati thi. Aise
-    // messages ko tab tak rakho jab tak server unhe khud na bheje (ya delete mark na kare).
-    const keepMyMissingMedia = (prev, fresh) => {
-        if (!fresh.length) return [];
-        const freshIds = new Set(fresh.map((m) => m._id));
-        const oldest = new Date(fresh[fresh.length - 1].createdAt).getTime();
-        return prev.filter((m) =>
-            !m.isOptimistic && !m.isDeleted && !freshIds.has(m._id)
-            && !String(m._id).startsWith("temp_")
-            && m.messageType !== "text" && idOf(m.sender) === MY_USER_ID
-            && new Date(m.createdAt).getTime() >= oldest);
-    };
-
-    const fetchMessages = async ({ silent = false } = {}) => {
-        try {
-            if (!silent) setLoading(true);
-            // GET khud saare messages read mark kar deta hai — alag se emit nahi karna (API doc 6.4)
-            const res = await apiService({ method: "GET", endpoint: `messages/${chatId}?page=1&limit=${LIMIT}` });
-            if (!res?.success) {
-                // Offline ho aur cache se pehle hi kuch dikh raha ho to chup chaap rehne do
-                // (WhatsApp jaisa) — alert sirf tab jab dikhane ko kuch bhi nahi hai.
-                if (messagesRef.current.length === 0) {
-                    Alert.alert("Error", apiErrorMessage(res, "Messages load nahi hue"));
+    // Background sync (messageSync.syncChat): cursor ho to delta (naye + edits + delete-for-everyone + delete-for-me),
+    // warna newest page; phir purani history silent crawl. Har batch merge hota hai — kabhi list replace nahi, isliye
+    // deleted rows wapas nahi aate aur scroll position nahi hilti. Dobara bulane par wahi in-flight sync (dedupe).
+    const syncHandlersRef = useRef(null);
+    const startSync = () => {
+        const handlers = {
+            onBatch: (msgs) => setMessages((prev) => mergeBatch(chatId, prev, msgs)),
+            onRemoved: (ids) => { const gone = new Set(ids); setMessages((prev) => prev.filter((m) => !gone.has(m._id))); },
+            onDetails: (details) => {
+                setchatDaetils((prev) => (sameJson(prev, details) ? prev : details));
+                if (details?.isGroupChat) setIsGroup(true);
+                if (!details?.isGroupChat && !otherUserIdRef.current) {
+                    const other = details?.users?.find((u) => (u?._id ?? u) !== MY_USER_ID);
+                    if (other?._id) setOtherUserId(other._id);
                 }
-                return;
+            },
+            onProgress: ({ syncing, historyComplete: done }) => {
+                setBackfilling(!!syncing);
+                if (done !== undefined) setHistoryComplete(!!done);
+            },
+            onFirstSync: () => setLoading(false),
+        };
+        syncHandlersRef.current = handlers;
+        return syncChat(chatId, handlers).then((r) => {
+            setLoading(false);
+            if (r?.ok) {
+                dispatch(clearUnread(chatId));
+                // Successful fetch khud proof hai ki connectivity hai — queued messages try karo.
+                retryQueuedRef.current?.();
+            } else if (messagesRef.current.length === 0 && isFocusedRef.current) {
+                Alert.alert("Error", "Messages load nahi hue");
             }
-            const details = res?.data?.chatDetails;
-            setchatDaetils((prev) => (sameJson(prev, details) ? prev : details));
-            if (details?.isGroupChat) setIsGroup(true);
-            if (!details?.isGroupChat && !otherUserIdRef.current) {
-                const other = details?.users?.find((u) => (u?._id ?? u) !== MY_USER_ID);
-                if (other?._id) setOtherUserId(other._id);
-            }
-            const msgs = (res?.data?.messages ?? []).map((m) => ({ ...m, status: determineStatus(m) }));
-            cacheMessages(chatId, msgs);
-            // Server ko abhi tak pata hi nahi un messages ka jo offline/send-fail hue —
-            // blind overwrite unhe gayab kar deta tha. Pending optimistic ones ko bachao.
-            setMessages((prev) => {
-                const freshIds = new Set(msgs.map((m) => m._id));
-                const pending = prev.filter((m) => m.isOptimistic && !freshIds.has(m._id));
-                return stabilizeList(prev, [...pending, ...keepMyMissingMedia(prev, msgs), ...msgs].sort(byNewest));
-            });
-            setCurrentPage(1);
-            setHasMore(res?.data?.pagination?.hasMore ?? false);
-            // Successful fetch khud proof hai ki connectivity hai — queued messages try karo.
-            retryQueuedRef.current?.();
-        } catch (e) { console.error(e); }
-        finally { setLoading(false); }
+            return r;
+        });
     };
-
-    // Page 1 dobara laao aur jo list me hai usme mila do (naye messages + taaza ticks).
-    // GET chat ko read bhi mark karta hai, isliye sirf tab chalao jab chat dikh rahi ho.
-    // Unlock/foreground par AppState + socket "connect" + focus teeno ek saath refresh maangte hain —
-    // ek hi request chale (in-flight share) aur 2s ke andar dobara nahi.
-    const refreshInflight = useRef(null);
+    // Unlock/foreground/reconnect/focus teeno ek saath refresh maangte hain — 2s ke andar dobara nahi (syncChat khud
+    // bhi in-flight run share karta hai).
     const refreshLastAt = useRef(0);
     const refreshLatest = () => {
-        if (refreshInflight.current) return refreshInflight.current;
         if (Date.now() - refreshLastAt.current < 2000) return Promise.resolve();
-        refreshInflight.current = refreshLatestNow().finally(() => {
-            refreshInflight.current = null;
-            refreshLastAt.current = Date.now();
-        });
-        return refreshInflight.current;
-    };
-    const refreshLatestNow = async () => {
-        const res = await apiService({ method: "GET", endpoint: `messages/${chatId}?page=1&limit=${LIMIT}` });
-        if (!res?.success) return;
-        const fresh = (res?.data?.messages ?? []).map((m) => ({ ...m, status: determineStatus(m) }));
-        cacheMessages(chatId, fresh);
-        if (res?.data?.chatDetails) setchatDaetils((prev) => (sameJson(prev, res.data.chatDetails) ? prev : res.data.chatDetails));
-        setMessages((prev) => {
-            const freshIds = new Set(fresh.map((m) => m._id));
-            const oldest = fresh.length ? new Date(fresh[fresh.length - 1].createdAt).getTime() : Infinity;
-            const pending = prev.filter((m) => m.isOptimistic);
-            const older = prev.filter((m) => !m.isOptimistic && !freshIds.has(m._id) && new Date(m.createdAt).getTime() < oldest);
-            return stabilizeList(prev, [...pending, ...keepMyMissingMedia(prev, fresh), ...fresh, ...older].sort(byNewest));
-        });
-        dispatch(clearUnread(chatId));
-        // Successful fetch khud proof hai ki connectivity hai — queued messages try karo.
-        retryQueuedRef.current?.();
+        refreshLastAt.current = Date.now();
+        return startSync();
     };
     const refreshLatestRef = useRef(null);
     refreshLatestRef.current = refreshLatest;
 
-    const loadMoreMessages = async () => {
-        if (loadingMore || !hasMore) return;
-        try {
-            setLoadingMore(true);
-            isPaginating.current = true;
-            const nextPage = currentPage + 1;
-            const res = await apiService({ method: "GET", endpoint: `messages/${chatId}?page=${nextPage}&limit=${LIMIT}` });
-            if (!res?.success) return;
-            const olderMsgs = (res?.data?.messages ?? []).map((m) => ({ ...m, status: determineStatus(m) }));
-            cacheMessages(chatId, olderMsgs);
-            // Beech me aaye naye message ki wajah se page shift ho to duplicate na bane
-            setMessages((prev) => {
-                const seen = new Set(prev.map((m) => m._id));
-                return [...prev, ...olderMsgs.filter((m) => !seen.has(m._id))];
-            });
-            setCurrentPage(nextPage);
-            setHasMore(res?.data?.pagination?.hasMore ?? false);
-        } catch (e) { console.error("Load more error:", e); }
-        finally { setLoadingMore(false); setTimeout(() => { isPaginating.current = false; }, 300); }
-    };
+    // "Load older messages" button / list ke end par: sync atka ho (offline tha) to dobara chalao.
+    const loadMoreMessages = () => { if (!backfilling) startSync(); };
 
     const determineStatus = (m) => {
         if (m.readBy?.length) return "read";
@@ -655,7 +627,7 @@ export default function ChatScreen({ route, navigation }) {
                     try {
                         const res = await apiService({ method: "DELETE", endpoint: `chats/${chatId}/clear` });
                         if (!res?.success) throw new Error(apiErrorMessage(res));
-                        setMessages([]); setHasMore(false); setCurrentPage(1);
+                        setMessages([]); setHistoryComplete(true); clearChatCache(chatId);
                         // List ka last message server se taaza ho jaye
                         syncAllTabData(dispatch, MY_USER_ID, { background: true });
                     } catch { Alert.alert("Error", "Chat clear nahi hui, dobara try karo"); }
@@ -731,6 +703,7 @@ export default function ChatScreen({ route, navigation }) {
             // (error.response.data). Internet/server tak pahunchi hi nahi → error ek plain
             // string (error.message). Offline-queue yahi se decide karta hai (sendMediaAsset).
             err.isNetworkFailure = !res?.success && typeof res?.error === "string";
+            err.status = res?.status;
             throw err;
         }
         return { url: json.data.url, filename: json.data.filename, fileType: json.data.fileType, fileSize: json.data.fileSize };
@@ -738,11 +711,14 @@ export default function ChatScreen({ route, navigation }) {
 
     // Ek hi saath 10+ photos par kuch upload timeout/5xx/429 se fail ho jaate the. Transient error par
     // backoff ke saath 3 baar try karo, aur ek upload ko 100s se zyada atakne mat do (queue slot na ruke).
-    const isTransientUploadError = (e) => e?.isNetworkFailure
+    // Transient = retry ke layak: network/timeout, HTTP 408/425/429/5xx (apiService ab `status` deta hai — pehle sirf error
+    // message ke text se andaza lagta tha, isliye S3/"Server error" jaise 5xx bina retry ke seedha fail dikhte the).
+    const isTransientStatus = (st) => st === 408 || st === 425 || st === 429 || (st >= 500 && st <= 599);
+    const isTransientUploadError = (e) => e?.isNetworkFailure || isTransientStatus(e?.status)
         || /too many|slow down|timeout|timed out|temporar|unavailable|gateway|network|try again/i.test(String(e?.message ?? ""));
     const uploadWithRetry = async (localUri, mimeType, messageType, fileName, onProgress) => {
         let lastErr;
-        for (let attempt = 0; attempt < 3; attempt += 1) {
+        for (let attempt = 0; attempt < 4; attempt += 1) {
             try {
                 let timer;
                 const timeout = new Promise((_, rej) => {
@@ -753,8 +729,9 @@ export default function ChatScreen({ route, navigation }) {
                 } finally { clearTimeout(timer); }
             } catch (e) {
                 lastErr = e;
-                if (!isTransientUploadError(e) || attempt === 2) break;
-                await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+                if (!isTransientUploadError(e) || attempt === 3) break;
+                // Backoff + jitter (429 par server ko saans), 1.5s, 3s, 4.5s
+                await new Promise((r) => setTimeout(r, 1500 * (attempt + 1) + Math.random() * 500));
             }
         }
         throw lastErr;
@@ -838,7 +815,7 @@ export default function ChatScreen({ route, navigation }) {
                     // res.error TAB bhi ek object hota hai (error.response.data). Internet/server
                     // tak pahunchi hi nahi (timeout, DNS, offline) — apiService error.message ek
                     // plain string deta hai. Isi se "offline queue" vs "real rejection" decide hota hai.
-                    const isNetworkFailure = typeof res?.error === "string";
+                    const isNetworkFailure = typeof res?.error === "string" || isTransientStatus(res?.status);
                     handleSendFailure(tempId, optimisticMsg, isNetworkFailure, apiErrorMessage(res, "Send failed"));
                 }
             }
@@ -1021,7 +998,7 @@ export default function ChatScreen({ route, navigation }) {
                 } else {
                     // Upload ho chuka tha, sirf POST /messages fail hua — cache me real
                     // (uploaded) attachment hi jaaye, warna retry use dobara upload kar dega.
-                    const isNetworkFailure = typeof res?.error === "string";
+                    const isNetworkFailure = typeof res?.error === "string" || isTransientStatus(res?.status);
                     failPendingMedia(tempId, { ...optimisticMsg, attachments: [realAttachment] }, isNetworkFailure, apiErrorMessage(res, "Send failed"));
                 }
             } catch (e) {
@@ -1121,7 +1098,6 @@ export default function ChatScreen({ route, navigation }) {
 
     // Apna in-app camera (neeche daayen Gallery button ke saath). expo-camera native module
     // build me na ho (purana APK / OTA) to purane system camera par wapas.
-    const [showStarred, setShowStarred] = useState(false);
     const [CameraComp, setCameraComp] = useState(null);
     const [showCamera, setShowCamera] = useState(false);
     const openSystemCamera = async () => {
@@ -1242,7 +1218,7 @@ export default function ChatScreen({ route, navigation }) {
         await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
     };
 
-    const openPopup = (item) => {
+    const openPopup = (item, anchor = null) => {
         if (item.isDeleted) return;
         if (item.status === "failed") {
             Alert.alert("Message not sent", "", [
@@ -1253,9 +1229,9 @@ export default function ChatScreen({ route, navigation }) {
             return;
         }
         if (item.isOptimistic) return;
-        setSelectedMsg(item); setShowPopup(true);
+        setPopupAnchor(anchor); setSelectedMsg(item); setShowPopup(true);
     };
-    const closePopup = () => { setShowPopup(false); setSelectedMsg(null); };
+    const closePopup = () => { setShowPopup(false); setSelectedMsg(null); setPopupAnchor(null); };
     const handleReply = () => { setReplyMsg(selectedMsg); closePopup(); };
     const handleDelete = () => {
         const id = selectedMsg?._id;
@@ -1278,43 +1254,6 @@ export default function ChatScreen({ route, navigation }) {
         if (!msg) return;
         if (isEditWindowExpired(msg)) { Toast.show({ type: "error", text1: "This message is too old to edit" }); return; }
         startEdit(msg);
-    };
-    // PUT /messages/:id/star toggle hai. Optimistic update, fail ho to rollback; server ka
-    // isStarred hi final. temp_/deleted messages par star nahi.
-    const isStarredByMe = (m) => !!m?.starredBy?.some((u) => idOf(u) === MY_USER_ID);
-    const starOne = async (msg) => {
-        const msgId = msg?._id;
-        if (!msgId || String(msgId).startsWith("temp_") || msg.isDeleted || msg.isOptimistic) return { ok: false, skipped: true };
-        const before = isStarredByMe(msg);
-        setMessages((prev) => prev.map((m) => (m._id === msgId ? withStar(m, MY_USER_ID, !before) : m)));
-        const res = await apiService({ method: "PUT", endpoint: `messages/${msgId}/star` });
-        if (!res?.success) {
-            setMessages((prev) => prev.map((m) => (m._id === msgId ? withStar(m, MY_USER_ID, before) : m)));
-            return { ok: false, message: apiErrorMessage(res, "Could not update star") };
-        }
-        const starred = !!res.data?.isStarred;
-        setMessages((prev) => prev.map((m) => (m._id === msgId ? withStar(m, MY_USER_ID, starred) : m)));
-        // SQL cache me bhi — warna offline reopen par star gayab dikhta hai
-        markMessageDeletedLocally(chatId, msgId, { starredBy: withStar(msg, MY_USER_ID, starred).starredBy }).catch(() => {});
-        return { ok: true };
-    };
-    const handleStar = async () => {
-        const msg = selectedMsg;
-        closePopup();
-        const r = await starOne(msg);
-        if (r && !r.ok && !r.skipped) Alert.alert("Error", r.message);
-    };
-    // Multi-select: sirf selected ids. Sab pehle se starred ho to unstar, warna jo starred nahi unhe star.
-    const handleStarSelected = async () => {
-        if (selectedMsgIds.size === 0) return;
-        const picked = messages.filter((m) => selectedMsgIds.has(m._id) && !m.isDeleted && !m.isOptimistic && !String(m._id).startsWith("temp_"));
-        cancelSelectMode(); // stale selection har action ke baad saaf
-        if (!picked.length) return;
-        const allStarred = picked.every(isStarredByMe);
-        const targets = allStarred ? picked : picked.filter((m) => !isStarredByMe(m));
-        const results = await Promise.all(targets.map(starOne));
-        const failed = results.filter((r) => !r.ok && !r.skipped).length;
-        if (failed) Toast.show({ type: "error", text1: "Star failed", text2: `${failed} message${failed > 1 ? "s" : ""} could not be updated` });
     };
     const handleReact = (emoji) => { const msg = selectedMsg; closePopup(); reactToMessage(msg, emoji); };
     const handleCopy = () => {
@@ -1422,15 +1361,18 @@ export default function ChatScreen({ route, navigation }) {
                 if (!res?.success) throw new Error(windowErrorMessage(res) ?? apiErrorMessage(res));
                 // Dusron ke / window ke bahar ke message server skip karta hai (skippedMessageIds) — wo visible rahte hain
                 const skipped = new Set((res.data?.skippedMessageIds ?? []).map(String));
-                const deleted = (res.data?.deletedMessageIds ?? serverIds).filter((id) => !skipped.has(String(id)));
+                const deleted = (res.data?.deletedMessageIds ?? serverIds).map(String).filter((id) => !skipped.has(id));
                 if (skipped.size) Toast.show({ type: "info", text1: "Some messages could not be deleted for everyone" });
+                const deletedSet = new Set(deleted);
                 setMessages((prev) => prev.map((m) =>
-                    deleted.includes(m._id)
+                    deletedSet.has(String(m._id))
                         ? { ...m, isDeleted: true, content: 'This message was deleted', attachments: [] }
                         : m
                 ));
-                // Memory + SQL cache me bhi delete reflect karo (warna chat dobara kholne par blink)
-                markMessagesDeleted(chatId, deleted);
+                // Memory + SQL cache me bhi delete reflect karo — server ne jitne ids lautaye SAB (jo abhi `messages` state me
+                // nahi, sirf SQLite me hain unko bhi), attachments saaf aur local media-cache files bhi hat jati hain.
+                // (Tombstone ke karan koi in-flight purana sync batch inhe wapas zinda nahi karega.)
+                await markMessagesDeleted(chatId, deleted);
             } else {
                 // DELETE /messages/delete-for-me { messageIds } — sirf mere liye
                 if (serverIds.length) {
@@ -1440,16 +1382,21 @@ export default function ChatScreen({ route, navigation }) {
                 setMessages((prev) => prev.filter((m) => !ids.includes(m._id)));
                 // Local DB (SQL + memory) se bhi hatao — pehle sirf screen state se jata tha, cache me bacha rehta
                 // tha aur app band-khol par dikh kar phir gayab hota (blink)
-                ids.forEach((id) => uncacheMessage(chatId, id));
+                removeMessagesLocally(chatId, ids);
             }
             // Chat list ka last-message preview bhi theek ho (background, loader nahi)
             if (MY_USER_ID) syncAllTabData(dispatch, MY_USER_ID, { background: true });
         } catch (e) { Alert.alert("Error", e?.message || "Could not delete the message. Please try again."); }
     };
 
-    const handleSelectMsg = (item) => {
+    const handleSelectMsg = (item, anchor = null) => {
         // Deleted / abhi-bhejte (temp_) message select nahi hote
         if (!item?._id || item.isDeleted || item.isOptimistic || String(item._id).startsWith("temp_")) return;
+        if (anchor) {
+            setSelAnchor({ ...anchor, id: item._id });
+            // Reaction bar root View ke andar absolute hai — window coords ko root ke origin se relative karne ke liye
+            rootRef.current?.measureInWindow?.((rx, ry) => { if (Number.isFinite(ry)) rootYRef.current = ry; });
+        }
         setIsSelectMode(true);
         setSelectedMsgIds((prev) => {
             const next = new Set(prev);
@@ -1483,7 +1430,7 @@ export default function ChatScreen({ route, navigation }) {
         if (selectedMsgIds.size !== 1) return;
         const msg = messages.find((m) => selectedMsgIds.has(m._id));
         cancelSelectMode();
-        if (msg) { setSelectedMsg(msg); setShowPopup(true); }
+        if (msg) { setPopupAnchor(selAnchor?.id === msg._id ? selAnchor : null); setSelectedMsg(msg); setShowPopup(true); }
     };
     const handleSelectAll = () => {
         setSelectedMsgIds(new Set(messages.filter(isSelectable).map((m) => m._id)));
@@ -1516,8 +1463,11 @@ export default function ChatScreen({ route, navigation }) {
         ];
         // Group owner/admin kisi ka bhi message sabke liye hata sakta hai (time-window nahi lagti)
         const adminMod = isGroup && isGroupAdmin;
+        // Broadcast se aaye message sabke liye delete nahi hote (server bhi 403 deta hai)
+        const hasBroadcast = ids.some((id) => messages.find((m) => m._id === id)?.isBroadcast);
         const allExpired = !adminMod && ids.every((id) => isDeleteWindowExpired(messages.find((m) => m._id === id)));
-        if ((allMine || adminMod) && !allExpired) {
+        const canEveryone = (allMine || adminMod) && !allExpired && !hasBroadcast;
+        if (canEveryone) {
             buttons.push({
                 text: 'Delete for Everyone', style: 'destructive',
                 onPress: async () => { await deleteMessage(ids, true); cancelSelectMode(); },
@@ -1525,7 +1475,7 @@ export default function ChatScreen({ route, navigation }) {
         }
         Alert.alert(
             'Delete Messages',
-            `Delete ${ids.length} message${ids.length > 1 ? 's' : ''}?\n\nDelete for Me removes ${ids.length > 1 ? 'them' : 'it'} only from your own view.${(allMine || adminMod) && !allExpired ? ' Delete for Everyone removes ' + (ids.length > 1 ? 'them' : 'it') + ' for everyone in this chat.' : ''}`,
+            `Delete ${ids.length} message${ids.length > 1 ? 's' : ''}?\n\nDelete for Me removes ${ids.length > 1 ? 'them' : 'it'} only from your own view.${canEveryone ? ' Delete for Everyone removes ' + (ids.length > 1 ? 'them' : 'it') + ' for everyone in this chat.' : ''}`,
             buttons
         );
     };
@@ -1586,7 +1536,7 @@ export default function ChatScreen({ route, navigation }) {
     const bgImage = isDark ? Images.ChatblackBackground : Images.ChatwhiteBackground;
 
     return (
-        <View style={styles.container}>
+        <View ref={rootRef} collapsable={false} style={styles.container}>
             <StatusBar backgroundColor={theme?.header ?? "#1296f3"} barStyle="light-content" />
 
             <ChatHeader
@@ -1606,8 +1556,6 @@ export default function ChatScreen({ route, navigation }) {
                 onForwardSelected={handleForwardSelected}
                 onDeleteSelected={deleteSelectedMessages}
                 onCopySelected={handleCopySelected}
-                onStarSelected={handleStarSelected}
-                onOpenStarred={() => setShowStarred(true)}
                 onReplySelected={handleReplySelected}
                 onMoreSelected={handleMoreSelected}
                 onSelectAll={handleSelectAll}
@@ -1632,8 +1580,20 @@ export default function ChatScreen({ route, navigation }) {
                 const only = messages.find((m) => selectedMsgIds.has(m._id));
                 if (!only || only.isDeleted) return null;
                 const mineEmoji = (only.reactions ?? []).find((r) => idOf(r?.user ?? r?.userId) === MY_USER_ID)?.emoji;
+                // Pressed message ke upar (jagah na ho to neeche) — header ke neeche / keyboard ke upar clamp; anchor na ho to beech me
+                const winH = Dimensions.get("window").height;
+                const BAR_H = 56, GAP = 8;
+                const minTop = insets.top + 64;
+                const maxTop = Math.max(minTop, winH - keyboardH - BAR_H - 90);
+                let winTop = (winH - BAR_H) / 2;
+                if (selAnchor?.id === only._id) {
+                    const above = selAnchor.y - BAR_H - GAP;
+                    winTop = above >= minTop ? above : selAnchor.y + selAnchor.h + GAP;
+                }
+                const barTop = Math.max(minTop, Math.min(maxTop, winTop)) - rootYRef.current - 6;
                 return (
                     <ReactionBar
+                        top={barTop}
                         isDark={isDark}
                         mine={mineEmoji}
                         onReact={(emoji) => { cancelSelectMode(); reactToMessage(only, emoji); }}
@@ -1691,8 +1651,8 @@ export default function ChatScreen({ route, navigation }) {
                         onDeleteSelected={deleteSelectedMessages}
                         onForwardSelected={handleForwardSelected}
                         onCopySelected={handleCopySelected}
-                        hasMore={hasMore}
-                        loadingMore={loadingMore}
+                        hasMore={!historyComplete}
+                        loadingMore={backfilling && !historyComplete}
                         onLoadMore={loadMoreMessages}
                         /* 🔎 search-nav props */
                         activeSearchId={activeMatchId}
@@ -1757,7 +1717,6 @@ export default function ChatScreen({ route, navigation }) {
                     />
                 )}
 
-                <StarredMessagesModal visible={showStarred} chatId={chatId} myUserId={MY_USER_ID} onClose={() => setShowStarred(false)} />
 
                 <AttachSheet
                     visible={showAttach}
@@ -1777,11 +1736,11 @@ export default function ChatScreen({ route, navigation }) {
                     onDelete={handleDelete}
                     onDeleteForAll={handleDeleteAll}
                     onEdit={handleEdit}
+                    anchor={popupAnchor}
                     canEdit={!isEditWindowExpired(selectedMsg)}
                     canModerate={isGroup && isGroupAdmin && !(selectedMsg?.sender?._id === MY_USER_ID || selectedMsg?.sender === MY_USER_ID)}
-                    canDeleteForAll={(isGroup && isGroupAdmin) || !isDeleteWindowExpired(selectedMsg)}
+                    canDeleteForAll={!selectedMsg?.isBroadcast && ((isGroup && isGroupAdmin) || !isDeleteWindowExpired(selectedMsg))}
                     onForward={handleForward}
-                    onStar={handleStar}
                     onReact={handleReact}
                     onBlock={handleBlock}
                     onCopy={handleCopy}

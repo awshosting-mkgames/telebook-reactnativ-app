@@ -54,7 +54,8 @@ const apiService = async ({
           console.log('error responce',error);
         if (error.response) {
             const status = error.response.status;
-            return { success: false, error: error.response.data };
+            // status: HTTP code (429/5xx = transient => caller retry kare). Additive field, purane callers ignore karte hain.
+            return { success: false, error: error.response.data, status };
         }
         return { success: false, error: error.message || 'Something went wrong' };
     }

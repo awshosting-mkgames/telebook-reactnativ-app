@@ -1,6 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as VideoThumbnails from 'expo-video-thumbnails';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 
 import { useTranslation } from 'react-i18next';
 import {
@@ -16,9 +16,10 @@ import { useMediaDownload } from '../../../utils/mediaCache';
 import { useNameResolver } from '../../../services/nameResolver';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-// Bubble ki asli max width (list padding 10+10, container 82%, bubble padding 6+6). Media isse bada na ho —
-// forwarded/normal dono images ek hi width me poori fit hon.
-const MEDIA_W = Math.min(SCREEN_W * 0.8, (SCREEN_W - 20) * 0.82) - 12;
+// Image/video frame ki chaudai: screen ka ~72% (pehle ~80% tha, bubble bahut chauda lagta tha). Bubble padding 6+6 ke saath
+// wrap hota hai => bubble = MEDIA_W + 12 < container max (82%), sent/received/forwarded sab ek hi width. Frame ki height
+// image ke aspect-ratio se aati hai (ImageAtt), isliye poori image dikhti hai.
+const MEDIA_W = Math.round(SCREEN_W * 0.72);
 
 // Video ka thumbnail ek baar bana kar cache — pehle har video message ke liye poora
 // video player banta tha (memory + network bhari, lambi chat me list atak jati thi).
@@ -64,8 +65,25 @@ const DownloadBadge = ({ dl, size, label }) => (
 
 // Image: dusron ki bheji hui image apne aap download NAHI hoti — thumbnail (server de to) + download button
 // dikhta hai, tap par download hoke local save hoti hai (phir offline bhi khulti hai). Apni bheji hui auto-cache.
-const ImageAtt = memo(({ uri, thumbUri, size, auto, style, wrapStyle, pending, guard, onOpen, onLongPress }) => {
+// Image ka asli aspect-ratio yaad rakho (uri -> {w,h}) — dobara render par frame na kudey
+const imgSizeCache = new Map();
+const MIN_RATIO = 0.45;   // bahut chauri (panorama) image ki frame height ka floor
+const MAX_RATIO = 1.7;    // bahut lambi (tall) image ki frame height ka cap
+
+const ImageAtt = memo(({ uri, thumbUri, natW, natH, size, auto, style, wrapStyle, pending, guard, onOpen, onLongPress }) => {
     const dl = useMediaDownload(uri, { auto });
+    const [nat, setNat] = useState(() => imgSizeCache.get(uri) || (natW > 0 && natH > 0 ? { w: natW, h: natH } : null));
+    // Server ne width/height nahi di to local file (ya thumbnail) se asli size padh lo
+    useEffect(() => {
+        if (nat) return;
+        const src = dl.ready ? dl.localUri : thumbUri;
+        if (!src) return;
+        Image.getSize(src, (w, h) => {
+            if (w > 0 && h > 0) { imgSizeCache.set(uri, { w, h }); setNat({ w, h }); }
+        }, () => {});
+    }, [nat, dl.ready, dl.localUri, thumbUri, uri]);
+    // Frame image ke aspect me: koi hissa cut nahi, chhoti ho to bhi poori chaudai tak bade ho kar set
+    const frame = nat ? { height: Math.round(MEDIA_W * Math.min(MAX_RATIO, Math.max(MIN_RATIO, nat.h / nat.w))) } : null;
     return (
         <Pressable
             style={wrapStyle}
@@ -74,11 +92,11 @@ const ImageAtt = memo(({ uri, thumbUri, size, auto, style, wrapStyle, pending, g
             delayLongPress={200}
         >
             {dl.ready ? (
-                <Image source={{ uri: dl.localUri }} style={style} resizeMode="cover" />
+                <Image source={{ uri: dl.localUri }} style={[style, frame]} resizeMode="contain" />
             ) : thumbUri ? (
-                <Image source={{ uri: thumbUri }} style={style} resizeMode="cover" blurRadius={3} />
+                <Image source={{ uri: thumbUri }} style={[style, frame]} resizeMode="contain" blurRadius={3} />
             ) : (
-                <View style={[style, { backgroundColor: '#2b2b2b', alignItems: 'center', justifyContent: 'center' }]}>
+                <View style={[style, frame, { backgroundColor: '#2b2b2b', alignItems: 'center', justifyContent: 'center' }]}>
                     <Ionicons name="image-outline" size={34} color="rgba(255,255,255,0.35)" />
                 </View>
             )}
@@ -155,12 +173,16 @@ const docIcon = (att) => {
 
 // Attachment abhi upload ho raha hai (local file, server par nahi pahuncha) —
 // WhatsApp jaisa chhota progress overlay, tap karne par cancel.
+// SIRF is chhote cancel button par tap upload cancel karta hai — image ka baaki hissa (dim layer) touch nahi leta
+// (pointerEvents none), isliye galti se image par tap karne par upload nahi tootta.
 const UploadOverlay = ({ progress = 0, onCancel }) => (
-    <Pressable style={styles.uploadOverlay} onPress={onCancel}>
-        <ActivityIndicator size="small" color="#fff" />
-        <Text style={styles.uploadOverlayText}>{progress}%</Text>
-        <Text style={styles.uploadOverlayHint}>tap to cancel</Text>
-    </Pressable>
+    <View pointerEvents="box-none" style={styles.uploadOverlay}>
+        <Pressable style={styles.cancelBtn} onPress={onCancel} hitSlop={8} accessibilityLabel="Cancel upload">
+            <ActivityIndicator size="large" color="#fff" style={styles.cancelSpinner} />
+            <Ionicons name="close" size={22} color="#fff" />
+        </Pressable>
+        <Text pointerEvents="none" style={styles.uploadOverlayText}>{progress}%</Text>
+    </View>
 );
 
 const MessageBubble = ({
@@ -210,13 +232,20 @@ const MessageBubble = ({
         if (isFailed) retryMessage?.(item);
     };
     // Long press: select mode shuru / toggle. Failed message par Retry/Delete popup.
+    // Bubble ki window position — reaction bar / popup isi message ke paas khulte hain (screen ke upar-neeche nahi)
+    const bubbleRef = useRef(null);
+    const withAnchor = (fn) => {
+        const node = bubbleRef.current;
+        if (node?.measureInWindow) node.measureInWindow((x, y, w, h) => fn(Number.isFinite(y) ? { x, y, w, h } : null));
+        else fn(null);
+    };
     const handleLongPress = () => {
         if (item.isDeleted) return;
         if (isFailed) return openPopup?.(item); // Retry / Delete
         if (item.isOptimistic) return;
         // WhatsApp jaisa: long press seedha select mode shuru karta hai (header me actions)
-        if (canSelect && onSelect) return onSelect(item);
-        openPopup?.(item);
+        if (canSelect && onSelect) return withAnchor((a) => onSelect(item, a));
+        withAnchor((a) => openPopup?.(item, a));
     };
     // Reactions ko emoji ke hisaab se group karo: ❤️ 2  👍 1
     const reactionGroups = Object.entries(
@@ -229,14 +258,14 @@ const MessageBubble = ({
     const myReactionEmoji = (item.reactions ?? []).find(
         (r) => r?.emoji && (r.user?._id ?? r.user ?? r.userId) === MY_USER_ID
     )?.emoji;
-    const isStarred = !!item.starredBy?.some((u) => (u?._id ?? u) === MY_USER_ID);
     // Media par tap: select mode me select, warna full-screen viewer
     const openMedia = (open) => () => (isSelectMode ? (canSelect ? onSelect(item) : undefined) : open());
 
 
     // Failed media par image tap = Retry (pehle viewer khul jata tha aur retry nahi hota tha)
+    // Upload chal raha ho: image par tap = KUCH NAHI (onPress undefined); cancel sirf overlay ke X button se.
     const pendingProps = isPendingUpload ? {
-        onPress: () => onCancelUpload?.(item._id),
+        onPress: undefined,
         overlay: <UploadOverlay progress={item.uploadProgress ?? 0} onCancel={() => onCancelUpload?.(item._id)} />,
     } : (isFailed && item.attachments?.[0]?._pendingUpload ? {
         onPress: () => (isSelectMode ? undefined : retryMessage?.(item)),
@@ -275,7 +304,7 @@ const MessageBubble = ({
                 <View style={[styles.bubbleContainer, { alignItems: isMine ? 'flex-end' : 'flex-start' }]}>
 
 
-                    <View style={[
+                    <View ref={bubbleRef} collapsable={false} style={[
                         styles.bubble,
                         { backgroundColor: bg },
                         isMine ? styles.bubbleMine : styles.bubbleTheirs,
@@ -323,6 +352,8 @@ const MessageBubble = ({
                                         key={i}
                                         uri={getFullUrl(att.url)}
                                         thumbUri={att.thumbnailUrl ? getFullUrl(att.thumbnailUrl) : undefined}
+                                        natW={att.width}
+                                        natH={att.height}
                                         size={fmtSize(att.fileSize)}
                                         auto={isMine}
                                         style={styles.msgImage}
@@ -352,10 +383,13 @@ const MessageBubble = ({
                                 {item.messageType === 'audio' && item.attachments?.map((att, i) => (
                                     <View key={i} style={styles.audioWrapper}>
                                         {isPendingUpload ? (
-                                            <Pressable style={[styles.audioUploadRow, { backgroundColor: accent }]} onPress={() => onCancelUpload?.(item._id)}>
+                                            <View style={[styles.audioUploadRow, { backgroundColor: accent }]}>
                                                 <ActivityIndicator size="small" color="#fff" />
                                                 <Text style={styles.docName}>Uploading voice message… {item.uploadProgress ?? 0}%</Text>
-                                            </Pressable>
+                                                <Pressable onPress={() => onCancelUpload?.(item._id)} hitSlop={10} accessibilityLabel="Cancel upload">
+                                                    <Ionicons name="close-circle" size={24} color="#fff" />
+                                                </Pressable>
+                                            </View>
                                         ) : (
                                             <AudioAtt
                                                 uri={getFullUrl(att.url)}
@@ -373,12 +407,15 @@ const MessageBubble = ({
 
                                 {item.messageType === 'document' && item.attachments?.map((att, i) => (
                                     isPendingUpload ? (
-                                        <Pressable key={i} style={[styles.docRow, { backgroundColor: accent }]} onPress={() => onCancelUpload?.(item._id)}>
+                                        <View key={i} style={[styles.docRow, { backgroundColor: accent }]}>
                                             <ActivityIndicator size="small" color="#fff" />
                                             <Text style={styles.docName} numberOfLines={1}>
                                                 {att.filename || 'Document'} · {item.uploadProgress ?? 0}%
                                             </Text>
-                                        </Pressable>
+                                            <Pressable onPress={() => onCancelUpload?.(item._id)} hitSlop={10} accessibilityLabel="Cancel upload">
+                                                <Ionicons name="close-circle" size={24} color="#fff" />
+                                            </Pressable>
+                                        </View>
                                     ) : (
                                         <DocAtt
                                             key={i}
@@ -412,7 +449,6 @@ const MessageBubble = ({
 
                         {/* Time + Ticks */}
                         <View style={styles.timeRow}>
-                            {isStarred && <Ionicons name="star" size={12} color="#f0a500" />}
                             {item.isEdited && !item.isDeleted && (
                                 <Text style={[styles.timeText, { color: timeColor }]}>edited</Text>
                             )}
@@ -488,11 +524,12 @@ const styles = StyleSheet.create({
     docName: { color: '#fff', fontSize: 13, flex: 1 },
     audioUploadRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, backgroundColor: '#1296f3', borderRadius: 8 },
     uploadOverlay: {
-        ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)',
+        ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)',
         alignItems: 'center', justifyContent: 'center', gap: 4,
     },
-    uploadOverlayText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-    uploadOverlayHint: { color: 'rgba(255,255,255,0.75)', fontSize: 10 },
+    uploadOverlayText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+    cancelBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
+    cancelSpinner: { position: 'absolute' },
     timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 2, gap: 4 },
     timeText: { fontSize: 10 },
     senderName: { fontSize: 12, color: '#1296f3', fontWeight: 'bold', marginBottom: 2, marginLeft: 0, marginVertical: 5, marginBottom: 15 },

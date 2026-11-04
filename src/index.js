@@ -1,8 +1,9 @@
 // Sabse pehle: StatusBar.currentHeight ko asli inset se sahi karta hai (screens ke styles isse padhte hain)
 import './utils/statusBarInset';
 import { useContext, useEffect, useRef } from 'react';
-import { AppState } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AppState, View } from 'react-native';
+import { SafeAreaInsetsContext, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCallStripHeight } from './services/callStripStore';
 import { Provider, useDispatch, useSelector, useStore } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import Toast from 'react-native-toast-message';
@@ -20,6 +21,7 @@ import CallConfigLoader from './components/CallConfigLoader';
 import { contactSync, loadContactsFromDb } from './services/contactSync';
 import { getLastSyncedAt } from './services/contactsDb';
 import { initChatTabs } from './services/chatSync';
+import { registerCallForegroundService } from './services/callForeground';
 import { refreshMyProfile } from './services/profileSync';
 import {
     generateAndSaveFCMToken,
@@ -33,7 +35,9 @@ import {
     setupTokenRefreshListener,
     syncPushToken,
 } from './components/notification';
+import { warmSystemConfig } from './services/systemConfig';
 
+registerCallForegroundService();
 setupBackgroundHandler();
 // App start se pehle hi register — killed-state mein "Decline" tap ko
 // handle karne ke liye yeh JS module load hote hi chalna zaroori hai.
@@ -44,6 +48,9 @@ registerCallBackgroundEvents();
 // channel id use karega jo abhi tak exist hi nahi karta, aur Android
 // notification silently drop kar deta hai (koi error bhi nahi dikhta).
 setupCallChannel();
+// Message channels (msgs_*) bhi startup par — backend push ab inhi ids ko target karta hai,
+// killed state me pehli push se pehle channel exist hona chahiye.
+setupAndroidChannel().catch(() => {});
 
 // App khulte hi SQL se contacts Redux me le aao. Normally ye sync nahi hai —
 // na device contacts padhe jate hain, na koi API call hoti hai.
@@ -198,6 +205,19 @@ const SocketManager = () => {
     return null;
 };
 
+// Ongoing-call strip dikhe to navigator uske neeche shuru ho (header strip ke neeche aaye, chhipe nahi).
+// Strip status-bar wala hissa bhi ghere hai, isliye neeche ki screens ko top inset 0 milta hai.
+const CallStripFrame = ({ children }) => {
+    const stripH = useCallStripHeight();
+    const insets = useSafeAreaInsets();
+    const value = stripH > 0 ? { ...insets, top: 0 } : insets;
+    return (
+        <View style={{ flex: 1, paddingTop: stripH }}>
+            <SafeAreaInsetsContext.Provider value={value}>{children}</SafeAreaInsetsContext.Provider>
+        </View>
+    );
+};
+
 export default function App() {
     useEffect(() => {
         let cleanupForeground = () => {};
@@ -215,6 +235,7 @@ export default function App() {
             // rahe par Firebase naya token de, jiska refresh event bhi nahi
             // aata), to yahi call backend ko taaza token deta hai.
             await syncPushToken();
+            warmSystemConfig(); // share-app link / legal pages cache (fail ho to koi asar nahi)
             cleanupRefresh    = setupTokenRefreshListener(() => {});
             cleanupForeground = setupForegroundHandler();
             cleanupClicks     = setupNotificationClickHandlers();
@@ -246,7 +267,7 @@ export default function App() {
                         <ChatTabsLoader />
                         <CallConfigLoader />
                         <IncomingCallManager />
-                        <AppNavigator />
+                        <CallStripFrame><AppNavigator /></CallStripFrame>
                         <ActiveCallBar />
                         <SuspensionGate />
                         <Toast />

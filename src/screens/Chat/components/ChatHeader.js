@@ -9,6 +9,7 @@ import { ThemeContext } from '../../../components/ThemeContext';
 import { useNameResolver } from '../../../services/nameResolver';
 import GradientFill from '../../../components/GradientFill';
 import { useHeaderMetrics } from '../../../utils/headerMetrics';
+import { useCallStripHeight } from '../../../services/callStripStore';
 
 const ChatHeader = ({
     navigation, chatName, chatImage, isGroup, isBroadcast,
@@ -27,6 +28,7 @@ const ChatHeader = ({
     // Header colour theme token se (dark me neutral dark, light me wahi blue)
     const headerBg = theme?.header ?? '#1296f3';
     const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
+    const menuTop = useCallStripHeight() + top + 50; // popup menu header ke neeche (call strip ho to uske neeche)
     const accent = theme?.main ?? '#1296f3';
     // Status bar ke neeche tak gradient/colour (paddingTop = safe-area top)
     const headerStyle = [styles.header, { backgroundColor: headerBg, paddingTop: top, paddingBottom: 0, height }];
@@ -72,12 +74,9 @@ const ChatHeader = ({
                     <Ionicons name="close" size={22} color="#fff" />
                 </TouchableOpacity>
                 <Text style={[styles.name, { flex: 1 }]}>{selectedCount}</Text>
-                {/* Order: Delete(1) · Star(2) · Copy(3) · Forward(4) · Reply (sirf 1 select) */}
+                {/* Order: Delete · Copy · Forward · Reply (sirf 1 select) */}
                 <TouchableOpacity onPress={onDeleteSelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
                     <Ionicons name="trash-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={onStarSelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
-                    <Ionicons name="star-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={onCopySelected} style={styles.headerActionBtn} disabled={selectedCount === 0}>
                     <Ionicons name="copy-outline" size={22} color={selectedCount === 0 ? '#a0c8f0' : '#fff'} />
@@ -94,7 +93,7 @@ const ChatHeader = ({
                     <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
                 </TouchableOpacity>
                 <Modal statusBarTranslucent visible={selMenuVisible} transparent animationType="fade" onRequestClose={() => setSelMenuVisible(false)}>
-                    <Pressable style={styles.menuOverlay} onPress={() => setSelMenuVisible(false)}>
+                    <Pressable style={[styles.menuOverlay, { paddingTop: menuTop }]} onPress={() => setSelMenuVisible(false)}>
                         <View style={[styles.menuBox, { backgroundColor: menuBg }]}>
                             {selectedCount === 1 && !!onMoreSelected && (
                                 <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => { setSelMenuVisible(false); onMoreSelected(); }}>
@@ -175,7 +174,7 @@ const ChatHeader = ({
 
             {/* Dropdown menu */}
             <Modal statusBarTranslucent visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
-                <Pressable style={styles.menuOverlay} onPress={() => setMenuVisible(false)}>
+                <Pressable style={[styles.menuOverlay, { paddingTop: menuTop }]} onPress={() => setMenuVisible(false)}>
                     <View style={[styles.menuBox, { backgroundColor: menuBg }]}>
                         <TouchableOpacity
                             style={styles.menuItem}
@@ -185,19 +184,6 @@ const ChatHeader = ({
                             <Ionicons name="search" size={18} color={accent} />
                             <Text style={[styles.menuText, { color: menuText }]}>Search</Text>
                         </TouchableOpacity>
-                        {!!onOpenStarred && (
-                            <>
-                                <View style={[styles.menuDivider, { backgroundColor: dividerC }]} />
-                                <TouchableOpacity
-                                    style={styles.menuItem}
-                                    onPress={() => { setMenuVisible(false); onOpenStarred(); }}
-                                    activeOpacity={0.7}
-                                >
-                                    <Ionicons name="star" size={18} color="#f0a500" />
-                                    <Text style={[styles.menuText, { color: menuText }]}>Starred messages</Text>
-                                </TouchableOpacity>
-                            </>
-                        )}
                         <View style={[styles.menuDivider, { backgroundColor: dividerC }]} />
                         <TouchableOpacity
                             style={styles.menuItem}

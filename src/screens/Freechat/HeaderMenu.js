@@ -7,8 +7,12 @@ import {
 import { TouchableWithoutFeedback } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../../components/ThemeContext';
+import { useHeaderMetrics } from '../../utils/headerMetrics';
+import { useCallStripHeight } from '../../services/callStripStore';
 
 export default function HeaderMenu({ visible, onClose, onProfile, onSyncData, syncing }) {
+    const { top } = useHeaderMetrics();
+    const popupTop = useCallStripHeight() + top + 54;   // call strip ho to uske neeche
     const { theme } = useContext(ThemeContext);
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -74,6 +78,7 @@ export default function HeaderMenu({ visible, onClose, onProfile, onSyncData, sy
                         <Animated.View style={[
                             styles.popup,
                             {
+                                top: popupTop,
                                 backgroundColor: popupBg,
                                 borderColor: borderColor,
                                 opacity: opacityAnim,

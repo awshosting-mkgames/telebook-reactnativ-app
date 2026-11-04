@@ -41,6 +41,7 @@ import {
 import PostActions from '../Mychannelscreen/components/PostActions';
 import GradientFill from '../../components/GradientFill';
 import { useHeaderMetrics } from '../../utils/headerMetrics';
+import { useCallStripHeight } from '../../services/callStripStore';
 const STORAGE_KEY = 'DOWNLOAD_DIR_URI';
 const HIT = { top: 10, bottom: 10, left: 10, right: 10 };
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -544,6 +545,7 @@ export default function ChannelDetailScreen({ navigation, route }) {
     const { theme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
     const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
+    const menuTop = useCallStripHeight() + top + 50; // popup menu header ke neeche (call strip ho to uske neeche)
 
     // Accent/header-blue theme se follow kare
     const palBase = PALETTES[theme?.mode] ?? PALETTES.light;
@@ -845,7 +847,7 @@ export default function ChannelDetailScreen({ navigation, route }) {
 
             {/* MENU */}
             <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
-                <TouchableOpacity style={sc.menuOverlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
+                <TouchableOpacity style={[sc.menuOverlay, { paddingTop: menuTop }]} activeOpacity={1} onPress={() => setShowMenu(false)}>
                     <View style={[sc.menuBox, { backgroundColor: pal.card }]}>
                         <TouchableOpacity style={sc.menuItem} onPress={() => { setShowMenu(false); setShowInfo(true); }} activeOpacity={0.7}>
                             <Ionicons name="information-circle-outline" size={18} color={pal.accent} />

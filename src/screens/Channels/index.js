@@ -24,7 +24,6 @@ import apiService from '../../services/apiService';
 import Config from '../../services/config';
 import GradientFill from '../../components/GradientFill';
 import { useHeaderMetrics } from '../../utils/headerMetrics';
-import AnnouncementBoard from '../../components/AnnouncementBoard';
 
 // Icon relative path me aata hai — media host ke saath jodna hota hai.
 // Pehle Config.Main_url ki string par .MEDIA_URL lagta tha (undefined), isliye
@@ -524,8 +523,6 @@ const Channels = ({ navigation }) => {
 
             {activeTab === 'all' && (
                 <>
-                    {/* Admin ke announcements — channel search ke upar */}
-                    <AnnouncementBoard />
                     <View style={[styles.searchBar, { backgroundColor: isDark ? '#1e1e1e' : '#f2f2f2', borderColor: searchFocused ? headerBg : 'transparent' }]}>
                         <Ionicons name="search" size={17} color={searchFocused ? headerBg : (isDark ? '#666' : '#aaa')} />
                         <TextInput

@@ -181,14 +181,7 @@
           "recordAudioAndroid": true
         }
       ],
-      [
-        "expo-notifications",
-        {
-          "sounds": [
-            "./assets/sounds/ringtone.wav"
-          ]
-        }
-      ],
+      ["expo-notifications", { "defaultChannel": "msgs_default", "sounds": ["./assets/sounds/ringtone_telebook.mp3"] }],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "@react-native-firebase/messaging",
@@ -198,7 +191,8 @@
       "./plugins/withAdiRegistration",
       "./plugins/withRemoveForegroundPermissions",
       "./plugins/withRingtoneModule",
-      "./plugins/withPictureInPicture"
+      "./plugins/withPictureInPicture",
+      "./plugins/withCallForegroundService"
     ],
     "owner": "ambujexpo25",
     "scheme": "telebook",

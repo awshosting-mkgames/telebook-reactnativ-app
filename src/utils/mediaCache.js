@@ -140,6 +140,13 @@ export const clearMediaCache = async () => {
     try { await FileSystem.deleteAsync(DIR, { idempotent: true }); } catch (e) { /* already gone */ }
 };
 
+// Delete-for-everyone hue message ki local file hatao (storage + purani photo phone me na bachi rahe)
+export const removeCachedMedia = async (url) => {
+    if (!isRemote(url)) return;
+    known.delete(url);
+    try { await FileSystem.deleteAsync(localPathFor(url), { idempotent: true }); } catch (e) { /* already gone */ }
+};
+
 // Apni bheji hui media: upload ke baad bubble ka url local file:// se server url ban jata hai.
 // Bina seed ke wahi file dobara download hoti (placeholder flash + data waste). Local file ko
 // server url ke naam se cache me daal do, taaki bubble bina badlaav ke wahi image dikhaye.

@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppState, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -7,7 +7,7 @@ import { ThemeContext } from './ThemeContext';
 import apiService from '../services/apiService';
 import socketService from '../services/socketService';
 
-// Admin Panel ki announcements ka chhota notice board (Channels tab me, channel search ke upar).
+// Admin Panel ki announcements ka chhota notice board (Home/Freechat me, contact search bar ke neeche).
 // Push notification alag se aati rehti hai; yahan wahi soochna baad me bhi dekhi ja sakti hai.
 // Offline: pichhli list AsyncStorage se dikhti hai.
 const CACHE_KEY = 'ANNOUNCEMENTS_CACHE_V1';
@@ -40,6 +40,20 @@ export default function AnnouncementBoard() {
     }, []);
 
     useFocusEffect(useCallback(() => { load(); }, [load]));
+
+    // App background se wapas aaye to dobara pooch lo (admin ne is beech delete kiya ho sakta hai)
+    useEffect(() => {
+        const sub = AppState.addEventListener('change', (st) => { if (st === 'active') load(); });
+        return () => sub?.remove?.();
+    }, [load]);
+
+    // Socket reconnect par bhi server list le lo — disconnected rehte waqt 'removed' event miss ho sakta hai
+    useEffect(() => {
+        const onConnect = () => load();
+        socketService.on?.('connect', onConnect);
+        socketService.on?.('announcements-updated', onConnect);
+        return () => { socketService.off?.('connect', onConnect); socketService.off?.('announcements-updated', onConnect); };
+    }, [load]);
 
     // Admin ne naya publish/remove kiya to turant (socket)
     useEffect(() => {
@@ -88,6 +102,7 @@ export default function AnnouncementBoard() {
                     </TouchableOpacity>
                 )}
             </View>
+            <ScrollView style={open ? styles.openList : null} nestedScrollEnabled showsVerticalScrollIndicator={false}>
             {shown.map((a) => {
                 const c = KIND_COLOR[a.kind] || KIND_COLOR.info;
                 return (
@@ -110,12 +125,14 @@ export default function AnnouncementBoard() {
                     </View>
                 );
             })}
+            </ScrollView>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    board: { marginHorizontal: 12, marginTop: 10, marginBottom: 4, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+    openList: { maxHeight: 220 },
+    board: { marginHorizontal: 12, marginTop: 6, marginBottom: 4, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
     head: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 6 },
     headText: { fontSize: 13, fontWeight: '700', flex: 1 },
     toggle: { flexDirection: 'row', alignItems: 'center', gap: 2 },

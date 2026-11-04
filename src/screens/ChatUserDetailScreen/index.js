@@ -23,7 +23,8 @@ import { saveUnknownContact } from '../../services/saveContactFlow';
 import { useBadgePlacements } from '../../services/badgeConfig';
 import PlanBadge from '../../components/PlanBadge';
 import { useNameResolver } from '../../services/nameResolver';
-import { APP_LINK_HOST } from '../../navigation/deepLinks';
+import { APP_DOWNLOAD_URL } from '../../navigation/deepLinks';
+import { getAppDownloadUrl, getShareText } from '../../services/systemConfig';
 const BASE_URL = Config.Main_url;
 
 
@@ -260,8 +261,6 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
     const resolved = resolveName(otherUser);
     const displayName = resolved.title;
     const planBadge = otherUser?.planBadge ?? fetchedBadge;
-    const inviteCode = otherUser?.inviteCode || '';
-    const inviteLink = inviteCode ? `https://${APP_LINK_HOST}/u/${inviteCode}` : '';
 
     // chats/:id/info me planBadge na aaye to users/:id se ek baar le lo
     useEffect(() => {
@@ -357,22 +356,15 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
         }
     };
 
-    const handleCopyNumber = () => {
-        if (!otherUser?.mobile) return;
-        Clipboard.setString(String(otherUser.mobile));
-        showToast('Number copied');
+    // Dusre user ka profile / number / contact link copy ya share nahi hota — sirf apne app ka download link
+    const handleCopyAppLink = () => {
+        Clipboard.setString(getAppDownloadUrl(APP_DOWNLOAD_URL)); // server link (system-config) ho to wahi
+        showToast('App link copied');
     };
 
-    const handleCopyLink = () => {
-        if (!inviteLink) return;
-        Clipboard.setString(inviteLink);
-        showToast('Link copied');
-    };
-
-    const handleShareLink = async () => {
-        if (!inviteLink) return;
+    const handleShareApp = async () => {
         try {
-            await Share.share({ message: `Chat with ${displayName} on Telebook: ${inviteLink}` });
+            await Share.share({ message: getShareText('Install Telebook and chat with me:', APP_DOWNLOAD_URL) });
         } catch (e) { /* user cancelled */ }
     };
 
@@ -512,15 +504,9 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                         <Text style={[styles.infoLabel, { color: sub }]}>Phone</Text>
                         <Text style={[styles.infoValue, { color: txt }]}>{phone || 'Not available'}</Text>
                     </View>
-                    <TouchableOpacity
-                        style={[styles.copyBtn, { backgroundColor: isDark ? '#1a2a1a' : '#e8fff0' }]}
-                        onPress={handleCopyNumber}
-                    >
-                        <Ionicons name="copy-outline" size={16} color="#27ae60" />
-                    </TouchableOpacity>
                 </View>
 
-                {/* ── Quick actions: Save Contact / Copy Link / Share Link (blocked => hidden) ── */}
+                {/* ── Quick actions: Save Contact / Copy App Link / Share App (blocked => hidden) ── */}
                 {!blocked && !!otherUser?.mobile && (
                     <View style={[styles.actionsCard, { backgroundColor: card, borderColor: border }]}>
                         <TouchableOpacity style={styles.actionBtn} onPress={handleSaveContact} disabled={savingContact} activeOpacity={0.7}>
@@ -529,18 +515,14 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                                 : <Ionicons name="person-add-outline" size={22} color={accent} />}
                             <Text style={[styles.actionTxt, { color: txt }]} numberOfLines={2}>Save Contact</Text>
                         </TouchableOpacity>
-                        {!!inviteLink && (
-                            <>
-                                <TouchableOpacity style={styles.actionBtn} onPress={handleCopyLink} activeOpacity={0.7}>
-                                    <Ionicons name="link-outline" size={22} color={accent} />
-                                    <Text style={[styles.actionTxt, { color: txt }]} numberOfLines={2}>Copy Contact Link</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.actionBtn} onPress={handleShareLink} activeOpacity={0.7}>
-                                    <Ionicons name="share-social-outline" size={22} color={accent} />
-                                    <Text style={[styles.actionTxt, { color: txt }]} numberOfLines={2}>Share Contact Link</Text>
-                                </TouchableOpacity>
-                            </>
-                        )}
+                        <TouchableOpacity style={styles.actionBtn} onPress={handleCopyAppLink} activeOpacity={0.7}>
+                            <Ionicons name="link-outline" size={22} color={accent} />
+                            <Text style={[styles.actionTxt, { color: txt }]} numberOfLines={2}>Copy App Link</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.actionBtn} onPress={handleShareApp} activeOpacity={0.7}>
+                            <Ionicons name="share-social-outline" size={22} color={accent} />
+                            <Text style={[styles.actionTxt, { color: txt }]} numberOfLines={2}>Share App</Text>
+                        </TouchableOpacity>
                     </View>
                 )}
 

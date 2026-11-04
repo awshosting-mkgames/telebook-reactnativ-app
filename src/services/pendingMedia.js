@@ -59,7 +59,9 @@ export const subscribePending = (chatId, fn) => {
 //   - jab slot khali ho to agli lane round-robin se chunte hain (10 images wali lane baaki sab ko nahi rokti)
 // Text messages is queue se guzarte hi nahi — wo seedha POST hote hain.
 export const MAX_CONCURRENT_UPLOADS = 3;
-export const MAX_PER_CHAT = 2;
+// 1 = ek chat ki uploads ek ke baad ek (sequential lane). 10 photos ek saath parallel 2-2 jaane par dheeli network par
+// har upload ki bandwidth aadhi hoti thi, timeout/5xx badhte the. Dusri chats ki lane alag chalti hai (MAX_CONCURRENT_UPLOADS).
+export const MAX_PER_CHAT = 1;
 const lanes = new Map();      // laneKey -> job[]
 const laneActive = new Map(); // laneKey -> running count
 let active = 0;

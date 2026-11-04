@@ -15,15 +15,17 @@ import apiService from '../services/apiService';
 import { getDeviceId } from '../services/deviceId';
 import { getData } from '../services/staticStorage';
 import Config from '../services/config';
+import socketService from '../services/socketService';
 
 const TOKEN_KEY = 'FCM_TOKEN';
 const ANDROID_CHANNEL_ID = 'default_channel';
 // Alag channel — regular message notifications se importance/sound/vibration
 // alag honi chahiye (ringtone jaisa), aur channel settings pehli baar banne
 // ke baad badal nahi sakti isliye shuru se hi apna id.
-// v2: purane 'incoming_calls' channel ki sound (default notification tune) badal nahi sakti — naya id.
-const CALL_CHANNEL_ID = 'incoming_calls_v2';
-const OLD_CALL_CHANNEL_ID = 'incoming_calls';
+// v3: channel ki sound banne ke baad badal nahi sakti — ringtoneTelebook.mp3 (res/raw/ringtone_telebook) ke liye naya id.
+const CALL_CHANNEL_ID = 'incoming_calls_v3';
+const OLD_CALL_CHANNEL_IDS = ['incoming_calls', 'incoming_calls_v2'];
+const CALL_SOUND = 'ringtone_telebook';   // android res/raw naam (extension ke bina)
 
 // Part1 #16 — sound/vibration user setting ke hisaab se alag channels. Android
 // mein channel ki sound/vibration banne ke baad badal nahi sakti, isliye har
@@ -119,14 +121,16 @@ export async function setupAndroidChannel() {
 export async function setupCallChannel() {
     if (Platform.OS !== 'android') return;
     try {
-        try { await notifee.deleteChannel(OLD_CALL_CHANNEL_ID); } catch (e) { /* pehle se nahi hai */ }
+        for (const old of OLD_CALL_CHANNEL_IDS) {
+            try { await notifee.deleteChannel(old); } catch (e) { /* pehle se nahi hai */ }
+        }
         await notifee.createChannel({
             id: CALL_CHANNEL_ID,
             name: 'Incoming calls',
             importance: AndroidImportance.HIGH,
-            // res/raw/ringtone.wav (expo-notifications plugin `sounds` se copy hota hai) — in-app
-            // ringtone (assets/sounds/ringtone.wav) jaisi hi, taaki dono jagah ek hi tune baje.
-            sound: 'ringtone',
+            // res/raw/ringtone_telebook.mp3 (expo-notifications plugin `sounds` se copy hota hai) — in-app
+            // ringtone/ringback jaisi hi, taaki har jagah ek hi tune baje.
+            sound: CALL_SOUND,
             vibration: true,
             // notifee reject karta hai agar pattern ka pehla value 0/non-positive ho;
             // in-app vibration (ringtoneModule CALL_VIBE_PATTERN: 0.8s buzz / 1.2s pause) jaisa hi
@@ -174,7 +178,7 @@ export async function displayIncomingCallNotification(data = {}) {
                 autoCancel: false,
                 loopSound: true,
                 // Channel ke sound/vibration ke saath hi (pre-Oreo par channel nahi hota)
-                sound: 'ringtone',
+                sound: CALL_SOUND,
                 vibrationPattern: [1, 800, 1200, 800, 1200, 800, 1200],
                 lightUpScreen: true,
                 smallIcon: 'ic_launcher',
@@ -474,7 +478,25 @@ export function setupForegroundHandler() {
 
         // App foreground mein hai — socket (IncomingCallManager) ring overlay
         // khud dikha deta hai, yahan dobara notification nahi dikhani.
-        if (remoteMessage?.data?.entity === 'call') return;
+        // Par agar socket us pal juda hua hai (reconnect / network switch) to
+        // overlay aayega hi nahi — tab push hi ek-matra raasta hai, isliye
+        // full-screen call notification dikhao (pehle yahan call chup-chaap miss ho jaati thi).
+        if (remoteMessage?.data?.entity === 'call') {
+            const d = remoteMessage.data;
+            if (d.action === 'dismiss') {
+                await cancelIncomingCallNotification(d.entityId);
+            } else if (!socketService.isConnected()) {
+                await displayIncomingCallNotification(d);
+            }
+            return;
+        }
+
+        // Jo chat abhi khuli hai uske message par notification/awaaz nahi (WhatsApp jaisa)
+        try {
+            const { store } = require('../redex/store'); // lazy: import cycle se bachne ke liye
+            const d = remoteMessage?.data;
+            if (d?.entity === 'chat' && d.entityId && store.getState()?.chatList?.activeChatId === String(d.entityId)) return;
+        } catch (e) { /* store tayyar nahi — normal notification dikha do */ }
 
         await showLocalNotification(remoteMessage);
     });

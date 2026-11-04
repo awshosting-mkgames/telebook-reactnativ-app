@@ -15,6 +15,7 @@
  */
 
 import { PermissionsAndroid, Platform } from 'react-native';
+import { startCallForeground, stopCallForeground } from './callForeground';
 import createAgoraRtcEngine, {
     ChannelProfileType,
     ClientRoleType,
@@ -71,6 +72,8 @@ class CallService {
     joinChannel({ token, channel, uid, isVideo }) {
         if (!this._engine) return;
         this._isVideo = !!isVideo;
+        // App background me jaye to bhi mic/camera chalte rahein (foreground service)
+        startCallForeground({ isVideo: !!isVideo });
         this._joinedChannel = channel;
         if (isVideo) {
             this._engine.enableVideo();
@@ -101,6 +104,7 @@ class CallService {
 
     leaveChannel() {
         this._joinedChannel = null;
+        stopCallForeground();
         if (!this._engine) return;
         try {
             this._engine.leaveChannel();
@@ -113,6 +117,7 @@ class CallService {
     // Poora teardown — in-call screen unmount par. leaveChannel() alag hai
     // taaki "retry same call" jaisi situation mein dobara init na karna pade.
     release() {
+        stopCallForeground();
         if (!this._engine) return;
         try {
             if (this._handler) this._engine.unregisterEventHandler(this._handler);

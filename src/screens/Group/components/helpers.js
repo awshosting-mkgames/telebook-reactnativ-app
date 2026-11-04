@@ -1,5 +1,7 @@
 import Config from '../../../services/config';
-export const BASE_URL = Config.Main_url;
+// Server files /media/<key> par chalti hain (Chat / Profile jaisa) — pehle Main_url lagta tha, isliye Group Info me
+// group icon, members ki photo aur media thumbnails load nahi hote the.
+export const BASE_URL = Config.MEDIA_URL;
 
 export const getImageUrl = (path) => {
     if (!path) return null;

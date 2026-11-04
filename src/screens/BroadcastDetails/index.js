@@ -32,6 +32,7 @@ import { appendFile } from '../../utils/uploadFile';
 import { useNameResolver } from '../../services/nameResolver';
 import GradientFill from '../../components/GradientFill';
 import { useHeaderMetrics } from '../../utils/headerMetrics';
+import { useCallStripHeight } from '../../services/callStripStore';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -73,6 +74,7 @@ export default function BroadcastDetails({ route, navigation }) {
     const isDark = theme.mode !== 'light';
     const insets = useSafeAreaInsets();
     const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
+    const menuTop = useCallStripHeight() + top + 50; // popup menu header ke neeche (call strip ho to uske neeche)
 
     const contacts = useSelector((state) => state.contacts?.contacts ?? []);
     const maniAllData = useSelector((s) => s.totalappData);
@@ -287,19 +289,6 @@ export default function BroadcastDetails({ route, navigation }) {
         { key: 'members', label: 'Recipients', icon: 'people', iconOutline: 'people-outline', count: recipientCount },
     ];
 
-    const confirmDeleteMessage = (item) => {
-        Alert.alert('Delete message?', 'This message will be deleted for everyone.', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Delete', style: 'destructive',
-                onPress: async () => {
-                    await apiService({ method: 'DELETE', endpoint: `broadcasts/messages/${item._id}` });
-                    setMessages(prev => prev.filter(m => m._id !== item._id));
-                },
-            },
-        ]);
-    };
-
     const renderMessage = ({ item }) => {
         const delivered = item.totalRecipients ?? recipientCount;
         return (
@@ -310,7 +299,6 @@ export default function BroadcastDetails({ route, navigation }) {
                     messageId: item._id,
                     content: item.content,
                 })}
-                onLongPress={() => confirmDeleteMessage(item)}
             >
                 {item.messageType === 'image' && item.attachments?.map((a, i) => (
                     <Image key={i} source={{ uri: Config.MEDIA_URL + a.url }} style={styles.msgImg} />
@@ -566,7 +554,7 @@ export default function BroadcastDetails({ route, navigation }) {
 
             {/* OPTIONS — header ke neeche right corner me, Chat screen jaisa */}
             <Modal statusBarTranslucent visible={showOptions} transparent animationType="fade" onRequestClose={() => setShowOptions(false)}>
-                <Pressable style={styles.menuOverlay} onPress={() => setShowOptions(false)}>
+                <Pressable style={[styles.menuOverlay, { paddingTop: menuTop }]} onPress={() => setShowOptions(false)}>
                     <View style={[styles.menuBox, { backgroundColor: colors.cardBg }]}>
                         <TouchableOpacity
                             style={styles.menuItem}

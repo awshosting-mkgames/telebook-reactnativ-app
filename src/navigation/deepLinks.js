@@ -11,6 +11,8 @@ import { navigationRef } from './RootNavigation';
 export const APP_LINK_HOST = 'telebookservices.com';
 const LEGACY_LINK_HOST = 'telebook.app';
 export const APP_LINK_SCHEME = 'telebook';
+// App download page — dusre ke profile ki jagah yahi link share hota hai
+export const APP_DOWNLOAD_URL = `https://${APP_LINK_HOST}/download`;
 
 // Links: https://telebook.app/u/<code>, https://telebook.app/c/<slug>,
 //        telebook://u/<code>, telebook://c/<slug>

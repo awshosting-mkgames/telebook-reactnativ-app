@@ -23,6 +23,7 @@ import Toast from 'react-native-toast-message';
 import Clipboard from '@react-native-clipboard/clipboard';
 import apiService from '../../services/apiService';
 import { APP_LINK_HOST } from '../../navigation/deepLinks';
+import { getLinkBase } from '../../services/systemConfig';
 import { useDispatch, useSelector } from 'react-redux';
 import { ThemeContext } from '../../components/ThemeContext';
 import GradientFill from '../../components/GradientFill';
@@ -153,7 +154,7 @@ const ProfileScreen = ({ navigation }) => {
         (async () => {
             const res = await apiService({ method: 'GET', endpoint: 'users/invite-code' });
             const code = res?.data?.inviteCode;
-            if (alive && res?.success && code) setInviteLink(res.data.inviteLink || `https://${APP_LINK_HOST}/u/${code}`);
+            if (alive && res?.success && code) setInviteLink(res.data.inviteLink || `${getLinkBase('profile', `https://${APP_LINK_HOST}/u`)}/${code}`);
         })();
         return () => { alive = false; };
     }, []);
