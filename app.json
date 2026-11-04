@@ -181,7 +181,7 @@
           "recordAudioAndroid": true
         }
       ],
-      ["expo-notifications", { "defaultChannel": "msgs_default", "sounds": ["./assets/sounds/ringtone_telebook.mp3"] }],
+      ["expo-notifications", { "sounds": ["./assets/sounds/ringtone_telebook.mp3"] }],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "@react-native-firebase/messaging",
