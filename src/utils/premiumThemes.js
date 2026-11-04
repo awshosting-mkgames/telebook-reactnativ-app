@@ -5,7 +5,6 @@
 // accent  : spec ka accent colour — active pill, filter chip background, highlights.
 // main    : accent ka gehra (contrast-safe) roop — icon/text/FAB, jo safed background par
 //           bhi saaf dikhe (jaise Rose Gold ka #FFC1D5 safed par nahi dikhta).
-import { DarkTheme } from './theme';
 
 export const PREMIUM_THEMES = {
     'royal-sapphire': { key: 'royal-sapphire', name: 'Royal Sapphire', emoji: '🔵', gradient: ['#1565C0', '#00B4DB'], accent: '#00C6FF', main: '#0A84D0', bubble: '#D9F0FF', background: '#F5FAFF' },
@@ -20,20 +19,51 @@ export const PREMIUM_THEME_LIST = Object.values(PREMIUM_THEMES);
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const ok = (c) => typeof c === 'string' && HEX.test(c.trim());
 
-/** Backend theme object ({id, accent, colors:{gradientStart,...}}) ko local defaults ke upar merge karta hai */
+const hexToRgb = (hex) => {
+    const h = (hex || '#000').replace('#', '');
+    const f = h.length === 3 ? h.split('').map((x) => x + x).join('') : h;
+    return [0, 2, 4].map((i) => parseInt(f.slice(i, i + 2), 16));
+};
+const rgbToHex = (rgb) => '#' + rgb.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+/** a ko b ki taraf t (0..1) khiskao */
+export const mixHex = (a, b, t) => { const x = hexToRgb(a); const y = hexToRgb(b); return rgbToHex(x.map((v, i) => v + (y[i] - v) * t)); };
+const lum = (hex) => {
+    const [r, g, b] = hexToRgb(hex).map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a, b) => { const x = lum(a) + 0.05; const y = lum(b) + 0.05; return x > y ? x / y : y / x; };
+/** color ko tab tak gehra/halka karo jab tak `bg` par kam se kam `min` contrast na aa jaye (hue wahi rehta hai) */
+export const ensureContrast = (color, bg, min = 3) => {
+    const toward = lum(bg) > 0.5 ? '#000000' : '#FFFFFF';
+    let c = color;
+    for (let i = 0; i < 20 && contrast(c, bg) < min; i++) c = mixHex(c, toward, 0.1);
+    return c;
+};
+
+/**
+ * Backend theme object ({id, accent, colors:{gradientStart,gradientEnd,...}}) ko local defaults ke upar merge karta hai.
+ * Admin ko sirf 2 colour dene hote hain (gradientStart/gradientEnd). Gradient badle (ya naya key ho) to accent, main aur
+ * bubble in 2 colours se khud nikalte hain — admin ko baaki colour nahi bharne. Background yahan kabhi nahi aata
+ * (wo light/dark mode se tay hota hai).
+ */
 export const resolvePremiumTheme = (key, remote) => {
     const base = PREMIUM_THEMES[key];
-    if (!base) return null;
     const c = remote?.colors || {};
+    const hasGrad = ok(c.gradientStart) && ok(c.gradientEnd);
+    if (!base && !hasGrad) return null;
     const start = ok(c.gradientStart) ? c.gradientStart : base.gradient[0];
     const end = ok(c.gradientEnd) ? c.gradientEnd : base.gradient[1];
-    const accent = ok(remote?.accent) ? remote.accent : base.accent;
+    const same = base && start.toLowerCase() === base.gradient[0].toLowerCase() && end.toLowerCase() === base.gradient[1].toLowerCase();
+    if (same) {
+        return { ...base, gradient: [start, end], accent: ok(remote?.accent) ? remote.accent : base.accent, bubble: ok(c.bubble) ? c.bubble : base.bubble };
+    }
     return {
-        ...base,
+        key, name: remote?.name || base?.name || key, emoji: base?.emoji || '🎨',
         gradient: [start, end],
-        accent,
-        bubble: ok(c.bubble) ? c.bubble : base.bubble,
-        background: ok(c.background) ? c.background : base.background,
+        accent: end,
+        main: end,
+        bubble: ok(c.bubble) ? c.bubble : mixHex(end, '#FFFFFF', 0.82),
+        background: '#FFFFFF',
     };
 };
 
@@ -47,30 +77,30 @@ export const readableOn = (hex) => {
 };
 
 /**
- * Base (light/dark) theme ke upar premium theme laga do. Dark mode me background/bubble
- * dark hi rehte hain; gradient + accent dono modes me lagte hain.
+ * Base (light/dark) theme ke upar premium theme laga do.
+ * Rule: light/dark MODE hi background, text, card, input, chat-background tay karta hai.
+ * Premium/admin theme sirf "accent" cheezein badalti hai: header gradient, button, selected/active
+ * option, FAB, icon (main/accent) aur apne bhejhe message ka bubble. Isliye background/card/text
+ * yahan kabhi override nahi hote (Obsidian Gold bhi ab light mode me light rehta hai).
  */
 export const applyPremiumTheme = (base, p) => {
     if (!p) return base;
-    // Obsidian Gold jaisi dark premium theme: light mode me bhi poora dark UI
-    const forceDark = !!p.dark && base.mode === 'light';
-    const b = forceDark ? { ...DarkTheme, ChatBackimage: DarkTheme.ChatBackimage } : base;
-    const light = b.mode === 'light';
+    const light = base.mode === 'light';
+    const mainFor = ensureContrast(p.main, light ? '#FFFFFF' : '#000000', light ? 3 : 4.5);
     return {
-        ...b,
+        ...base,
         premiumKey: p.key,
         gradient: p.gradient,
         accent: p.accent,
         accentText: readableOn(p.accent),
-        main: p.main,
-        maincolor: p.main,
+        // main ko mode ke background par readable bana do (light me chamakdar yellow/gold/pastel gehra ho jata hai,
+        // dark me bahut gehra halka). Isse har theme dono modes me chalti hai.
+        main: mainFor,
+        maincolor: mainFor,
         header: p.gradient[0],
         headerText: '#FFFFFF',
-        batchColor: light ? p.bubble : b.batchColor,
-        bubbleMine: p.dark ? p.bubble : (light ? p.bubble : b.bubbleMine),
+        batchColor: light ? p.bubble : base.batchColor,
+        bubbleMine: p.dark ? p.bubble : (light ? p.bubble : base.bubbleMine),
         bubbleMineText: p.dark ? '#1A1405' : undefined,
-        chatTint: light ? p.background : undefined,
-        ...(light ? { background: p.background, freeChatmess: p.bubble } : {}),
-        ...(p.dark ? { background: p.background, inputBackground: '#1B2029', freeChatmess: '#161B24' } : {}),
     };
 };

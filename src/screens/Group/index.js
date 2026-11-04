@@ -37,7 +37,7 @@ export default function GroupScreen({ navigation, route }) {
     const { top, height } = useHeaderMetrics(); // standard header: status bar + 60
     const headerBg = theme.header || theme.main || '#3498db';
     const dark = theme.mode === 'dark';
-    const pageBg = dark ? '#0b0b0b' : (theme.chatTint || '#F1F3F8');
+    const pageBg = dark ? '#0b0b0b' : '#F1F3F8';
     const cardBg = dark ? '#1a1a1a' : '#FFFFFF';
 
     const maniAllData = useSelector((state) => state.totalappData);

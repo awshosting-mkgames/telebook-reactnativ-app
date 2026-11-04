@@ -102,7 +102,7 @@ export default function ThemeSelect({ navigation }) {
     };
 
     // Sirf wahi themes jinka gradient app ko aata hai, backend ke sortOrder me
-    const remote = (info?.themes || []).filter((t) => PREMIUM_THEMES[t.id]);
+    const remote = (info?.themes || []).filter((t) => resolvePremiumTheme(t.id, t));
 
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>

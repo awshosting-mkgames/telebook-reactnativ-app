@@ -34,7 +34,9 @@ export const ThemeProvider = ({ children }) => {
                 setFontSizeState(savedFont);
             }
             const savedPremium = await AsyncStorage.getItem('APP_PREMIUM_THEME');
-            if (savedPremium && resolvePremiumTheme(savedPremium)) setPremiumKeyState(savedPremium);
+            const savedRemote = await AsyncStorage.getItem('APP_REMOTE_THEMES');
+            if (savedRemote) { try { setRemoteThemes(JSON.parse(savedRemote)); } catch (e) { /* ignore */ } }
+            if (savedPremium) setPremiumKeyState(savedPremium);   // custom (admin) theme ka data upar cache se aata hai
             const savedTheme = await AsyncStorage.getItem('APP_THEME');
             if (savedTheme === 'dark') {
                 setTheme(DarkTheme);
@@ -57,7 +59,7 @@ export const ThemeProvider = ({ children }) => {
 
     // Premium gradient theme: null = hata do. Backend save alag se (ThemeSelect screen).
     const setPremiumTheme = async (key) => {
-        const k = key && resolvePremiumTheme(key) ? key : null;
+        const k = key && resolvePremiumTheme(key, remoteThemes[key]) ? key : null;
         setPremiumKeyState(k);
         try {
             if (k) await AsyncStorage.setItem('APP_PREMIUM_THEME', k);
@@ -69,6 +71,7 @@ export const ThemeProvider = ({ children }) => {
         const map = {};
         (list || []).forEach((t) => { if (t?.id) map[t.id] = t; });
         setRemoteThemes(map);
+        AsyncStorage.setItem('APP_REMOTE_THEMES', JSON.stringify(map)).catch(() => {});   // restart par admin-theme turant lage
     };
 
     const toggleTheme = async () => {
