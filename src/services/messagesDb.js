@@ -220,6 +220,21 @@ export const markMessagesDeletedBatch = (chatId, messageIds = [], patch) => seri
     return urls;
 });
 
+/**
+ * Cached message ke kuch fields badlo (edit / call entry ka text). Row nahi hai to kuch nahi (delta-sync wo laayega).
+ * Chat khuli ho ya na ho — socket 'message-edited' par ChatListSocketSync isse chalata hai.
+ */
+export const patchCachedMessage = (chatId, messageId, patch) => serializeDbWrite(async () => {
+    if (!chatId || !messageId || !patch) return false;
+    const db = await getDb();
+    const row = await db.getFirstAsync('SELECT data FROM messages WHERE chat_id = ? AND message_id = ?', [String(chatId), String(messageId)]);
+    const cur = row ? safeParse(row.data) : null;
+    if (!cur) return false;
+    await db.runAsync('UPDATE messages SET data = ?, updated_at = ? WHERE chat_id = ? AND message_id = ?',
+        [JSON.stringify({ ...cur, ...patch }), Date.now(), String(chatId), String(messageId)]);
+    return true;
+});
+
 /** Ek message row hatao (temp/failed row ko jab asli sent message mil jaye, taaki duplicate na bane). */
 export const deleteCachedMessage = (chatId, messageId) => serializeDbWrite(async () => {
     if (!chatId || !messageId) return;

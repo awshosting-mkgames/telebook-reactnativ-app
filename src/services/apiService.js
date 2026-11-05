@@ -11,6 +11,7 @@ const apiService = async ({
     navigation = null,
     onUploadProgress = null,
     timeout = null,
+    signal = null,   // AbortController.signal — upload cancel ke liye
 }) => {
     try {
         const token = await getData('token');
@@ -47,6 +48,7 @@ const apiService = async ({
             // ho sakta hai dheeli network par — explicit timeout isko override karta hai.
             timeout: timeout ?? (isMultipart ? 120000 : undefined),
             ...(onUploadProgress ? { onUploadProgress } : {}),
+            ...(signal ? { signal } : {}),
         });
 
         return { success: true, data: response.data };

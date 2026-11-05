@@ -1,4 +1,4 @@
-import { useCallback, useContext, useState } from 'react';
+import { useCallback, useContext, useRef, useState } from 'react';
 import {
     ActivityIndicator, Alert, BackHandler, FlatList, Image, Modal, Pressable,
     StatusBar, StyleSheet, Text, TouchableOpacity, View,
@@ -12,8 +12,19 @@ import apiService from '../../services/apiService';
 import Config from '../../services/config';
 import { fetchCallsConfig, getCachedCallsConfig } from '../../services/callConfigStore';
 import { startCall } from '../../services/callHelpers';
+import { deleteCallsLocal, loadCalls, upsertCalls } from '../../services/callsDb';
 import { useNameResolver } from '../../services/nameResolver';
 import GradientFill from '../../components/GradientFill';
+import CallDetailsSheet from './CallDetailsSheet';
+
+const FILTERS = [
+    { key: 'all', label: 'All' },
+    { key: 'missed', label: 'Missed' },
+    { key: 'incoming', label: 'Incoming' },
+    { key: 'outgoing', label: 'Outgoing' },
+    { key: 'audio', label: 'Audio' },
+    { key: 'video', label: 'Video' },
+];
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 const toImageUrl = (v) => (!v ? DEFAULT_AVATAR : /^(https?:|file:|data:)/.test(v) ? v : `${Config.MEDIA_URL}${v}`);
@@ -39,6 +50,9 @@ export default function Call({ navigation }) {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
+    const [filter, setFilter] = useState('all');
+    const filterRef = useRef('all');
+    const [detailCall, setDetailCall] = useState(null);
     const [available, setAvailable] = useState(getCachedCallsConfig()?.available ?? null);
 
     // Call history delete: long press -> select mode, Select all, Delete; 3-dots -> Select / Clear call history
@@ -71,6 +85,7 @@ export default function Call({ navigation }) {
         setDeleting(false);
         if (res?.success && res.data?.success !== false) {
             setCalls((prev) => prev.filter((c) => !removeLocal(c)));
+            deleteCallsLocal(payload.all ? null : payload.ids).catch(() => {});
             exitSelect();
             if (payload.all) { setHasMore(false); fetchCalls(1); }
         } else {
@@ -93,17 +108,26 @@ export default function Call({ navigation }) {
         ]);
     };
 
+    // SQL pehle (turant, offline me bhi) → API → SQL → UI
     const fetchCalls = useCallback(async (pageNum = 1) => {
-        if (pageNum === 1) setLoading(true);
+        const f = filterRef.current;
+        if (pageNum === 1) {
+            const cached = await loadCalls(f);
+            if (cached.length) { setCalls(cached); setLoading(false); }
+        }
         try {
-            const res = await apiService({ method: 'GET', endpoint: 'calls', params: { page: pageNum, limit: 20 } });
+            const res = await apiService({ method: 'GET', endpoint: 'calls', params: { page: pageNum, limit: 20, filter: f } });
             if (res?.success && res.data?.success !== false) {
                 const body = res.data?.data ?? {};
                 const rows = body.calls ?? [];
-                setCalls((prev) => (pageNum === 1 ? rows : [...prev, ...rows]));
+                const more = (body.pagination?.page ?? pageNum) < (body.pagination?.pages ?? pageNum);
+                // Reconcile sirf unfiltered page 1 par (filtered list poori history nahi hoti)
+                await upsertCalls(rows, { reconcile: pageNum === 1 && f === 'all', hasMore: more });
+                setCalls((prev) => (pageNum === 1 ? rows : [...prev, ...rows.filter((r) => !prev.some((p) => p._id === r._id))]));
                 setPage(pageNum);
-                setHasMore((body.pagination?.page ?? pageNum) < (body.pagination?.pages ?? pageNum));
+                setHasMore(more);
             }
+            // API fail (offline) → jo cache dikh raha hai wahi rehne do
         } catch (e) {
             console.error('fetchCalls:', e);
         } finally {
@@ -121,6 +145,15 @@ export default function Call({ navigation }) {
             fetchCalls(1);
         }, [fetchCalls])
     );
+
+    const changeFilter = (key) => {
+        if (key === filterRef.current) return;
+        filterRef.current = key;
+        setFilter(key);
+        exitSelect();
+        setCalls([]);
+        fetchCalls(1);
+    };
 
     const loadMore = () => {
         if (loadingMore || !hasMore) return;
@@ -147,7 +180,7 @@ export default function Call({ navigation }) {
         return (
             <TouchableOpacity
                 style={[styles.row, selectMode && selected.has(item._id) && { backgroundColor: 'rgba(18,150,243,0.12)' }]}
-                onPress={() => (selectMode ? toggleSelect(item._id) : recall(item))}
+                onPress={() => (selectMode ? toggleSelect(item._id) : setDetailCall(item))}
                 onLongPress={() => { if (!selectMode) { setSelectMode(true); setSelected(new Set([item._id])); } else toggleSelect(item._id); }}
                 delayLongPress={300}
                 activeOpacity={0.7}
@@ -185,9 +218,9 @@ export default function Call({ navigation }) {
                     </View>
                 </View>
                 {!selectMode && (
-                    <View style={[styles.callBtn, { backgroundColor: isMissed ? '#e53935' : '#2ecc71' }]}>
+                    <TouchableOpacity hitSlop={8} onPress={() => recall(item)} style={[styles.callBtn, { backgroundColor: isMissed ? '#e53935' : '#2ecc71' }]}>
                         <Ionicons name={isVideo ? 'videocam' : 'call'} size={15} color="#fff" />
-                    </View>
+                    </TouchableOpacity>
                 )}
             </TouchableOpacity>
         );
@@ -239,6 +272,32 @@ export default function Call({ navigation }) {
                 </Pressable>
             </Modal>
 
+            {available !== false && (
+                <View style={styles.filterBar}>
+                    <FlatList
+                        horizontal
+                        data={FILTERS}
+                        keyExtractor={(f) => f.key}
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}
+                        renderItem={({ item: f }) => {
+                            const on = filter === f.key;
+                            return (
+                                <TouchableOpacity
+                                    onPress={() => changeFilter(f.key)}
+                                    activeOpacity={0.7}
+                                    style={[styles.filterChip, on
+                                        ? { backgroundColor: theme.main, borderColor: theme.main }
+                                        : { borderColor: theme?.mode === 'dark' ? '#3a474f' : '#d5d9dd' }]}
+                                >
+                                    <Text style={[styles.filterText, { color: on ? '#fff' : theme.text }]}>{f.label}</Text>
+                                </TouchableOpacity>
+                            );
+                        }}
+                    />
+                </View>
+            )}
+
             {available === false ? (
                 <View style={styles.emptyWrap}>
                     <Ionicons name="call-outline" size={56} color="#ccc" />
@@ -261,12 +320,13 @@ export default function Call({ navigation }) {
                     ListEmptyComponent={
                         <View style={styles.emptyWrap}>
                             <Ionicons name="call-outline" size={56} color="#ccc" />
-                            <Text style={styles.emptyTitle}>No calls yet</Text>
-                            <Text style={styles.emptySub}>Start a voice or video call from any chat</Text>
+                            <Text style={styles.emptyTitle}>{filter === 'all' ? 'No calls yet' : 'No calls in this list'}</Text>
+                            <Text style={styles.emptySub}>{filter === 'all' ? 'Start a voice or video call from any chat' : 'Try another filter'}</Text>
                         </View>
                     }
                 />
             )}
+            {!!detailCall && <CallDetailsSheet call={detailCall} onClose={() => setDetailCall(null)} navigation={navigation} />}
         </View>
     );
 }
@@ -280,6 +340,9 @@ const styles = StyleSheet.create({
     },
     headerTitle: { color: '#fff', fontSize: 20, fontWeight: '700' },
     hdrBtn: { paddingHorizontal: 8, paddingVertical: 6 },
+    filterBar: { paddingVertical: 8 },
+    filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
+    filterText: { fontSize: 13, fontWeight: '500' },
     menuOverlay: { flex: 1 },
     menuBox: { position: 'absolute', right: 10, borderRadius: 12, paddingVertical: 6, minWidth: 190, elevation: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8 },
     menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16 },

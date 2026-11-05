@@ -30,8 +30,11 @@ import { syncAllTabData } from '../../services/chatSync';
 import { clearChatsDb } from '../../services/chatsDb';
 import { clearMediaCache } from '../../utils/mediaCache';
 import Config from '../../services/config';
+import { getCallRingtone, pickCallRingtone, resetCallRingtone } from '../../services/callRingtone';
 import { logoutUser } from '../../services/Logoutcall';
 import { clearMessagesDb } from '../../services/messagesDb';
+import { clearStatusDb } from '../../services/statusDb';
+import { clearCallsDb } from '../../services/callsDb';
 import {
     fetchNotificationSettings,
     fetchPrivacy,
@@ -66,7 +69,7 @@ const PRIVACY_OPTIONS = [
     { value: 'contacts', label: 'My contacts' },
     { value: 'nobody', label: 'Nobody' },
 ];
-const privacyLabel = (v) => PRIVACY_OPTIONS.find((o) => o.value === v)?.label ?? 'Everyone';
+const privacyLabel = (v) => (v === 'only' ? 'Only share with…' : PRIVACY_OPTIONS.find((o) => o.value === v)?.label ?? 'Everyone');
 
 // API doc 6.2 — ye keys push par asar karti hain
 const NOTIF_FIELDS = [
@@ -137,6 +140,28 @@ export default function Settings({ navigation }) {
         selected: isDark ? '#1a2a3a' : '#ebf5ff',
     };
 
+    // Call ringtone (Android): user apni ringtone chun sake
+    const [ringtoneTitle, setRingtoneTitle] = useState(null);
+    useEffect(() => { getCallRingtone().then((r) => setRingtoneTitle(r?.title || null)).catch(() => {}); }, []);
+    const chooseRingtone = async () => {
+        try {
+            const r = await pickCallRingtone();
+            if (r) { setRingtoneTitle(r.title); Toast.show({ type: 'success', text1: 'Call ringtone updated' }); }
+        } catch (e) {
+            Alert.alert('Not available', e?.message === 'NOT_SUPPORTED'
+                ? 'Please update the app to change the call ringtone.'
+                : 'Could not open the ringtone list. Please try again.');
+        }
+    };
+    const onRingtonePress = () => {
+        if (!ringtoneTitle) { chooseRingtone(); return; }
+        Alert.alert('Call ringtone', ringtoneTitle, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Use Telebook default', onPress: async () => { await resetCallRingtone(); setRingtoneTitle(null); } },
+            { text: 'Change', onPress: chooseRingtone },
+        ]);
+    };
+
     const [sheet, setSheet] = useState(null); // 'theme' | 'lang' | 'privacy' | 'notif' | 'logout'
     const [selectedLang, setSelectedLang] = useState(i18n.language || maniAllData?.lang || 'en');
     const [privacy, setPrivacy] = useState(user.privacySettings ?? null);
@@ -202,6 +227,8 @@ export default function Settings({ navigation }) {
             if (CLEAR_ALL_SCOPE !== 'calls') {
                 await clearChatsDb();
                 await clearMessagesDb();
+                await clearStatusDb();
+                await clearCallsDb();
                 await clearMediaCache();
                 dispatch(clearChatList());
                 if (user?._id) await syncAllTabData(dispatch, user._id);
@@ -266,6 +293,9 @@ export default function Settings({ navigation }) {
 
                 <Section label="APP" colors={colors}>
                     <Item icon={isDark ? 'moon-outline' : 'sunny-outline'} color="#e67e22" title="Theme" subtitle={theme?.premiumKey ? 'Premium gradient' : (isDark ? 'Dark' : 'Light')} onPress={() => navigation.navigate('ThemeSelect')} colors={colors} />
+                    {Platform.OS === 'android' && (
+                        <Item icon="musical-notes-outline" color="#e74c3c" title="Call ringtone" subtitle={ringtoneTitle || 'Telebook default'} onPress={onRingtonePress} colors={colors} />
+                    )}
                     <Item icon="text-outline" color="#2c3e50" title="Font size" subtitle={({ small: 'Small', medium: 'Medium', large: 'Large' })[fontSize] || 'Medium'} onPress={() => setSheet('font')} colors={colors} />
                     <Item icon="globe-outline" color="#1abc9c" title={t('Language')} subtitle={currentLangLabel} onPress={() => setSheet('lang')} colors={colors} />
                     <Item icon="megaphone-outline" color="#27ae60" title="Broadcast Lists" subtitle="Send one message to many" onPress={() => navigation.navigate('MyBroadcastList')} colors={colors} />
@@ -364,7 +394,7 @@ export default function Settings({ navigation }) {
                     <>
                         <Text style={[styles.popupNote, { color: colors.sub }]}>Choose who can see your details.</Text>
                         {PRIVACY_FIELDS.map((f) => (
-                            <TouchableOpacity key={f.key} style={styles.optionRow} onPress={() => setPrivacyPick(f.key)}>
+                            <TouchableOpacity key={f.key} style={styles.optionRow} onPress={() => (f.key === 'status' ? (close(), navigation.navigate('StatusPrivacy')) : setPrivacyPick(f.key))}>
                                 <Ionicons name={f.icon} size={20} color={theme.main} style={{ marginRight: 12 }} />
                                 <View style={{ flex: 1 }}>
                                     <Text style={[styles.optionLabel, { color: colors.txt }]}>{f.label}</Text>

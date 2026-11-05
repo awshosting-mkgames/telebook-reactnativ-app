@@ -41,7 +41,7 @@ const waitForNav = async (tries = 20) => {
     return false;
 };
 
-const openUserChat = async (code) => {
+const openUserProfile = async (code) => {
     const res = await apiService({ method: 'GET', endpoint: `users/invite/${encodeURIComponent(code)}` });
     const user = res?.data?.user;
     if (!res?.success || !user?._id) return notAvailable();
@@ -56,13 +56,8 @@ const openUserChat = async (code) => {
     const chat = chatRes?.data?.chat;
     if (!chatRes?.success || !chat?._id) return notAvailable();
     const other = (chat.users || []).find((u) => u?._id !== myId) || user;
-    navigationRef.navigate('Chat', {
-        chatId: chat._id,
-        chatName: other?.name || other?.mobile || user?.name || user?.mobile || 'User',
-        chatImage: other?.profilePicture,
-        isGroup: false,
-        otherUserId: user._id,
-    });
+    // Profile link = seedha us user ki profile details (chat nahi). Wahan "Message" button se chat khulti hai.
+    navigationRef.navigate('ChatUserDetailScreen', { chatId: chat._id, fromLink: true });
 };
 
 // Channel link silently join nahi karta: pehle user se poochte hain, haan par hi join + open.
@@ -95,7 +90,7 @@ export const handleDeepLink = async (url) => {
     busy = true;
     try {
         if (!(await waitForNav())) return;
-        if (link.type === 'u') await openUserChat(link.value);
+        if (link.type === 'u') await openUserProfile(link.value);
         else await openChannel(link.value);
     } catch (e) {
         notAvailable();

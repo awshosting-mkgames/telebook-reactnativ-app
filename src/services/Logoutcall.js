@@ -9,6 +9,8 @@ import { clearChatsDb } from './chatsDb';
 import { clearContactsDb } from './contactsDb';
 import { getDeviceId } from './deviceId';
 import { clearMessagesDb } from './messagesDb';
+import { clearStatusDb } from './statusDb';
+import { clearCallsDb } from './callsDb';
 import { clearMemoryMessages } from './messageSync';
 import { saveData } from './staticStorage';
 
@@ -46,6 +48,8 @@ export const logoutUser = async (_navigation, dispatch) => {
         await withTimeout(clearChatsDb());
         clearMemoryMessages();
         await withTimeout(clearMessagesDb());
+        await withTimeout(clearStatusDb());   // status cache + pending views/reactions
+        await withTimeout(clearCallsDb());
     } finally {
         dispatch(clearContacts());
         dispatch(clearChatList());

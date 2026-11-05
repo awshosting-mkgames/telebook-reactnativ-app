@@ -18,6 +18,8 @@ import IncomingCallManager from './components/IncomingCallManager';
 import ActiveCallBar from './components/ActiveCallBar';
 import SuspensionGate from './components/SuspensionGate';
 import CallConfigLoader from './components/CallConfigLoader';
+import CallReadinessPrompt from './components/CallReadinessPrompt';
+import StatusSyncManager from './components/StatusSyncManager';
 import { contactSync, loadContactsFromDb } from './services/contactSync';
 import { getLastSyncedAt } from './services/contactsDb';
 import { initChatTabs } from './services/chatSync';
@@ -267,6 +269,8 @@ export default function App() {
                         <ChatTabsLoader />
                         <CallConfigLoader />
                         <IncomingCallManager />
+                        <CallReadinessPrompt />
+                        <StatusSyncManager />
                         <CallStripFrame><AppNavigator /></CallStripFrame>
                         <ActiveCallBar />
                         <SuspensionGate />

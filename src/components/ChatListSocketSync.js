@@ -5,6 +5,7 @@ import { updateChatLastMessage } from '../redex/slices/chatListSlice';
 import { persistChatTabs, processChat, syncAllTabData } from '../services/chatSync';
 import socketService from '../services/socketService';
 import { markMessagesDeleted } from '../services/messageSync';
+import { patchCachedMessage } from '../services/messagesDb';
 
 // Chat list ka socket listener app ke root par (src/index.js), kisi screen par nahi.
 // Pehle ye Freechat screen me tha — Chats tab mount na ho (lazy tab) to list update
@@ -69,6 +70,17 @@ const ChatListSocketSync = () => {
         const GROUP_EVENTS = ['added-to-group', 'removed-from-group', 'group-updated'];
 
         socketService.on('message-received', handleNewMessage);
+        // Call entry ("Calling..." → "Audio call · 10 min") badli to chat list ka preview taaza karo
+        // Edit / call entry update: SQL cache me turant patch (chat khuli na ho tab bhi), chat-list preview taaza
+        const handleEdited = (p) => {
+            if (!p?.messageId || !p?.chatId) return;
+            const patch = p.callInfo
+                ? { content: p.newContent, callInfo: p.callInfo }
+                : { content: p.newContent, isEdited: true, editedAt: p.editedAt };
+            patchCachedMessage(p.chatId, p.messageId, patch).catch(() => {});
+            scheduleBackgroundSync();
+        };
+        socketService.on('message-edited', handleEdited);
         socketService.on('messages-deleted', handleDeleted);
         socketService.on('message-deleted', handleDeleted);
         GROUP_EVENTS.forEach((event) => socketService.on(event, scheduleBackgroundSync));
@@ -83,6 +95,7 @@ const ChatListSocketSync = () => {
             if (timer) clearTimeout(timer);
             appStateSub.remove();
             socketService.off('message-received', handleNewMessage);
+            socketService.off('message-edited', handleEdited);
             socketService.off('messages-deleted', handleDeleted);
             socketService.off('message-deleted', handleDeleted);
             GROUP_EVENTS.forEach((event) => socketService.off(event, scheduleBackgroundSync));

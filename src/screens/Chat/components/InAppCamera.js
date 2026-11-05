@@ -4,6 +4,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../../components/ThemeContext';
+import { getActiveCall } from '../../../services/activeCallStore';
 
 const FLASH_ORDER = ['off', 'on', 'auto'];
 const FLASH_ICON = { off: 'flash-off', on: 'flash', auto: 'flash-outline' };
@@ -30,14 +31,32 @@ export default function InAppCamera({ visible, onClose, onCaptured, onOpenGaller
     const [secs, setSecs] = useState(0);
     const [busy, setBusy] = useState(false);
     const [ready, setReady] = useState(false);
+    // CameraView ko Modal ki slide-animation khatam hone ke BAAD mount karte hain, aur ready na ho to retry.
+    // Modal ke saath hi mount hone par Android (New Architecture + edge-to-edge) par surface black reh jaati hai.
+    const [mountCam, setMountCam] = useState(false);
+    const [camKey, setCamKey] = useState(0);
+    const [stuck, setStuck] = useState(false);
+    const callBusy = !!getActiveCall();   // chalti call camera/mic pakde hoti hai
 
     useEffect(() => {
         if (visible && camPerm && !camPerm.granted && camPerm.canAskAgain) requestCam();
     }, [visible, camPerm]);
     useEffect(() => {
-        if (visible) { setMode('picture'); setRecording(false); setSecs(0); setReady(false); }
+        if (visible) { setMode('picture'); setRecording(false); setSecs(0); setReady(false); setStuck(false); }
         return () => clearInterval(timerRef.current);
     }, [visible]);
+    useEffect(() => {
+        if (!visible) { setMountCam(false); return undefined; }
+        const t = setTimeout(() => setMountCam(true), 400);
+        return () => clearTimeout(t);
+    }, [visible]);
+    // Camera 4 sec me ready na ho to "Retry" dikhao (CameraView ko dobara mount karta hai)
+    useEffect(() => {
+        if (!visible || !mountCam || ready) return undefined;
+        const t = setTimeout(() => setStuck(true), 4000);
+        return () => clearTimeout(t);
+    }, [visible, mountCam, ready, camKey]);
+    const retryCamera = () => { setReady(false); setStuck(false); setMountCam(false); setCamKey((k) => k + 1); setTimeout(() => setMountCam(true), 250); };
 
     const switchMode = async (m) => {
         if (recording) return;
@@ -83,15 +102,42 @@ export default function InAppCamera({ visible, onClose, onCaptured, onOpenGaller
                 </View>
             );
         }
+        if (callBusy) {
+            return (
+                <View style={[styles.fill, styles.center]}>
+                    <Ionicons name="call-outline" size={44} color="#fff" />
+                    <Text style={styles.permText}>Camera is in use by your call</Text>
+                    <Text style={[styles.permText, { fontSize: 13, opacity: 0.7 }]}>End the call to take a photo</Text>
+                </View>
+            );
+        }
         return (
-            <CameraView
-                ref={camRef}
-                style={styles.fill}
-                facing={facing}
-                flash={flash}
-                mode={mode}
-                onCameraReady={() => setReady(true)}
-            />
+            <>
+                {mountCam && (
+                    <CameraView
+                        key={camKey}
+                        ref={camRef}
+                        style={styles.fill}
+                        facing={facing}
+                        flash={flash}
+                        mode={mode}
+                        onCameraReady={() => setReady(true)}
+                        onMountError={() => setStuck(true)}
+                    />
+                )}
+                {!ready && (
+                    <View style={[styles.fill, styles.center]} pointerEvents="box-none">
+                        {stuck ? (
+                            <>
+                                <Text style={styles.permText}>Camera did not start</Text>
+                                <TouchableOpacity style={[styles.permBtn, { backgroundColor: theme?.main ?? '#1296f3' }]} onPress={retryCamera}>
+                                    <Text style={styles.permBtnText}>Retry</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : <ActivityIndicator color="#fff" size="large" />}
+                    </View>
+                )}
+            </>
         );
     };
 

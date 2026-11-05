@@ -10,6 +10,7 @@
 
 import { NativeModules, Platform, Vibration } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { getCallRingtone } from './callRingtone';
 
 const { RingtoneModule } = NativeModules;
 const RING_ASSET = require('../../assets/sounds/ringtone_telebook.mp3');
@@ -31,7 +32,14 @@ const playJs = async () => {
     try {
         await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false, shouldPlayInBackground: false });
         if (!ringing) return; // await ke beech stop aa gaya
-        jsPlayer = createAudioPlayer(RING_ASSET);
+        // User ki chuni ringtone ho to wahi; player na bana paye to bundled par girna
+        const custom = await getCallRingtone().catch(() => null);
+        if (!ringing) return;
+        try {
+            jsPlayer = createAudioPlayer(custom?.uri ? { uri: custom.uri } : RING_ASSET);
+        } catch (e) {
+            jsPlayer = createAudioPlayer(RING_ASSET);
+        }
         jsPlayer.loop = true;
         jsPlayer.volume = 1;
         jsPlayer.play();

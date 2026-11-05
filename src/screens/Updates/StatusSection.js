@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -28,298 +29,15 @@ import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
 import { claimPlayback, useExclusivePlayback } from '../../utils/playbackManager';
 import { useNameResolver } from '../../services/nameResolver';
-const STATUS_DURATION = 5000;
-const VIDEO_MAX_SECS = 30;
-const FALLBACK_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-const TEXT_BGS = ['#075e54', '#1296f3', '#6d4c9f', '#c62828', '#ef6c00', '#00897b', '#37474f'];
-
-const toArr = (v) => (Array.isArray(v) ? v : []);
-
-// Server relative path deta hai (uploads/...) — usko media host ke saath jodna hota hai.
-const imgUrl = (p) => {
-    if (!p) return null;
-    if (p.startsWith('http')) return p;
-    return `${Config.MEDIA_URL}${p}`.replace(/([^:])\/\//g, '$1/');
-};
-
-// Server viewedBy me viewers rakhta hai — usi se ring grey/blue decide hota hai.
-const isSeenByMe = (status, myUserId) => {
-    if (!myUserId) return false;
-    if (status?.seen || status?.isViewed) return true;
-    const viewers = toArr(status?.viewedBy ?? status?.viewers ?? status?.views);
-    return viewers.some((v) => String(v?.user?._id ?? v?.user ?? v?._id ?? v) === String(myUserId));
-};
-const fmtTime = (d) => {
-    if (!d) return '';
-    const s = Math.floor((Date.now() - new Date(d)) / 1000);
-    if (s < 60) return 'just now';
-    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-    return `${Math.floor(s / 86400)}d ago`;
-};
-const getMediaType = (status) => {
-    const t = status?.mediaType || '';
-    if (t === 'video') return 'video';
-    if (t === 'image') return 'image';
-    const url = status?.mediaUrl || '';
-    if (/\.(mp4|mov|avi|mkv|webm)$/i.test(url)) return 'video';
-    if (/\.(jpg|jpeg|png|gif|webp)$/i.test(url)) return 'image';
-    return 'text';
-};
-
-// ─── StatusViewer — fullscreen, no theme needed (always dark) ────────────────
-const StatusViewer = ({ visible, groups, startGroupIdx = 0, myUserId, onClose, onDelete, onViewed }) => {
-    const resolveName = useNameResolver();
-    const insets = useSafeAreaInsets();
-    const [groupIdx, setGroupIdx] = useState(startGroupIdx);
-    const [statusIdx, setStatusIdx] = useState(0);
-    const [videoDone, setVideoDone] = useState(false);
-    const progress = useRef(new Animated.Value(0)).current;
-    const anim = useRef(null);
-
-    const currentGroup = groups[groupIdx];
-    const currentStatus = currentGroup?.statuses?.[statusIdx];
-    const totalInGroup = currentGroup?.statuses?.length ?? 0;
-    const isMine = String(currentGroup?.user?._id ?? currentGroup?.user ?? '') === String(myUserId ?? '');
-    const mediaType = getMediaType(currentStatus);
-    const mediaUrl = imgUrl(currentStatus?.mediaUrl);
-    const viewCount = toArr(currentStatus?.viewedBy ?? currentStatus?.viewers).length;
-
-    const player = useVideoPlayer(null, (p) => {
-        p.loop = false;
-        p.timeUpdateEventInterval = 0.5;
-    });
-
-    useExclusivePlayback(player);
-
-    // Video source ko current status ke saath sync rakho
-    useEffect(() => {
-        if (mediaType === 'video' && mediaUrl) {
-            player.replace(mediaUrl);
-        }
-    }, [mediaUrl, mediaType]);
-
-    useEffect(() => {
-        if (!visible) {
-            player.pause();
-            anim.current?.stop();
-            progress.setValue(0);
-        }
-    }, [visible]);
-
-    useEffect(() => {
-        if (!visible || !currentStatus?._id) return;
-        apiService({ method: 'PUT', endpoint: `status/${currentStatus._id}/view` }).catch(() => { });
-        // Parent ko turant batao taaki "Status" list se card "Viewed Status" me
-        // move ho jaye bina pura refetch kiye — backend call fire-and-forget hi rehta hai.
-        onViewed && onViewed(currentStatus._id);
-    }, [visible, currentStatus?._id, onViewed]);
-
-    useEffect(() => {
-        if (visible) { setGroupIdx(startGroupIdx); setStatusIdx(0); }
-        else { anim.current?.stop(); progress.setValue(0); }
-    }, [visible, startGroupIdx]);
-
-    const stopVideo = useCallback(() => {
-        player.pause();
-    }, [player]);
-
-    const goNext = useCallback(() => {
-        anim.current?.stop();
-        stopVideo();
-        if (statusIdx < totalInGroup - 1) setStatusIdx(i => i + 1);
-        else if (groupIdx < groups.length - 1) { setGroupIdx(g => g + 1); setStatusIdx(0); }
-        else onClose();
-    }, [statusIdx, totalInGroup, groupIdx, groups.length, stopVideo]);
-
-    const goPrev = useCallback(() => {
-        anim.current?.stop();
-        stopVideo();
-        if (statusIdx > 0) setStatusIdx(i => i - 1);
-        else if (groupIdx > 0) { setGroupIdx(g => g - 1); setStatusIdx(0); }
-    }, [statusIdx, groupIdx, stopVideo]);
-
-    const startProgress = useCallback((durationMs = STATUS_DURATION) => {
-        progress.setValue(0);
-        anim.current?.stop();
-        anim.current = Animated.timing(progress, {
-            toValue: 1, duration: durationMs, useNativeDriver: false,
-        });
-        anim.current.start(({ finished }) => { if (finished) goNext(); });
-    }, [goNext]);
-
-    // Image/text ke liye timer-based progress; video apna real progress khud track karta hai
-    useEffect(() => {
-        if (!visible) return;
-        setVideoDone(false);
-        anim.current?.stop();
-        progress.setValue(0);
-        if (mediaType === 'image' || mediaType === 'text') {
-            startProgress(STATUS_DURATION);
-        }
-    }, [visible, groupIdx, statusIdx]);
-
-    // Video ready hote hi autoplay karo
-    useEffect(() => {
-        if (mediaType !== 'video' || !mediaUrl) return;
-        const statusSub = player.addListener('statusChange', ({ status }) => {
-            if (status === 'readyToPlay') {
-                claimPlayback(player);
-                player.play();
-            }
-        });
-        return () => statusSub.remove();
-    }, [player, mediaType, mediaUrl]);
-
-    // Video ka real-time progress bar + end par next status
-    useEffect(() => {
-        if (mediaType !== 'video') return;
-        const timeSub = player.addListener('timeUpdate', ({ currentTime }) => {
-            const dur = player.duration || 0;
-            if (dur > 0) progress.setValue(currentTime / dur);
-        });
-        const endSub = player.addListener('playToEnd', () => {
-            if (!videoDone) { setVideoDone(true); progress.setValue(1); setTimeout(goNext, 300); }
-        });
-        return () => {
-            timeSub.remove();
-            endSub.remove();
-        };
-    }, [player, mediaType, videoDone, goNext]);
-
-    const handleDelete = () => {
-        if (!currentStatus?._id) return;
-        Alert.alert('Delete status?', 'This status will be removed for everyone.', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Delete', style: 'destructive',
-                onPress: async () => {
-                    anim.current?.stop();
-                    stopVideo();
-                    const res = await apiService({ method: 'DELETE', endpoint: `status/${currentStatus._id}` });
-                    if (res?.success || res?.data?.success) {
-                        onDelete && onDelete(currentStatus._id);
-                        if (totalInGroup <= 1) {
-                            groupIdx < groups.length - 1
-                                ? (setGroupIdx(g => g + 1), setStatusIdx(0))
-                                : onClose();
-                        } else goNext();
-                    } else {
-                        Alert.alert('Error', 'Could not delete the status');
-                    }
-                },
-            },
-        ]);
-    };
-
-    if (!visible || !currentGroup) return null;
-
-    // status/my me user sirf id hoti hai — isliye apne status par naam fallback
-    const userName = isMine ? 'My Status' : resolveName(currentGroup?.user).title;
-    const avatar = imgUrl(currentGroup?.user?.profilePicture) || FALLBACK_AVATAR;
-
-    return (
-        <Modal visible={visible} transparent={false} animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-            <View style={vs.container}>
-                <View style={vs.progressRow}>
-                    {currentGroup.statuses.map((_, i) => (
-                        <View key={i} style={vs.track}>
-                            <Animated.View style={[vs.fill, {
-                                width: i < statusIdx ? '100%'
-                                    : i === statusIdx
-                                        ? progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
-                                        : '0%',
-                            }]} />
-                        </View>
-                    ))}
-                </View>
-
-                <View style={vs.header}>
-                    <Image source={{ uri: avatar }} style={vs.avatar} />
-                    <View style={{ flex: 1 }}>
-                        <Text style={vs.name}>{userName}</Text>
-                        <Text style={vs.time}>{fmtTime(currentStatus?.createdAt)}</Text>
-                    </View>
-                    {mediaType === 'video' && (
-                        <View style={vs.videoBadge}>
-                            <Ionicons name="videocam" size={12} color="#fff" />
-                            <Text style={vs.videoBadgeText}>Video</Text>
-                        </View>
-                    )}
-                    {isMine && (
-                        <TouchableOpacity onPress={handleDelete} style={vs.iconBtn}>
-                            <Ionicons name="trash-outline" size={22} color="#f90000" />
-                        </TouchableOpacity>
-                    )}
-                    <TouchableOpacity onPress={onClose} style={vs.iconBtn}>
-                        <Ionicons name="close" size={26} color="#fff" />
-                    </TouchableOpacity>
-                </View>
-
-                {mediaType === 'image' && mediaUrl && (
-                    <Image source={{ uri: mediaUrl }} style={vs.media} resizeMode="contain" />
-                )}
-                {mediaType === 'video' && mediaUrl && (
-                    <VideoView
-                        player={player}
-                        style={vs.media}
-                        contentFit="contain"
-                        nativeControls={false}
-                    />
-                )}
-                {mediaType === 'text' && (
-                    <View style={[vs.media, vs.textBg, { backgroundColor: currentStatus?.backgroundColor || '#075e54' }]}>
-                        <Text style={vs.statusText}>{currentStatus?.content || ''}</Text>
-                    </View>
-                )}
-                {/* Caption + (apne status par) views count — server viewedBy rakhta hai */}
-                {((!!currentStatus?.content && mediaType !== 'text') || isMine) && (
-                    <View style={[vs.bottomBar, { paddingBottom: 16 + insets.bottom }]}>
-                        {!!currentStatus?.content && mediaType !== 'text' && (
-                            <Text style={vs.caption}>{currentStatus.content}</Text>
-                        )}
-                        {isMine && (
-                            <View style={vs.viewsRow}>
-                                <Ionicons name="eye-outline" size={15} color="rgba(255,255,255,0.9)" />
-                                <Text style={vs.viewsText}>
-                                    {viewCount} {viewCount === 1 ? 'view' : 'views'}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                )}
-                <View style={vs.tapRow} pointerEvents="box-none">
-                    <Pressable style={vs.tapHalf} onPress={goPrev} />
-                    <Pressable style={vs.tapHalf} onPress={goNext} />
-                </View>
-            </View>
-        </Modal>
-    );
-};
-
-const vs = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#000' },
-    progressRow: { flexDirection: 'row', gap: 4, paddingHorizontal: 8, paddingTop: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight || 24) + 8, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
-    track: { flex: 1, height: 3, backgroundColor: 'rgba(255,255,255,0.35)', borderRadius: 2, overflow: 'hidden' },
-    fill: { height: '100%', backgroundColor: '#fff', borderRadius: 2 },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingTop: Platform.OS === 'ios' ? 66 : (StatusBar.currentHeight || 24) + 20, paddingBottom: 10, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
-    avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#fff' },
-    name: { color: '#fff', fontWeight: '700', fontSize: 15 },
-    time: { color: 'rgba(255,255,255,0.7)', fontSize: 12 },
-    iconBtn: { padding: 6, marginLeft: 4 },
-    videoBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
-    videoBadgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
-    media: { flex: 1, width: '100%' },
-    textBg: { justifyContent: 'center', alignItems: 'center', padding: 32 },
-    statusText: { color: '#fff', fontSize: 26, fontWeight: '700', textAlign: 'center', lineHeight: 36 },
-    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingTop: 12, paddingBottom: Platform.OS === 'ios' ? 28 : 16, backgroundColor: 'rgba(0,0,0,0.45)', gap: 8, zIndex: 6 },
-    caption: { color: '#fff', fontSize: 14 },
-    viewsRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    viewsText: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '600' },
-    tapRow: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', zIndex: 5 },
-    tapHalf: { flex: 1, height: '100%' },
-});
-
+import socketService from '../../services/socketService';
+import { deleteStatusLocal, setOwnerMutedLocal } from '../../services/statusDb';
+import { fetchRemote, flushPending, loadLocal } from '../../services/statusSync';
+import {
+    FALLBACK_AVATAR, STATUS_DURATION, TEXT_BGS, VIDEO_MAX_SECS, expiresIn, fmtTime, getMediaType, imgUrl,
+    isSeenByMe, loadSeenIds, rememberSeen, toArr,
+} from './statusUtils';
+import StatusViewer from './StatusViewer';
+import StatusComposer from './StatusComposer';
 // ─── MediaPickerSheet — theme-aware ──────────────────────────────────────────
 const MediaPickerSheet = ({ visible, uploading, onClose, onCamera, onGallery, onVideoGallery, onText, isDark }) => {
     const { theme } = useContext(ThemeContext);
@@ -600,6 +318,8 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
     const [uploading, setUploading] = useState(false);
     const [posting, setPosting] = useState(false);
     const [showPicker, setShowPicker] = useState(false);
+    const [statusCfg, setStatusCfg] = useState(null);       // server se limits/reactions
+    const [composerAsset, setComposerAsset] = useState(null);   // upload se pehle preview+caption
     const [showTextComposer, setShowTextComposer] = useState(false);
     const [viewerVisible, setViewerVisible] = useState(false);
     const [viewerStartIdx, setViewerStartIdx] = useState(0);
@@ -610,37 +330,46 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
 
     const myProfile = useSelector((state) => state.totalappData?.user ?? null);
 
-    const fetchStatuses = useCallback(async () => {
+    const hasLocal = useRef(false);
+    const [offline, setOffline] = useState(false);   // server tak nahi pahunche — saved (cached) data dikh raha hai
+
+    const myFallbackUser = useCallback(() => ({
+        _id: myUserId,
+        name: myProfile?.name || 'My Status',
+        profilePicture: myProfile?.profilePicture,
+    }), [myUserId, myProfile?.name, myProfile?.profilePicture]);
+
+    const applyFeed = useCallback((feed) => {
+        setAllGroups(toArr(feed.others));
+        setMyGroup(feed.mine?.statuses?.length ? { user: feed.mine.user || myFallbackUser(), statuses: feed.mine.statuses } : null);
+        if (feed.cfg) setStatusCfg(feed.cfg);
+    }, [myFallbackUser]);
+
+    // Screen → SQL (turant) → API → SQL → UI. Cache hone par loader nahi; API fail (offline) par cache hi dikhta rehta hai.
+    const fetchStatuses = useCallback(async (quiet = false) => {
         try {
-            setLoading(true);
-            const [allRes, myRes] = await Promise.all([
-                apiService({ method: 'GET', endpoint: 'status' }),
-                apiService({ method: 'GET', endpoint: 'status/my' }),
-            ]);
-            const groups = toArr(allRes?.data?.statuses ?? allRes?.data);
-            setAllGroups(groups.filter(g => g?.user?._id !== myUserId));
-            const myStatuses = toArr(myRes?.data?.statuses ?? myRes?.data);
-            if (myStatuses.length > 0) {
-                // API is list me user sirf id deta hai, isliye apni profile
-                // Redux se lete hain — warna viewer me "Unknown" dikhta tha.
-                const rawUser = myStatuses[0]?.user;
-                const user = typeof rawUser === 'object' && rawUser
-                    ? rawUser
-                    : {
-                        _id: myUserId,
-                        name: myProfile?.name || 'My Status',
-                        profilePicture: myProfile?.profilePicture,
-                    };
-                setMyGroup({ user, statuses: myStatuses });
+            await loadSeenIds();
+            if (!hasLocal.current) {
+                const local = await loadLocal(myUserId);
+                if (local.others.length || local.mine) { hasLocal.current = true; applyFeed(local); setLoading(false); }
+            }
+            if (quiet !== true && !hasLocal.current) setLoading(true);
+            const remote = await fetchRemote(myUserId, myFallbackUser());
+            if (remote) {
+                hasLocal.current = true;
+                setOffline(false);
+                applyFeed(remote);
+                flushPending();   // offline me jama views/reactions ab bhej do
             } else {
-                setMyGroup(null);
+                setOffline(true);
             }
         } catch (e) {
             console.error('Status fetch:', e);
+            setOffline(true);
         } finally {
             setLoading(false);
         }
-    }, [myUserId, myProfile?.name, myProfile?.profilePicture]);
+    }, [myUserId, myFallbackUser, applyFeed]);
 
     useEffect(() => { fetchStatuses(); }, [fetchStatuses]);
 
@@ -650,36 +379,33 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
         useCallback(() => { fetchStatuses(); }, [fetchStatuses])
     );
 
+    // Live: koi status delete / view / reaction hua → quietly taaza (list me loader nahi)
+    useEffect(() => {
+        const refresh = () => fetchStatuses(true);
+        const events = ['status-deleted', 'status-viewed', 'status-reaction'];
+        events.forEach((e) => socketService.on(e, refresh));
+        return () => events.forEach((e) => socketService.off(e, refresh));
+    }, [fetchStatuses]);
+
+    // 24h expiry: server list me expire hue status nahi deta; screen khuli rahe to bhi har minute purane hata do
+    useEffect(() => {
+        const prune = () => {
+            const alive = (st) => !st?.expiresAt || new Date(st.expiresAt) > new Date();
+            const strip = (groups) => groups.map((g) => ({ ...g, statuses: toArr(g.statuses).filter(alive) })).filter((g) => g.statuses.length);
+            setAllGroups((prev) => (prev.some((g) => toArr(g.statuses).some((st) => !alive(st))) ? strip(prev) : prev));
+            setMyGroup((prev) => {
+                if (!prev || !toArr(prev.statuses).some((st) => !alive(st))) return prev;
+                const left = toArr(prev.statuses).filter(alive);
+                return left.length ? { ...prev, statuses: left } : null;
+            });
+        };
+        const t = setInterval(prune, 60000);
+        return () => clearInterval(t);
+    }, []);
+
     useEffect(() => {
         if (refreshSignal) fetchStatuses();
     }, [refreshSignal, fetchStatuses]);
-
-    const uploadStatus = async (uri, type = 'image') => {
-        try {
-            setUploading(true);
-            setShowPicker(false);
-            const isVideo = type === 'video';
-            const formData = new FormData();
-            await appendFile(formData, 'media', {
-                uri,
-                name: `status_${Date.now()}.${isVideo ? 'mp4' : 'jpg'}`,
-                type: isVideo ? 'video/mp4' : 'image/jpeg',
-            });
-            formData.append('mediaType', isVideo ? 'video' : 'image');
-            // Global fetch RN ke { uri } FormData part ko handle nahi karta — apiService use karo
-            const apiRes = await apiService({ method: 'POST', endpoint: 'status', data: formData, isMultipart: true });
-            const res = apiRes?.data;
-            if (res?.success) {
-                fetchStatuses();
-            } else {
-                Alert.alert('Error', res?.message || 'Upload failed');
-            }
-        } catch (e) {
-            Alert.alert('Error', 'Could not upload the status. Please try again.');
-        } finally {
-            setUploading(false);
-        }
-    };
 
     // Text status — server mediaType 'text' + backgroundColor ke saath rakhta hai
     const postTextStatus = async (content, backgroundColor) => {
@@ -704,31 +430,44 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
         }
     };
 
+    // Picker se asset aaya → seedha upload nahi; pehle preview + caption (StatusComposer)
+    const toComposer = (a) => {
+        if (!a) return;
+        const isVid = a.type === 'video';
+        setComposerAsset({
+            uri: a.uri, type: isVid ? 'video' : 'image', mimeType: a.mimeType,
+            duration: isVid ? (Number(a.duration) || 0) / 1000 : 0,   // picker ms deta hai
+            fileSize: a.fileSize,
+        });
+    };
+    const maxSecs = Number(statusCfg?.maxVideoSeconds) || VIDEO_MAX_SECS;
+
     const openCamera = async () => {
         setShowPicker(false);
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') { Alert.alert('Permission required', 'Please allow camera access'); return; }
-        const res = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.All, quality: 0.85, videoMaxDuration: VIDEO_MAX_SECS });
-        if (!res.canceled) { const a = res.assets[0]; uploadStatus(a.uri, a.type === 'video' ? 'video' : 'image'); }
+        const res = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.85, videoMaxDuration: maxSecs });
+        if (!res.canceled) toComposer(res.assets[0]);
     };
 
     const openImageGallery = async () => {
         setShowPicker(false);
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') { Alert.alert('Permission required', 'Please allow gallery access'); return; }
-        const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.85 });
-        if (!res.canceled) uploadStatus(res.assets[0].uri, 'image');
+        const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85 });
+        if (!res.canceled) toComposer(res.assets[0]);
     };
 
     const openVideoGallery = async () => {
         setShowPicker(false);
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') { Alert.alert('Permission required', 'Please allow gallery access'); return; }
-        const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Videos, videoMaxDuration: VIDEO_MAX_SECS });
-        if (!res.canceled) uploadStatus(res.assets[0].uri, 'video');
+        const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], videoMaxDuration: maxSecs });
+        if (!res.canceled) toComposer(res.assets[0]);
     };
 
     const handleDelete = (deletedId) => {
+        deleteStatusLocal(deletedId).catch(() => {});
         const stripDeleted = (groups) =>
             groups.map(g => ({ ...g, statuses: g.statuses.filter(s => s._id !== deletedId) }))
                 .filter(g => g.statuses.length > 0);
@@ -745,6 +484,7 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
     // StatusCard ki "allSeen" check turant badal jaati hai aur card "Status" se
     // "Viewed Status" section me chala jaata hai, bina fetchStatuses() call kiye.
     const markStatusViewed = useCallback((statusId) => {
+        rememberSeen(String(statusId));
         setAllGroups(prev => prev.map(g => ({
             ...g,
             statuses: g.statuses.map(s => {
@@ -754,15 +494,24 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
         })));
     }, [myUserId]);
 
+    // Mute/unmute (viewer se) — list turant badle, server pehle hi save kar chuka
+    const handleMuteChange = (uid, muted) => {
+        setOwnerMutedLocal(uid, muted).catch(() => {});
+        const patch = (groups) => groups.map((g) => (String(g?.user?._id) === String(uid) ? { ...g, muted } : g));
+        setAllGroups((prev) => patch(prev));
+        setViewerSnapshot((prev) => patch(prev));
+    };
+
     // "Status" = kam se kam ek status abhi tak unseen; "Viewed Status" = group ke
     // saare statuses already seen — StatusCard ki ring-color logic (allSeen) ke
     // saath consistent rakha hai.
+    const mutedGroups = useMemo(() => allGroups.filter((g) => g?.muted), [allGroups]);
     const unviewedGroups = useMemo(
-        () => allGroups.filter((g) => !toArr(g?.statuses).every((s) => isSeenByMe(s, myUserId))),
+        () => allGroups.filter((g) => !g?.muted && !toArr(g?.statuses).every((s) => isSeenByMe(s, myUserId))),
         [allGroups, myUserId]
     );
     const viewedGroups = useMemo(
-        () => allGroups.filter((g) => toArr(g?.statuses).length > 0 && toArr(g?.statuses).every((s) => isSeenByMe(s, myUserId))),
+        () => allGroups.filter((g) => !g?.muted && toArr(g?.statuses).length > 0 && toArr(g?.statuses).every((s) => isSeenByMe(s, myUserId))),
         [allGroups, myUserId]
     );
 
@@ -781,7 +530,14 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
     return (
         <View style={{ backgroundColor: theme.background }}>
             <View style={ss.titleRow}>
-                <Text style={[ss.title, { color: isDark ? '#d0d0d0' : '#222' }]}>Status</Text>
+                <Text style={[ss.title, { color: isDark ? '#d0d0d0' : '#222' }]}>Recent updates</Text>
+                <TouchableOpacity
+                    onPress={() => navigation?.navigate?.('StatusPrivacy')}
+                    hitSlop={8}
+                    style={{ marginLeft: 'auto', marginRight: 10 }}
+                >
+                    <Ionicons name="lock-closed-outline" size={19} color={isDark ? '#9aa0a6' : '#667'} />
+                </TouchableOpacity>
                 <TouchableOpacity
                     style={[ss.addChip, { backgroundColor: isDark ? '#0d1e2e' : '#e8f4fd' }]}
                     onPress={() => setShowPicker(true)}
@@ -796,6 +552,16 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
                 <ActivityIndicator color={theme.main} style={{ marginVertical: 20 }} />
             ) : (
                 <>
+                    {offline && (
+                        <Text style={[ss.myInfo, { color: '#e67e22' }]}>Offline — showing saved updates</Text>
+                    )}
+                    {!!myGroup?.statuses?.length && (
+                        <Text style={[ss.myInfo, { color: isDark ? '#9aa0a6' : '#667' }]}>
+                            My status: {myGroup.statuses.length} active
+                            {myGroup.statuses.every((x) => x.viewCount == null) ? '' : ` · ${myGroup.statuses.reduce((n, x) => n + (x.viewCount || 0), 0)} views`}
+                            {' · last '}{fmtTime(myGroup.statuses[myGroup.statuses.length - 1]?.createdAt)}
+                        </Text>
+                    )}
                     <FlatList
                         data={unviewedGroups}
                         horizontal
@@ -836,7 +602,7 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
             {!loading && viewedGroups.length > 0 && (
                 <>
                     <View style={ss.titleRow}>
-                        <Text style={[ss.title, { color: isDark ? '#d0d0d0' : '#222' }]}>Viewed Status</Text>
+                        <Text style={[ss.title, { color: isDark ? '#d0d0d0' : '#222' }]}>Viewed updates</Text>
                     </View>
                     <FlatList
                         data={viewedGroups}
@@ -857,9 +623,34 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
                 </>
             )}
 
+            {/* Muted updates — mute kiye hue contacts; yahan se dekhne par bhi viewed tabhi mark hota hai jab asli me khule */}
+            {!loading && mutedGroups.length > 0 && (
+                <>
+                    <View style={ss.titleRow}>
+                        <Text style={[ss.title, { color: isDark ? '#d0d0d0' : '#222' }]}>Muted updates</Text>
+                    </View>
+                    <FlatList
+                        data={mutedGroups}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
+                        keyExtractor={(item, i) => item?.user?._id || i.toString()}
+                        renderItem={({ item, index }) => (
+                            <StatusCard
+                                group={item}
+                                isMe={false}
+                                myUserId={myUserId}
+                                isDark={isDark}
+                                onPress={() => openViewer(index, mutedGroups)}
+                            />
+                        )}
+                    />
+                </>
+            )}
+
             <MediaPickerSheet
                 visible={showPicker}
-                uploading={uploading}
+                uploading={false}
                 isDark={isDark}
                 onClose={() => setShowPicker(false)}
                 onCamera={openCamera}
@@ -873,14 +664,24 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
                 onClose={() => setShowTextComposer(false)}
                 onPost={postTextStatus}
             />
+            <StatusComposer
+                visible={!!composerAsset}
+                asset={composerAsset}
+                cfg={statusCfg}
+                onClose={() => setComposerAsset(null)}
+                onDone={() => fetchStatuses(true)}
+            />
             <StatusViewer
                 visible={viewerVisible}
                 groups={viewerSnapshot}
                 startGroupIdx={viewerStartIdx}
                 myUserId={myUserId}
-                onClose={() => setViewerVisible(false)}
+                cfg={statusCfg}
+                navigation={navigation}
+                onClose={() => { setViewerVisible(false); fetchStatuses(true); }}
                 onDelete={handleDelete}
                 onViewed={markStatusViewed}
+                onMuteChange={handleMuteChange}
             />
         </View>
     );
@@ -891,6 +692,7 @@ const ss = StyleSheet.create({
     title: { fontSize: 16, fontWeight: '600' },
     addChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
     addChipText: { color: '#1296f3', fontSize: 13, fontWeight: '600' },
+    myInfo: { fontSize: 12, paddingHorizontal: 16, paddingBottom: 8 },
     emptyText: { fontSize: 12, paddingHorizontal: 16, paddingBottom: 10 },
 });
 

@@ -11,6 +11,7 @@ import {
 import { navigate } from '../navigation/RootNavigation';
 import { getRouteConfig } from './notificationConfig';
 import { rejectCall } from '../services/callHelpers';
+import { ensureCustomChannel } from '../services/callRingtone';
 import apiService from '../services/apiService';
 import { getDeviceId } from '../services/deviceId';
 import { getData } from '../services/staticStorage';
@@ -160,25 +161,35 @@ export async function displayIncomingCallNotification(data = {}) {
     const photoUrl = data.callerPhoto
         ? (/^(https?:|file:|content:)/.test(data.callerPhoto) ? data.callerPhoto : `${Config.MEDIA_URL}${data.callerPhoto}`)
         : null;
+    // Server ke ring timeout (+ thoda margin); na mile to 45s
+    const ringSec = Number(data.ringTimeoutSeconds) > 0 ? Number(data.ringTimeoutSeconds) : 45;
+    const ringTimeoutMs = (ringSec + 3) * 1000;
     try {
         // Killed/background headless run: app start wala setupCallChannel() chala hi nahi hota —
         // channel ke bina notification default tune par aati hai. Idempotent, isliye yahan bhi.
         await setupCallChannel();
+        // User ne apni ringtone chuni ho to uski channel, nahi to default Telebook channel
+        const custom = await ensureCustomChannel();
         await notifee.displayNotification({
             id: `call_${callId}`,
             title: data.callerName || 'Incoming call',
             body: callType === 'video' ? 'Incoming video call' : 'Incoming voice call',
             data: { entity: 'call', entityId: callId, callType },
             android: {
-                channelId: CALL_CHANNEL_ID,
+                channelId: custom ? custom.channelId : CALL_CHANNEL_ID,
                 category: AndroidCategory.CALL,
                 importance: AndroidImportance.HIGH,
                 visibility: AndroidVisibility.PUBLIC,
                 ongoing: true,
                 autoCancel: false,
                 loopSound: true,
+                // Duplicate FCM (same callId) wahi notification replace karta hai (id `call_<callId>`);
+                // onlyAlertOnce se dobara sound/vibration/heads-up nahi hota.
+                onlyAlertOnce: true,
+                // Dismiss push kho jaaye (network/FCM) tab bhi ghanti server ke ring-timeout par band ho jaaye.
+                timeoutAfter: ringTimeoutMs,
                 // Channel ke sound/vibration ke saath hi (pre-Oreo par channel nahi hota)
-                sound: CALL_SOUND,
+                ...(custom ? {} : { sound: CALL_SOUND }),
                 vibrationPattern: [1, 800, 1200, 800, 1200, 800, 1200],
                 lightUpScreen: true,
                 smallIcon: 'ic_launcher',
@@ -187,10 +198,14 @@ export async function displayIncomingCallNotification(data = {}) {
                 fullScreenAction: { id: 'default' },
                 // Notification shade/heads-up se bhi seedha accept/decline.
                 pressAction: { id: 'default' },
+                // Call jaisa dikhe: heads-up/shade me hamesha do rang ke button — Reject (laal) aur Accept (hara).
+                // Title HTML support karta hai (Android). id 'decline' wahi rakhi hai jo handleCallNotificationEvent sunta hai.
                 actions: [
-                    { title: 'Decline', pressAction: { id: 'decline' } },
-                    { title: 'Accept', pressAction: { id: 'accept', launchActivity: 'default' } },
+                    { title: '<font color="#E53935"><b>Reject</b></font>', pressAction: { id: 'decline' } },
+                    { title: '<font color="#2E7D32"><b>Accept</b></font>', pressAction: { id: 'accept', launchActivity: 'default' } },
                 ],
+                color: '#2E7D32',
+                showTimestamp: true,
             },
         });
     } catch (e) {

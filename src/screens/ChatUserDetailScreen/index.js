@@ -506,6 +506,24 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                     </View>
                 </View>
 
+                {/* Profile link se aaye visitor ke liye: seedha chat shuru karne ka button */}
+                {!!route?.params?.fromLink && !blocked && (
+                    <TouchableOpacity
+                        activeOpacity={0.85}
+                        style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: accent, borderRadius: 24, paddingVertical: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}
+                        onPress={() => navigation.navigate('Chat', {
+                            chatId,
+                            chatName: otherUser?.name || otherUser?.mobile || 'User',
+                            chatImage: otherUser?.profilePicture,
+                            isGroup: false,
+                            otherUserId: otherUser?._id,
+                        })}
+                    >
+                        <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
+                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Message</Text>
+                    </TouchableOpacity>
+                )}
+
                 {/* ── Quick actions: Save Contact / Copy App Link / Share App (blocked => hidden) ── */}
                 {!blocked && !!otherUser?.mobile && (
                     <View style={[styles.actionsCard, { backgroundColor: card, borderColor: border }]}>

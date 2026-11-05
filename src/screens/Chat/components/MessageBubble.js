@@ -14,6 +14,7 @@ import Ticks from './Ticks';
 import moment from 'moment';
 import { useMediaDownload } from '../../../utils/mediaCache';
 import { useNameResolver } from '../../../services/nameResolver';
+import Config from '../../../services/config';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 // Image/video frame ki chaudai: screen ka ~72% (pehle ~80% tha, bubble bahut chauda lagta tha). Bubble padding 6+6 ke saath
@@ -340,6 +341,28 @@ const MessageBubble = ({
                             </TouchableOpacity>
                         )}
 
+                        {/* Status par reply: original status ka chhota preview (status expire ho jaye to bhi dikhta hai) */}
+                        {!!item.statusReply && !item.isDeleted && (
+                            <View style={[styles.replyPreview, { backgroundColor: replyBg, borderLeftColor: accent, alignItems: 'center', gap: 8 }]}>
+                                {(item.statusReply.thumbnailUrl || (item.statusReply.mediaType === 'image' && item.statusReply.mediaUrl)) ? (
+                                    <Image
+                                        source={{ uri: `${Config.MEDIA_URL}${item.statusReply.thumbnailUrl || item.statusReply.mediaUrl}` }}
+                                        style={{ width: 38, height: 38, borderRadius: 6, backgroundColor: '#ddd' }}
+                                    />
+                                ) : (
+                                    <View style={{ width: 38, height: 38, borderRadius: 6, backgroundColor: item.statusReply.backgroundColor || '#075e54', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Ionicons name="aperture-outline" size={18} color="#fff" />
+                                    </View>
+                                )}
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.replyName, { color: accent }]} numberOfLines={1}>Status</Text>
+                                    <Text style={[styles.replyText, { color: replyTextC }]} numberOfLines={1}>
+                                        {item.statusReply.caption || (item.statusReply.mediaType === 'video' ? '🎥 Video' : item.statusReply.mediaType === 'image' ? '📷 Photo' : 'Text status')}
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+
                         {/* Content */}
                         {item.isDeleted ? (
                             <Text style={[styles.deletedText, { color: deletedC }]}>
@@ -449,7 +472,7 @@ const MessageBubble = ({
 
                         {/* Time + Ticks */}
                         <View style={styles.timeRow}>
-                            {item.isEdited && !item.isDeleted && (
+                            {item.isEdited && !item.isDeleted && item.messageType !== 'call' && (
                                 <Text style={[styles.timeText, { color: timeColor }]}>edited</Text>
                             )}
                             <Text style={[styles.timeText, { color: timeColor }]}>{Shawtime}</Text>
