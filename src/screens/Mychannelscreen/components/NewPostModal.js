@@ -29,6 +29,7 @@ import apiService from '../../../services/apiService';
 import { ThemeContext } from '../../../components/ThemeContext';
 import { appendFile } from '../../../utils/uploadFile';
 import { claimPlayback, stopPlayback, useExclusivePlayback } from '../../../utils/playbackManager';
+import { launchCameraAsync } from '../../../services/cameraGuard';
 
 export default function NewPostModal({ visible, onClose, channelId, onPosted }) {
     const { theme } = useContext(ThemeContext);
@@ -68,7 +69,7 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
         setActiveSheet(null);
         const { granted } = await ImagePicker.requestCameraPermissionsAsync();
         if (!granted) { Alert.alert('Camera permission chahiye'); return; }
-        const res = await ImagePicker.launchCameraAsync({
+        const res = await launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             quality: 0.85,
         });
@@ -103,7 +104,7 @@ export default function NewPostModal({ visible, onClose, channelId, onPosted }) 
         setActiveSheet(null);
         const { granted } = await ImagePicker.requestCameraPermissionsAsync();
         if (!granted) { Alert.alert('Camera permission chahiye'); return; }
-        const res = await ImagePicker.launchCameraAsync({
+        const res = await launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Videos,
             videoMaxDuration: 60,
             quality: ImagePicker.UIImagePickerControllerQualityType.Medium,

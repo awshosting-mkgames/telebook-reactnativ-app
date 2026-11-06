@@ -66,6 +66,7 @@ import Toast from "react-native-toast-message";
 import { isDeleteWindowExpired, isEditWindowExpired, windowErrorMessage } from "../../services/messageWindows";
 import { appendFile } from '../../utils/uploadFile';
 import { stopPlayback } from "../../utils/playbackManager";
+import { launchCameraAsync } from '../../services/cameraGuard';
 
 const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
 const DEFAULT_GRP_AVT = 'https://cdn-icons-png.flaticon.com/512/681/681494.png';
@@ -1103,7 +1104,7 @@ export default function ChatScreen({ route, navigation }) {
     const openSystemCamera = async () => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== "granted") return Alert.alert("Permission chahiye", "Camera allow karo");
-        const res = await ImagePicker.launchCameraAsync({ mediaTypes: ["images", "videos"], quality: 0.8 });
+        const res = await launchCameraAsync({ mediaTypes: ["images", "videos"], quality: 0.8 });
         if (!res.canceled) {
             const a = res.assets[0], isVid = a.type === "video";
             sendMediaAsset(a, isVid ? "video" : "image", replyMsg);
@@ -1535,8 +1536,10 @@ export default function ChatScreen({ route, navigation }) {
     // ── Chat background image ─────────────────────────────────────
     const bgImage = isDark ? Images.ChatblackBackground : Images.ChatwhiteBackground;
 
+    // Root ka background theme ka (pehle hamesha #000): chat area aur input ke beech fractional-pixel gap me yeh jhalakta tha —
+    // light theme me input ke upar 1px kaali line dikhti thi.
     return (
-        <View ref={rootRef} collapsable={false} style={styles.container}>
+        <View ref={rootRef} collapsable={false} style={[styles.container, { backgroundColor: theme?.background ?? (isDark ? '#000' : '#fff') }]}>
             <StatusBar backgroundColor={theme?.header ?? "#1296f3"} barStyle="light-content" />
 
             <ChatHeader

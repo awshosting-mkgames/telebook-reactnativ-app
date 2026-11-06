@@ -199,6 +199,8 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
     const [loading, setLoading] = useState(true);
 
     const [activeTab, setActiveTab] = useState('photos'); // photos | videos | docs | audio
+    // Media, Links & Docs: shuru me thode items (grid 9, list 6); "View more" par baaki sab (server jitne deta hai)
+    const [expandedTabs, setExpandedTabs] = useState({});
     const [muted, setMuted] = useState(false);
     const [showBlock, setShowBlock] = useState(false);
     const [showClear, setShowClear] = useState(false);
@@ -287,11 +289,30 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
     })).filter(f => f.url);
 
     // ✅ Per-tab mapped data
+    const INITIAL_COUNT = { photos: 9, videos: 9, docs: 6, audio: 6 };
     const tabData = {
         photos: (mediaDetails?.images?.items || []).map(item => ({ ...item, _mediaUrl: getImageUrl(item?.attachments?.[0]?.url) })).filter(i => i._mediaUrl),
         videos: (mediaDetails?.videos?.items || []).map(item => ({ ...item, _mediaUrl: getImageUrl(item?.attachments?.[0]?.url) })).filter(i => i._mediaUrl),
         docs: (mediaDetails?.documents?.items || []).map(item => ({ ...item, _attachment: item?.attachments?.[0] })),
         audio: (mediaDetails?.audios?.items || []).map(item => ({ ...item, _attachment: item?.attachments?.[0] })),
+    };
+
+    // Visible slice + "View more"
+    const shown = (key, list) => (expandedTabs[key] ? list : list.slice(0, INITIAL_COUNT[key]));
+    const hiddenCount = (key, list) => (expandedTabs[key] ? 0 : Math.max(0, list.length - INITIAL_COUNT[key]));
+    const renderViewMore = (key, list) => {
+        const n = hiddenCount(key, list);
+        if (!n) return null;
+        return (
+            <TouchableOpacity
+                style={[styles.viewMoreBtn, { borderColor: accent }]}
+                onPress={() => setExpandedTabs((e) => ({ ...e, [key]: true }))}
+                activeOpacity={0.8}
+            >
+                <Text style={[styles.viewMoreTxt, { color: accent }]}>View more ({n})</Text>
+                <Ionicons name="chevron-down" size={16} color={accent} />
+            </TouchableOpacity>
+        );
     };
 
     // ✅ Only show tabs that have items
@@ -524,7 +545,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                     </TouchableOpacity>
                 )}
 
-                {/* ── Quick actions: Save Contact / Copy App Link / Share App (blocked => hidden) ── */}
+                {/* ── Quick actions: Save Contact (blocked => hidden). Copy App Link / Share App yahan se hata diye gaye. ── */}
                 {!blocked && !!otherUser?.mobile && (
                     <View style={[styles.actionsCard, { backgroundColor: card, borderColor: border }]}>
                         <TouchableOpacity style={styles.actionBtn} onPress={handleSaveContact} disabled={savingContact} activeOpacity={0.7}>
@@ -532,14 +553,6 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                                 ? <ActivityIndicator size="small" color={accent} />
                                 : <Ionicons name="person-add-outline" size={22} color={accent} />}
                             <Text style={[styles.actionTxt, { color: txt }]} numberOfLines={2}>Save Contact</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.actionBtn} onPress={handleCopyAppLink} activeOpacity={0.7}>
-                            <Ionicons name="link-outline" size={22} color={accent} />
-                            <Text style={[styles.actionTxt, { color: txt }]} numberOfLines={2}>Copy App Link</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.actionBtn} onPress={handleShareApp} activeOpacity={0.7}>
-                            <Ionicons name="share-social-outline" size={22} color={accent} />
-                            <Text style={[styles.actionTxt, { color: txt }]} numberOfLines={2}>Share App</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -615,7 +628,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                         {activeTab === 'photos' && (
                             tabData.photos.length > 0 ? (
                                 <View style={styles.mediaGrid}>
-                                    {tabData.photos.map((item, index) => (
+                                    {shown('photos', tabData.photos).map((item, index) => (
                                         <TouchableOpacity
                                             key={item._id || index}
                                             style={styles.mediaThumb}
@@ -628,12 +641,13 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                                 </View>
                             ) : <MediaEmpty label="No photos yet" icon="image-outline" sub={sub} />
                         )}
+                        {activeTab === 'photos' && renderViewMore('photos', tabData.photos)}
 
                         {/* ── Videos Grid ── */}
                         {activeTab === 'videos' && (
                             tabData.videos.length > 0 ? (
                                 <View style={styles.mediaGrid}>
-                                    {tabData.videos.map((item, index) => (
+                                    {shown('videos', tabData.videos).map((item, index) => (
                                         <TouchableOpacity
                                             key={item._id || index}
                                             style={styles.mediaThumb}
@@ -655,15 +669,16 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                                 </View>
                             ) : <MediaEmpty label="No videos yet" icon="videocam-outline" sub={sub} />
                         )}
+                        {activeTab === 'videos' && renderViewMore('videos', tabData.videos)}
 
                         {/* ── Documents List ── */}
                         {activeTab === 'docs' && (
                             tabData.docs.length > 0 ? (
                                 <View style={styles.docList}>
-                                    {tabData.docs.map((item, index) => {
+                                    {shown('docs', tabData.docs).map((item, index, arr) => {
                                         const att = item._attachment;
                                         const ext = att?.filename?.split('.').pop()?.toUpperCase() || 'FILE';
-                                        const isLast = index === tabData.docs.length - 1;
+                                        const isLast = index === arr.length - 1;
                                         return (
                                             <View
                                                 key={item._id || index}
@@ -704,14 +719,15 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                                 </View>
                             ) : <MediaEmpty label="No documents yet" icon="document-outline" sub={sub} />
                         )}
+                        {activeTab === 'docs' && renderViewMore('docs', tabData.docs)}
 
                         {/* ── Audio List ── */}
                         {activeTab === 'audio' && (
                             tabData.audio.length > 0 ? (
                                 <View style={styles.docList}>
-                                    {tabData.audio.map((item, index) => {
+                                    {shown('audio', tabData.audio).map((item, index, arr) => {
                                         const att = item._attachment;
-                                        const isLast = index === tabData.audio.length - 1;
+                                        const isLast = index === arr.length - 1;
                                         return (
                                             <View
                                                 key={item._id || index}
@@ -747,6 +763,7 @@ const ChatUserDetailScreen = ({ navigation, route }) => {
                                 </View>
                             ) : <MediaEmpty label="No audio yet" icon="mic-outline" sub={sub} />
                         )}
+                        {activeTab === 'audio' && renderViewMore('audio', tabData.audio)}
 
                     </View>
                 )}
@@ -875,6 +892,8 @@ const rs = StyleSheet.create({
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+    viewMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, marginHorizontal: 12, paddingVertical: 9, borderRadius: 18, borderWidth: 1 },
+    viewMoreTxt: { fontSize: 13, fontWeight: '600' },
     container: { flex: 1 },
 
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },

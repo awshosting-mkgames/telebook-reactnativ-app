@@ -33,6 +33,7 @@ import { fetchMyPlan } from '../../redex/slices/plansSlice';
 import { useBadgePlacements } from '../../services/badgeConfig';
 import PlanBadge from '../../components/PlanBadge';
 import { updateMyProfile, uploadProfilePhoto } from '../../services/profileSync';
+import { launchCameraAsync } from '../../services/cameraGuard';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
@@ -189,7 +190,7 @@ const ProfileScreen = ({ navigation }) => {
             }
             const options = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 };
             const result = source === 'camera'
-                ? await ImagePicker.launchCameraAsync(options)
+                ? await launchCameraAsync(options)
                 : await ImagePicker.launchImageLibraryAsync(options);
             if (result.canceled || !result.assets?.[0]) return;
 

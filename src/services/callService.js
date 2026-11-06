@@ -108,7 +108,12 @@ class CallService {
         if (!this._engine) return;
         try {
             this._engine.leaveChannel();
-            if (this._isVideo) this._engine.stopPreview();
+            // Camera HAMESHA chhodo (audio call me video toggle hua ho tab bhi). Sirf stopPreview se capture band nahi
+            // hota agar enableLocalVideo(true) hua tha — camera atka rehta tha aur baaki app me camera black dikhta tha.
+            try { this._engine.stopPreview(); } catch (e) { /* preview chalu hi nahi tha */ }
+            try { this._engine.enableLocalVideo(false); } catch (e) { /* ignore */ }
+            try { this._engine.muteLocalVideoStream(true); } catch (e) { /* ignore */ }
+            try { this._engine.disableVideo(); } catch (e) { /* ignore */ }
         } catch (e) {
             console.warn('[CallService] leaveChannel error:', e?.message);
         }

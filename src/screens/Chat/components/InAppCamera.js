@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { useContext, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../../components/ThemeContext';
 import { getActiveCall } from '../../../services/activeCallStore';
+import { ensureCameraFree } from '../../../services/cameraGuard';
 
 const FLASH_ORDER = ['off', 'on', 'auto'];
 const FLASH_ICON = { off: 'flash-off', on: 'flash', auto: 'flash-outline' };
@@ -19,6 +20,7 @@ const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 
  */
 export default function InAppCamera({ visible, onClose, onCaptured, onOpenGallery }) {
     const insets = useSafeAreaInsets();
+    const win = useWindowDimensions();
     const { theme } = useContext(ThemeContext);
     const camRef = useRef(null);
     const timerRef = useRef(null);
@@ -47,6 +49,7 @@ export default function InAppCamera({ visible, onClose, onCaptured, onOpenGaller
     }, [visible]);
     useEffect(() => {
         if (!visible) { setMountCam(false); return undefined; }
+        ensureCameraFree();   // call ke baad atka Agora engine camera pakde ho to chhoot jaye (black preview ki wajah)
         const t = setTimeout(() => setMountCam(true), 400);
         return () => clearTimeout(t);
     }, [visible]);
@@ -117,7 +120,9 @@ export default function InAppCamera({ visible, onClose, onCaptured, onOpenGaller
                     <CameraView
                         key={camKey}
                         ref={camRef}
-                        style={styles.fill}
+                        // EXPLICIT size: device par dekha — ExpoCameraView ka layout 720x0 aa raha tha (absoluteFill se height 0),
+                        // isliye preview ka SurfaceView dikhta hi nahi tha. Width/height seedha window se do.
+                        style={[styles.fill, { width: win.width, height: win.height }]}
                         facing={facing}
                         flash={flash}
                         mode={mode}
@@ -141,6 +146,8 @@ export default function InAppCamera({ visible, onClose, onCaptured, onOpenGaller
         );
     };
 
+    // Asli wajah (device par SurfaceFlinger/view-hierarchy se dekha): ExpoCameraView 720x0 layout hota tha — preview ki
+    // height 0 thi, isliye black. Ab CameraView ko explicit width/height di hai (upar). Modal wapas full-screen window ke liye.
     return (
         <Modal visible={visible} animationType="slide" onRequestClose={close} statusBarTranslucent>
             <StatusBar hidden />

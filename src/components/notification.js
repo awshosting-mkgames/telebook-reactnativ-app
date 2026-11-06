@@ -136,7 +136,7 @@ export async function setupCallChannel() {
             // notifee reject karta hai agar pattern ka pehla value 0/non-positive ho;
             // in-app vibration (ringtoneModule CALL_VIBE_PATTERN: 0.8s buzz / 1.2s pause) jaisa hi
             // pattern, bas shuru me 1ms.
-            vibrationPattern: [1, 800, 1200, 800, 1200, 800, 1200, 800, 1200, 800, 1200, 800, 1200],
+            vibrationPattern: [1, 800, 1200, 800, 1200, 800, 1200, 800, 1200, 800, 1200, 800],   // notifee: EVEN count of positive values (pehle 13 the → channel hi nahi banti thi → ring nahi bajti)
             visibility: AndroidVisibility.PUBLIC,
         });
     } catch (e) {
@@ -190,7 +190,7 @@ export async function displayIncomingCallNotification(data = {}) {
                 timeoutAfter: ringTimeoutMs,
                 // Channel ke sound/vibration ke saath hi (pre-Oreo par channel nahi hota)
                 ...(custom ? {} : { sound: CALL_SOUND }),
-                vibrationPattern: [1, 800, 1200, 800, 1200, 800, 1200],
+                vibrationPattern: [1, 800, 1200, 800, 1200, 800],
                 lightUpScreen: true,
                 smallIcon: 'ic_launcher',
                 ...(photoUrl ? { largeIcon: photoUrl } : {}),

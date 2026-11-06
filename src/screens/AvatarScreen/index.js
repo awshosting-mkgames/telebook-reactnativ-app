@@ -15,6 +15,7 @@ import GradientFill from '../../components/GradientFill';
 import { useSelector, useDispatch } from 'react-redux';
 import Config from '../../services/config';
 import { uploadProfilePhoto } from '../../services/profileSync';
+import { launchCameraAsync } from '../../services/cameraGuard';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
@@ -42,7 +43,7 @@ const pickFromCamera = async (mediaTypes) => {
         Alert.alert('Permission needed', 'Please allow camera access in settings.');
         return null;
     }
-    const result = await ImagePicker.launchCameraAsync({
+    const result = await launchCameraAsync({
         mediaTypes,
         allowsEditing: true,
         aspect: [1, 1],

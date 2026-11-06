@@ -7,6 +7,7 @@ import apiService from '../../services/apiService';
 import Config from '../../services/config';
 import { startCall } from '../../services/callHelpers';
 import { useNameResolver } from '../../services/nameResolver';
+import { isMissedCall } from '../../utils/callStatus';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 const toImageUrl = (v) => (!v ? DEFAULT_AVATAR : /^(https?:|file:|data:)/.test(v) ? v : `${Config.MEDIA_URL}${v}`);
@@ -34,6 +35,7 @@ const fmtDuration = (sec) => {
 // Server status → user ko dikhne wala label
 export const statusLabel = (c) => {
     if (!c) return '';
+    if (isMissedCall(c)) return 'Missed';
     if (c.status === 'missed') return c.direction === 'outgoing' ? 'Not answered' : 'Missed';
     if (c.status === 'ended') return c.acceptedAt ? 'Answered' : 'Ended';
     if (c.status === 'ongoing') return 'Ongoing';
@@ -83,11 +85,14 @@ export default function CallDetailsSheet({ call, onClose, navigation }) {
 
     if (!call) return null;
     const c = { ...call, ...(full || {}) };
+    // End time SIRF tab dikhate hain jab server ne asli `endedAt` diya ho. Purane server/rows me yeh nahi aata tha aur
+    // fallback (start ke barabar) galat dikhta tha (Start 12:39:42, End 12:39:42, Duration 00:44) — isliye ab row hi nahi dikhti.
+    const hasEnd = !!c.endedAt;
     const dark = theme?.mode === 'dark';
     const colors = { text: theme.text, sub: dark ? '#9aa0a6' : '#666', sheet: dark ? '#1f2c34' : '#fff', line: dark ? '#2d3a42' : '#eee' };
     const name = resolveName(c.user);
     const outgoing = c.direction === 'outgoing';
-    const missed = !!c.missed;
+    const missed = !!c.missed || isMissedCall(c);
     const fail = failureReason(c);
     const phone = c.user?.mobile || '—';
 
@@ -154,7 +159,7 @@ export default function CallDetailsSheet({ call, onClose, navigation }) {
                         {!!fail && <Row colors={colors} label="Reason" value={fail} />}
                         <Row colors={colors} label="Date" value={fmtDate(c.startedAt)} />
                         <Row colors={colors} label="Start time" value={fmtTime(c.acceptedAt || c.startedAt)} />
-                        <Row colors={colors} label="End time" value={fmtTime(c.endedAt)} />
+                        {hasEnd && <Row colors={colors} label="End time" value={fmtTime(c.endedAt)} />}
                         <Row colors={colors} label="Duration" value={c.acceptedAt || c.durationSeconds ? fmtDuration(c.durationSeconds) : '00:00'} />
                         <Row colors={colors} label="Call ID" value={c._id} />
                     </View>

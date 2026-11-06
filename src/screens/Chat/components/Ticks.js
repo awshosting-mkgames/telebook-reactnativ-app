@@ -7,11 +7,11 @@ import { Ionicons } from '@expo/vector-icons';
 //  ✓✓  delivered → double tick (grey)    — device ne receive kiya
 //  ✓✓  read      → double tick (BLUE)    — recipient ne padha
 
-const Ticks = ({ status, readBy, deliveredTo, senderId, myId, isDark = true }) => {
+const Ticks = ({ status, readBy, deliveredTo, senderId, myId, isDark = true, readColor }) => {
     if (senderId !== myId) return null;
     // Light-blue bubble (#d9efff) par default grey/cyan ticks dhundhle padte hain — light me gehre shade
     const GREY = isDark ? '#8696a0' : '#667781';
-    const READ = isDark ? '#53bdeb' : '#0b84d6';
+    const READ = readColor || (isDark ? '#53bdeb' : '#0b84d6');   // readColor = selected theme ka accent
 
     if (status === 'sending')
         return <Ionicons name="time-outline"   size={14} color={GREY} style={{ marginLeft: 4 }} />;

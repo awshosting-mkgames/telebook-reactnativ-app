@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { badgeTextColor } from '../../services/badgeConfig';
 import { badgeImageFor, BADGE_ASPECT } from '../../utils/badgeImages';
+import { mixHex } from '../../utils/premiumThemes';
 
 const ACTION_WIDTH = 140;
 const SWIPE_THRESHOLD = 60;
@@ -39,6 +40,12 @@ const lastMsgPreview = (lastMsg) => {
     if (lastMsg.messageType === 'audio') return '🎤 Voice';
     if (lastMsg.messageType === 'document') return '📄 Document';
     return lastMsg.content || 'No messages yet';
+};
+
+// Pinned row ka rang OPAQUE hona chahiye. Pehle `theme.main + '14'` (8% alpha) tha — row ke peeche Block/Delete buttons
+// rakhe hain, isliye light theme me pin karte hi woh row ke aar-paar dikhne lagte the. Ab main colour ko background me mila kar solid banate hain.
+const solidTint = (base, tint, amount) => {
+    try { return mixHex(base, tint, amount); } catch (e) { return base; }
 };
 
 const getInitials = (name = '') => name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
@@ -129,7 +136,11 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
         <View style={styles.swipeContainer}>
             {isPinned && <View style={[styles.pinStripe, { backgroundColor: theme.main }]} />}
 
-            <View style={styles.actionsContainer}>
+            {/* Buttons tab tak dikhte hi nahi jab tak row swipe na ho (opacity row ke khiskne ke saath) */}
+            <Animated.View
+                style={[styles.actionsContainer, { opacity: translateX.interpolate({ inputRange: [-ACTION_WIDTH, -6, 0], outputRange: [1, 1, 0], extrapolate: 'clamp' }) }]}
+                pointerEvents="box-none"
+            >
                 {/* Group ko block nahi kar sakte — wahan sirf Delete */}
                 {!isGroup && (
                     <TouchableOpacity style={[styles.blockBtn, isBlocked && styles.unblockBtn]} onPress={handleSwipeBlock} activeOpacity={0.85}>
@@ -141,14 +152,16 @@ export default function SwipeableChatItem({ item, theme, onPress, onDelete, onBl
                     <Ionicons name="trash-outline" size={22} color="#fff" />
                     <Text style={styles.actionBtnText}>Delete</Text>
                 </TouchableOpacity>
-            </View>
+            </Animated.View>
 
             {/* Chat Row */}
             <Animated.View
                 style={[
                     styles.chatRowAnimated,
                     {
-                        backgroundColor: isPinned ? (isLight ? (theme.main ? theme.main + '14' : '#f0f7ff') : '#16222c') : (theme.background || (isLight ? '#ffffff' : '#000000')),
+                        backgroundColor: isPinned
+                            ? (isLight ? solidTint(theme.background || '#ffffff', theme.main || '#1199ff', 0.08) : '#16222c')
+                            : (theme.background || (isLight ? '#ffffff' : '#000000')),
                         transform: [{ translateX }],
                     },
                 ]}

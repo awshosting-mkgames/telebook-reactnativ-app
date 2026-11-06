@@ -38,6 +38,7 @@ import {
 } from './statusUtils';
 import StatusViewer from './StatusViewer';
 import StatusComposer from './StatusComposer';
+import { launchCameraAsync } from '../../services/cameraGuard';
 // ─── MediaPickerSheet — theme-aware ──────────────────────────────────────────
 const MediaPickerSheet = ({ visible, uploading, onClose, onCamera, onGallery, onVideoGallery, onText, isDark }) => {
     const { theme } = useContext(ThemeContext);
@@ -446,7 +447,7 @@ const StatusSection = ({ navigation, myUserId, refreshSignal = 0 }) => {
         setShowPicker(false);
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') { Alert.alert('Permission required', 'Please allow camera access'); return; }
-        const res = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.85, videoMaxDuration: maxSecs });
+        const res = await launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.85, videoMaxDuration: maxSecs });
         if (!res.canceled) toComposer(res.assets[0]);
     };
 

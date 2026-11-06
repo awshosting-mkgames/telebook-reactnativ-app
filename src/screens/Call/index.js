@@ -12,6 +12,7 @@ import apiService from '../../services/apiService';
 import Config from '../../services/config';
 import { fetchCallsConfig, getCachedCallsConfig } from '../../services/callConfigStore';
 import { startCall } from '../../services/callHelpers';
+import { isMissedCall } from '../../utils/callStatus';
 import { deleteCallsLocal, loadCalls, upsertCalls } from '../../services/callsDb';
 import { useNameResolver } from '../../services/nameResolver';
 import GradientFill from '../../components/GradientFill';
@@ -113,10 +114,13 @@ export default function Call({ navigation }) {
         const f = filterRef.current;
         if (pageNum === 1) {
             const cached = await loadCalls(f);
+            if (f !== filterRef.current) return;
             if (cached.length) { setCalls(cached); setLoading(false); }
         }
         try {
             const res = await apiService({ method: 'GET', endpoint: 'calls', params: { page: pageNum, limit: 20, filter: f } });
+            // Tab badal chuka ho to purane tab ka jawab list me mat daalo (warna Audio tab me Video/Missed dikh jata tha)
+            if (f !== filterRef.current) return;
             if (res?.success && res.data?.success !== false) {
                 const body = res.data?.data ?? {};
                 const rows = body.calls ?? [];
@@ -173,7 +177,7 @@ export default function Call({ navigation }) {
     };
 
     const renderItem = ({ item }) => {
-        const isMissed = !!item.missed;
+        const isMissed = !!item.missed || isMissedCall(item);
         const isVideo = item.type === 'video';
         const isOutgoing = item.direction === 'outgoing';
 
@@ -272,31 +276,7 @@ export default function Call({ navigation }) {
                 </Pressable>
             </Modal>
 
-            {available !== false && (
-                <View style={styles.filterBar}>
-                    <FlatList
-                        horizontal
-                        data={FILTERS}
-                        keyExtractor={(f) => f.key}
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}
-                        renderItem={({ item: f }) => {
-                            const on = filter === f.key;
-                            return (
-                                <TouchableOpacity
-                                    onPress={() => changeFilter(f.key)}
-                                    activeOpacity={0.7}
-                                    style={[styles.filterChip, on
-                                        ? { backgroundColor: theme.main, borderColor: theme.main }
-                                        : { borderColor: theme?.mode === 'dark' ? '#3a474f' : '#d5d9dd' }]}
-                                >
-                                    <Text style={[styles.filterText, { color: on ? '#fff' : theme.text }]}>{f.label}</Text>
-                                </TouchableOpacity>
-                            );
-                        }}
-                    />
-                </View>
-            )}
+            {/* Filter chips (All/Missed/Incoming/...) hata diye — ab hamesha poori call list (sab type) dikhti hai */}
 
             {available === false ? (
                 <View style={styles.emptyWrap}>

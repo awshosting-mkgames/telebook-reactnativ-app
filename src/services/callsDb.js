@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { serializeDbWrite } from './sqliteWriteQueue';
+import { isMissedCall } from '../utils/callStatus';
 
 // Call history ka local store (offline dikhane + filters offline chalane ke liye).
 // Server hi sach hai: fetch ke baad local reconcile hota hai (server se hate/delete hue calls yahan se bhi jaate hain).
@@ -58,7 +59,7 @@ export const upsertCalls = (calls = [], { reconcile = false, hasMore = false } =
 
 const MATCH = {
     all: () => true,
-    missed: (c) => !!c.missed,
+    missed: (c) => !!c.missed || isMissedCall(c),
     incoming: (c) => c.direction === 'incoming',
     outgoing: (c) => c.direction === 'outgoing',
     audio: (c) => c.type === 'audio',

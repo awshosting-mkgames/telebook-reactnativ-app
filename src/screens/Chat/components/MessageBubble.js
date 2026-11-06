@@ -15,6 +15,7 @@ import moment from 'moment';
 import { useMediaDownload } from '../../../utils/mediaCache';
 import { useNameResolver } from '../../../services/nameResolver';
 import Config from '../../../services/config';
+import { ensureContrast } from '../../../utils/premiumThemes';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 // Image/video frame ki chaudai: screen ka ~72% (pehle ~80% tha, bubble bahut chauda lagta tha). Bubble padding 6+6 ke saath
@@ -214,6 +215,9 @@ const MessageBubble = ({
                 ? matchBg
                 : normalBg;
 
+    // Read (double) tick theme ke main colour ka — bubble par padhne layak (contrast) rakha jata hai.
+    // Pehle hamesha fixed blue tha, Pink/Gold jaisi themes me bhi.
+    const readTick = isMine ? ensureContrast(theme?.main || '#0499FF', mineBg, 3) : undefined;
     const mineText = isMine && theme?.bubbleMineText;
     const textColor = mineText || (isDark ? '#e9edef' : '#111111');
     const timeColor = mineText ? '#5A4A1A' : (isDark ? '#8696a0' : '#777777');
@@ -482,6 +486,7 @@ const MessageBubble = ({
                                 senderId={item.sender?._id}
                                 myId={MY_USER_ID}
                                 isDark={isDark}
+                                readColor={readTick}
                             />
                         </View>
                         {isFailed && (

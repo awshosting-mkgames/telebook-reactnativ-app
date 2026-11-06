@@ -29,6 +29,7 @@ import Config from '../../services/config';
 import { appendFile } from '../../utils/uploadFile';
 import GradientFill from '../../components/GradientFill';
 import { useHeaderMetrics } from '../../utils/headerMetrics';
+import { launchCameraAsync } from '../../services/cameraGuard';
 const BASE_URL = Config.Main_url;
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
@@ -59,7 +60,7 @@ const CreateBroadcast = ({ navigation, route }) => {
             Alert.alert('Permission denied', 'Camera access is required');
             return;
         }
-        const result = await ImagePicker.launchCameraAsync({
+        const result = await launchCameraAsync({
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,

@@ -17,6 +17,7 @@ import AddWalletAmt from '../../components/AddWalletAmt';
 import GradientFill from '../../components/GradientFill';
 import { useHeaderMetrics } from '../../utils/headerMetrics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { launchCameraAsync } from '../../services/cameraGuard';
 
 // Backend ye codes bheje to: group limit / coins kam — wallet me coins add karwao
 const COIN_ERROR_CODES = ['GROUP_LIMIT', 'INSUFFICIENT_COINS', 'INSUFFICIENT_BALANCE'];
@@ -88,7 +89,7 @@ const CreateGroup = ({ navigation, route }) => {
         setModalVisible(false);
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') { Alert.alert('Permission Denied', 'Camera access chahiye'); return; }
-        const res = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+        const res = await launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
         if (!res.canceled) setGroupImage(res.assets[0]);
     };
 

@@ -1,4 +1,4 @@
-import { useCallback, useContext, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator, FlatList, Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
@@ -33,6 +33,10 @@ const fmtDate = (iso) => {
     return `${d.getDate()}/${d.getMonth() + 1} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 };
 
+import apiService from '../../services/apiService';
+import { loadCalls, upsertCalls } from '../../services/callsDb';
+import { callRefIds, groupCallTransactions } from '../../utils/walletCalls';
+
 export default function Wallet({ navigation }) {
     const { theme } = useContext(ThemeContext);
     const insets = useSafeAreaInsets();
@@ -41,6 +45,7 @@ export default function Wallet({ navigation }) {
     const { wallet, walletLoading, transactions, txLoading, txPagination, txType } = useSelector((s) => s.wallet);
 
     const [tab, setTab] = useState('all');
+    const [callMap, setCallMap] = useState({});   // callId -> { type, durationSeconds, acceptedAt } (call history se)
     const [paymentConfig, setPaymentConfig] = useState(getCachedPaymentConfig());
 
     const isDark = theme?.mode === 'dark';
@@ -72,6 +77,29 @@ export default function Wallet({ navigation }) {
             dispatch(fetchWalletTransactions({ type: tab, page: txPagination.page + 1 }));
         }
     };
+
+    // Har call ek line: asli duration + net coins. Duration call history se (cache pehle, na mile to API ke pehle pages).
+    const missingIds = useMemo(() => callRefIds(transactions).filter((id) => !callMap[id]), [transactions, callMap]);
+    useEffect(() => {
+        if (!missingIds.length) return undefined;
+        let live = true;
+        (async () => {
+            const toMap = (list) => Object.fromEntries(list.map((c) => [String(c._id), { type: c.type, durationSeconds: c.durationSeconds, acceptedAt: c.acceptedAt || (c.durationSeconds ? true : null), status: c.status }]));
+            let found = toMap(await loadCalls('all', 500));
+            let still = missingIds.filter((id) => !found[id]);
+            for (let pg = 1; still.length && pg <= 3; pg += 1) {
+                const res = await apiService({ method: 'GET', endpoint: 'calls', params: { page: pg, limit: 50, filter: 'all' } });
+                const rows = res?.data?.data?.calls || [];
+                if (!rows.length) break;
+                await upsertCalls(rows);
+                found = { ...found, ...toMap(rows) };
+                still = missingIds.filter((id) => !found[id]);
+            }
+            if (live) setCallMap((prev) => ({ ...prev, ...found }));
+        })().catch(() => {});
+        return () => { live = false; };
+    }, [missingIds]);
+    const txRows = useMemo(() => groupCallTransactions(transactions, callMap), [transactions, callMap]);
 
     const buyActive = canBuy(paymentConfig);
     const packs = wallet?.packs ?? [];
@@ -117,7 +145,7 @@ export default function Wallet({ navigation }) {
                 <ActivityIndicator color={theme.main} size="large" style={{ flex: 1 }} />
             ) : (
                 <FlatList
-                    data={transactions}
+                    data={txRows}
                     keyExtractor={(item) => item._id}
                     renderItem={renderTxRow}
                     contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
