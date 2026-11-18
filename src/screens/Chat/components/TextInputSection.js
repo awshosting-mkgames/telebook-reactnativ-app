@@ -9,6 +9,7 @@ import {
 import Config from '../../../services/config';
 import { APP_BUILD_HEADERS } from '../../../services/appBuild';
 import { useNameResolver } from '../../../services/nameResolver';
+import StickerPanel from './StickerPanel';
 
 const EMOJIS = ['😀', '😂', '😍', '🥰', '😎', '👍', '❤️', '🔥', '🎉', '🙏', '✅', '🫡',
     '😅', '🤣', '😊', '😇', '🤩', '🤗', '😏', '😒', '😞', '😔', '😢', '😭',
@@ -18,127 +19,6 @@ const MIN_H = 48;
 const MAX_H = 150;
 const BTN_LARGE = 50;
 const BTN_SMALL = 42;
-
-// ─── Sticker Panel ────────────────────────────────────────────
-const StickerPanel = ({ onSendSticker, isDark, getFullUrl, accent = '#1296f3' }) => {
-    const [stickers, setStickers] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-
-    useEffect(() => {
-        fetchStickers();
-    }, []);
-
-    const fetchStickers = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const res = await fetch(`${Config?.BASE_URL}users/stickers`, {
-                method: 'GET',
-                headers: { 'Content-Type': 'application/json', ...APP_BUILD_HEADERS },
-            });
-            const json = await res.json();
-            // API response: { success: true, data: [{ url, filename, fileType, fileSize }] }
-            if (json?.success && Array.isArray(json?.data)) {
-                setStickers(json.data);
-            } else if (Array.isArray(json)) {
-                setStickers(json);
-            } else {
-                setError('No stickers found');
-            }
-        } catch (e) {
-            setError('Stickers load nahi ho sake');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const panelBg = isDark ? '#1f2c34' : '#ffffff';
-    const nameColor = isDark ? '#8696a0' : '#555555';
-    const errorColor = isDark ? '#8696a0' : '#999999';
-
-    if (loading) {
-        return (
-            <View style={[stickerStyles.center, { backgroundColor: panelBg }]}>
-                <ActivityIndicator size="large" color={accent} />
-            </View>
-        );
-    }
-
-    if (error || stickers.length === 0) {
-        return (
-            <View style={[stickerStyles.center, { backgroundColor: panelBg }]}>
-                <Text style={[stickerStyles.errorText, { color: errorColor }]}>
-                    {error || 'Koi sticker nahi mila'}
-                </Text>
-                <TouchableOpacity onPress={fetchStickers} style={[stickerStyles.retryBtn, { backgroundColor: accent }]}>
-                    <Text style={stickerStyles.retryText}>Retry</Text>
-                </TouchableOpacity>
-            </View>
-        );
-    }
-
-    // Stickers /media se nahi, seedhe server se static milte hain: <BASE>/<url> (API doc 6.2)
-    const getImageUrl = (url) => {
-        if (!url) return null;
-        if (url.startsWith('http')) return url;
-        return `${Config?.Main_url}${url}`;
-    };
-
-    return (
-        <View style={[stickerStyles.container, { backgroundColor: panelBg }]}>
-            <FlatList
-                data={stickers}
-                keyExtractor={(item, i) => item._id ?? item.url ?? i.toString()}
-                numColumns={3}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={stickerStyles.grid}
-                renderItem={({ item }) => (
-                    <TouchableOpacity
-                        style={stickerStyles.stickerItem}
-                        onPress={() => onSendSticker(item)}
-                        activeOpacity={0.7}
-                    >
-                        <View style={[
-                            stickerStyles.stickerImageWrap,
-                            { borderColor: isDark ? '#2a3942' : '#e8e8e8' }
-                        ]}>
-                            <Image
-                                source={{ uri: getImageUrl(item.url) }}
-                                style={stickerStyles.stickerImage}
-                                resizeMode="contain"
-                            />
-                        </View>
-                        <Text
-                            style={[stickerStyles.stickerName, { color: nameColor }]}
-                            numberOfLines={1}
-                        >
-                            {(item.name || item.filename || 'Sticker').replace(/\.[^.]+$/, '')}
-                        </Text>
-                    </TouchableOpacity>
-                )}
-            />
-        </View>
-    );
-};
-
-const stickerStyles = StyleSheet.create({
-    container: { height: 220 },
-    center: { height: 220, alignItems: 'center', justifyContent: 'center', gap: 12 },
-    errorText: { fontSize: 14 },
-    retryBtn: { paddingHorizontal: 20, paddingVertical: 8, backgroundColor: '#1296f3', borderRadius: 20 },
-    retryText: { color: '#fff', fontWeight: '600', fontSize: 13 },
-    grid: { paddingHorizontal: 8, paddingVertical: 8 },
-    stickerItem: { flex: 1, alignItems: 'center', margin: 6 },
-    stickerImageWrap: {
-        width: 90, height: 90, borderRadius: 12,
-        borderWidth: 1, padding: 4,
-        alignItems: 'center', justifyContent: 'center',
-        backgroundColor: 'transparent',
-    },
-    stickerImage: { width: 78, height: 78, borderRadius: 8 },
-    stickerName: { fontSize: 11, marginTop: 5, textAlign: 'center', maxWidth: 90 },
-});
 
 // ─── Main TextInputSection ─────────────────────────────────────
 const TextInputSection = ({

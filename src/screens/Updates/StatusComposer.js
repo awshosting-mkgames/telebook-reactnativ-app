@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from '../../components/ThemeContext';
 import apiService from '../../services/apiService';
 import { appendFile } from '../../utils/uploadFile';
+import { compressImageForUpload } from '../../utils/imageCompress';
 import { VIDEO_MAX_SECS } from './statusUtils';
 
 const EXT = { 'image/png': 'png', 'image/webp': 'webp', 'video/quicktime': 'mov', 'video/3gpp': '3gp', 'video/webm': 'webm' };
@@ -70,7 +71,13 @@ export default function StatusComposer({ visible, asset, cfg, onClose, onDone })
         try {
             const mime = asset.mimeType || (isVideo ? 'video/mp4' : 'image/jpeg');
             const form = new FormData();
-            await appendFile(form, 'media', { uri: asset.uri, name: `status_${Date.now()}.${EXT[mime] || (isVideo ? 'mp4' : 'jpg')}`, type: mime });
+            // Image ho to background me chhota karo (utils/imageCompress.js: >2MB→500KB, 1-2MB→1/4, 0.3-1MB→1/2, ≤300KB same)
+            let srcUri = asset.uri, srcMime = mime;
+            if (!isVideo) {
+                const c = await compressImageForUpload(asset.uri, mime, '');
+                if (c.changed) { srcUri = c.uri; srcMime = c.mimeType; }
+            }
+            await appendFile(form, 'media', { uri: srcUri, name: `status_${Date.now()}.${EXT[srcMime] || (isVideo ? 'mp4' : 'jpg')}`, type: srcMime });
             if (isVideo) {
                 try {
                     const t = await VideoThumbnails.getThumbnailAsync(asset.uri, { time: 0, quality: 0.7 });

@@ -43,7 +43,7 @@ import { apiErrorMessage, setBlocked } from "../../services/chatActions";
 import { startCall } from "../../services/callHelpers";
 import { getCachedCallsConfig } from "../../services/callConfigStore";
 import {
-    loadCachedMessages, cacheMessages, getMemoryMessages, uncacheMessage, markMessagesDeleted, syncChat, detachSync, isTombstoned,
+    loadCachedMessages, cacheMessages, getMemoryMessages, seedMemoryMessages, uncacheMessage, markMessagesDeleted, syncChat, detachSync, isTombstoned,
     clearChatCache, removeMessagesLocally,
 } from "../../services/messageSync";
 import { getMessagesPage, getSyncState } from "../../services/messagesDb";
@@ -67,6 +67,7 @@ import { isDeleteWindowExpired, isEditWindowExpired, windowErrorMessage } from "
 import { appendFile } from '../../utils/uploadFile';
 import { stopPlayback } from "../../utils/playbackManager";
 import { launchCameraAsync } from '../../services/cameraGuard';
+import { compressImageForUpload } from "../../utils/imageCompress";
 
 const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
 const DEFAULT_GRP_AVT = 'https://cdn-icons-png.flaticon.com/512/681/681494.png';
@@ -457,6 +458,7 @@ export default function ChatScreen({ route, navigation }) {
                     const first = await getMessagesPage(chatId, { limit: 300 });
                     if (cancelled) return;
                     cachedCount = first.length;
+                    if (first.length < 300) seedMemoryMessages(chatId, first);   // poora cache yehi hai => memory mirror valid
                     if (first.length) setMessages((prev) => mergeBatch(chatId, prev, fromCache(first), { addOnly: true }).slice().sort(byNewest));
                     setCacheReady(true);
                     if (first.length) setLoading(false);
@@ -539,9 +541,7 @@ export default function ChatScreen({ route, navigation }) {
                 dispatch(clearUnread(chatId));
                 // Successful fetch khud proof hai ki connectivity hai — queued messages try karo.
                 retryQueuedRef.current?.();
-            } else if (messagesRef.current.length === 0 && isFocusedRef.current) {
-                Alert.alert("Error", "Messages load nahi hue");
-            }
+            }   // fail (net off etc.) par chup-chaap SQL wale messages hi rehte hain — koi alert/error nahi
             return r;
         });
     };
@@ -941,7 +941,13 @@ export default function ChatScreen({ route, navigation }) {
                 // Progress har tick par patch karne se poori list re-render hoti thi (10 images = flicker).
                 // Sirf 10% ke step par patch karo.
                 let lastPct = -10;
-                const up = uploaded ?? await uploadWithRetry(localUri, mimeType, messageType, fileName, (pct) => {
+                // Image ho to upload se pehle background me chhota karo (size niyam: utils/imageCompress.js). Bubble original dikhata rehta hai.
+                let upUri = localUri, upMime = mimeType, upName = fileName;
+                if (!uploaded && messageType === "image") {
+                    const c = await compressImageForUpload(localUri, mimeType, fileName);
+                    if (c.changed) { upUri = c.uri; upMime = c.mimeType; upName = c.fileName; }
+                }
+                const up = uploaded ?? await uploadWithRetry(upUri, upMime, messageType, upName, (pct) => {
                     if (pct >= 100 || pct - lastPct >= 10) { lastPct = pct; patchPending(chatId, tempId, { uploadProgress: pct }); }
                 });
                 // Upload complete hone ke BAAD check karo — cancel mid-flight nahi roka
@@ -1629,7 +1635,7 @@ export default function ChatScreen({ route, navigation }) {
                         key="chat"
                         flatRef={flatRef}
                         messages={messages}
-                        loading={loading}
+                        loading={false}   // sync poori tarah background me — UI par koi loader/sync bar nahi
                         cacheReady={cacheReady}
                         MY_USER_ID={MY_USER_ID}
                         isGroup={isGroup}
@@ -1655,7 +1661,7 @@ export default function ChatScreen({ route, navigation }) {
                         onForwardSelected={handleForwardSelected}
                         onCopySelected={handleCopySelected}
                         hasMore={!historyComplete}
-                        loadingMore={backfilling && !historyComplete}
+                        loadingMore={false}
                         onLoadMore={loadMoreMessages}
                         /* 🔎 search-nav props */
                         activeSearchId={activeMatchId}

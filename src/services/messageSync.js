@@ -17,6 +17,8 @@ const memCache = new Map();
 const byNewest = (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
 
 export const getMemoryMessages = (chatId) => memCache.get(String(chatId)) || null;
+/** SQL se padhe hue rows se memory mirror hydrate karo (isi ke baad cacheMessages/sync memory update karte hain). */
+export const seedMemoryMessages = (chatId, rows = []) => mergeMemory(chatId, rows, true);
 export const clearMemoryMessages = () => { memCache.clear(); tombstones.clear(); syncing.clear(); };
 
 // Delete-for-everyone ho chuke ids (is app session me). Server delete wapas nahi hota, lekin delete se THEEK PEHLE
@@ -41,8 +43,12 @@ export const messageStatus = (m) => {
     return 'sent';
 };
 
-const mergeMemory = (chatId, messages) => {
+// memCache sirf tab "poora mirror" hai jab SQL se hydrate (create:true) ho chuka ho. Hydrate se pehle koi bhi partial
+// write (ek naya/sent message, ek delta batch) entry NAHI banata — warna screen dobara khulne par getMemoryMessages()
+// sirf wahi 1-2 messages deta tha aur SQL se baaki load hi skip ho jata tha (app restart par theek ho jata tha).
+const mergeMemory = (chatId, messages, create = false) => {
     const key = String(chatId);
+    if (!create && !memCache.has(key)) return;
     const map = new Map((memCache.get(key) || []).map((m) => [m._id, m]));
     messages.forEach((m) => {
         if (!m?._id || String(m._id).startsWith('temp_')) return;
@@ -60,7 +66,7 @@ const mergeMemory = (chatId, messages) => {
 export const loadCachedMessages = async (chatId) => {
     try {
         const rows = await getAllCachedMessages(chatId);
-        if (rows.length) mergeMemory(chatId, rows);
+        mergeMemory(chatId, rows, true);
         return rows;
     } catch (error) {
         console.log('⚠️ loadCachedMessages error:', error);
